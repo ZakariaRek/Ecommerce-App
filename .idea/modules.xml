@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/Config-Service/Config-Service.iml" filepath="$PROJECT_DIR$/Config-Service/Config-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Discovery-Service/Discovery-Service.iml" filepath="$PROJECT_DIR$/Discovery-Service/Discovery-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Ecommerce-App.iml" filepath="$PROJECT_DIR$/.idea/Ecommerce-App.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Gateway-Service/Gateway-Service.iml" filepath="$PROJECT_DIR$/Gateway-Service/Gateway-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Loyalty-Service/Loyalty-Service.iml" filepath="$PROJECT_DIR$/Loyalty-Service/Loyalty-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Notification-Service/Notification-Service.iml" filepath="$PROJECT_DIR$/Notification-Service/Notification-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Order-Service/Order-Service.iml" filepath="$PROJECT_DIR$/Order-Service/Order-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Product-Service/Product-Service.iml" filepath="$PROJECT_DIR$/Product-Service/Product-Service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/User-Service/User-Service.iml" filepath="$PROJECT_DIR$/User-Service/User-Service.iml" />
+    </modules>
+  </component>
+</project>
