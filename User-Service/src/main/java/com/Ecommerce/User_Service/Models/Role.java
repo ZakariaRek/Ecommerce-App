@@ -1,8 +1,14 @@
 package com.Ecommerce.User_Service.Models;
 
+import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Data
 @Document(collection = "roles")
 public class Role {
     @Id
@@ -10,8 +16,14 @@ public class Role {
 
     private ERole name;
 
-    public Role() {
+    private String description;
 
+
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    private LocalDateTime updatedAt = LocalDateTime.now();
+
+    public Role() {
     }
 
     public Role(ERole name) {

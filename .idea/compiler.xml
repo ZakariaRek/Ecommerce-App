@@ -7,8 +7,8 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="Config-Service" />
         <module name="Gateway-Service" />
+        <module name="Config-Service" />
         <module name="Discovery-Service" />
       </profile>
       <profile name="Annotation profile for User-Service" enabled="true">
@@ -16,7 +16,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/unknown/lombok-unknown.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.36/lombok-1.18.36.jar" />
         </processorPath>
         <module name="Notification-Service" />
         <module name="Order-Service" />
@@ -25,16 +25,6 @@
         <module name="User-Service" />
       </profile>
     </annotationProcessing>
-    <bytecodeTargetLevel>
-      <module name="Config-Service" target="19" />
-      <module name="Discovery-Service" target="19" />
-      <module name="Gateway-Service" target="19" />
-      <module name="Loyalty-Service" target="19" />
-      <module name="Notification-Service" target="19" />
-      <module name="Order-Service" target="19" />
-      <module name="Product-Service" target="19" />
-      <module name="User-Service" target="19" />
-    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">

@@ -1,10 +1,12 @@
 package com.Ecommerce.User_Service.Payload.Request;
 
+import com.Ecommerce.User_Service.Models.ERole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
+import lombok.Data;
 
 import java.util.Set;
-
+@Data
 public class UpdateUserRequest {
     @Size(min = 3, max = 20)
     private String username;
@@ -44,12 +46,5 @@ public class UpdateUserRequest {
         this.password = password;
     }
 
-    public Set<String> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<String> roles) {
-        this.roles = roles;
-    }
 
 }
