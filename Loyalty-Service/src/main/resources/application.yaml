@@ -1,1 +1,64 @@
-spring.application.name=Loyalty-Service
+# src/main/resources/application.yml
+server:
+  port: 8080
+  servlet:
+    context-path: /loyalty
+
+spring:
+  # Database configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/loyalty-service
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  # JPA / Hibernate configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+    open-in-view: false
+  
+  # Jackson configuration for date/time serialization
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+
+# Logging configuration
+logging:
+  level:
+    com.loyalty: DEBUG
+    org.springframework: INFO
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# Application-specific configuration
+loyalty:
+  points:
+    # Points expiration in days (0 = never expire)
+    expiration-days: 365
+    # Minimum points for redemption
+    min-redemption: 100
+  membership:
+    tiers:
+      bronze:
+        min-points: 0
+        benefits: "Basic customer support"
+      silver:
+        min-points: 500
+        benefits: "Priority customer support, Birthday reward"
+      gold:
+        min-points: 2000
+        benefits: "VIP customer support, Birthday reward, Quarterly bonus"
+      platinum:
+        min-points: 5000
+        benefits: "Dedicated account manager, Enhanced rewards, Special events"
+      diamond:
+        min-points: 10000
+        benefits: "All benefits plus exclusive access and personalized offers"
