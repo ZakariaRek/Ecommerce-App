@@ -11,7 +11,7 @@ import (
 )
 
 // InitDB initializes the database connection
-func InitDB(cfg *config.Config) *gorm.DB {
+func InitDB(cfg *config.Config) (*gorm.DB, *gorm.DB) {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
 		cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBPort)
 
@@ -26,5 +26,5 @@ func InitDB(cfg *config.Config) *gorm.DB {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	return db
+	return db, nil
 }
