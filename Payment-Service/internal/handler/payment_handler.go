@@ -1,15 +1,13 @@
 package handler
 
-
-
 import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/yourorg/payment-system/internal/models"
-	"github.com/yourorg/payment-system/internal/service"
 )
 
 // PaymentHandler handles payment-related HTTP requests
@@ -174,3 +172,17 @@ func (h *PaymentHandler) RefundPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid payment ID", http.StatusBadRequest)
 		return
 	}
+
+	if err := h.paymentService.RefundPayment(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	payment, _ := h.paymentService.GetPaymentByID(id)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func (h *PaymentHandler) GetPaymentStatus(writer http.ResponseWriter, request *http.Request) {
+
+}

@@ -3,9 +3,9 @@ package service
 import (
 	"errors"
 
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/repository"
 	"github.com/google/uuid"
-	"github.com/yourorg/payment-system/internal/models"
-	"github.com/yourorg/payment-system/internal/repository"
 )
 
 // PaymentService interface

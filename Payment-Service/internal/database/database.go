@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/yourorg/payment-system/internal/config"
-	"github.com/yourorg/payment-system/internal/models"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/config"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
