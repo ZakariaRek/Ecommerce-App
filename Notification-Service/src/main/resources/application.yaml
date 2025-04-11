@@ -1,1 +1,8 @@
-spring.application.name=Notification-Service
+spring:
+  data:
+    mongodb:
+      database: Notification-service  # Ensure this is your intended database name
+      host: localhost         # Ensure MongoDB is running on this host
+      port: 27017             # Ensure MongoDB is listening on this port
+server:
+  port: 8085

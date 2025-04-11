@@ -1,16 +1,9 @@
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/Product-service
-    username: your_database_username
-    password: your_database_password
+    username: postgres
+    password: yahyasd56
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      idle-timeout: 30000
-      max-lifetime: 1800000
-      connection-timeout: 30000
-      platform: postgresql
   jpa:
     hibernate:
       ddl-auto: update  # Change to 'none' or 'validate' based on your use case
@@ -20,4 +13,4 @@ spring:
       hibernate.format_sql: true
 
 server:
-  port: 8080
+  port: 8082

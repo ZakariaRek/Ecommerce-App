@@ -1,4 +1,5 @@
-//package com.Ecommerce.User_Service.Config;
+//package com.Ecommerce.Notification_Service.Config;
+//
 //
 //import com.mongodb.client.MongoClients;
 //import org.springframework.context.annotation.Bean;
@@ -10,6 +11,6 @@
 //public class MongoConfig {
 //    @Bean
 //    public MongoTemplate mongoTemplate() {
-//        return new MongoTemplate(MongoClients.create("mongodb://localhost:27017"), "User-service");
+//        return new MongoTemplate(MongoClients.create("mongodb://localhost:27017"), "Notification-service");
 //    }
 //}

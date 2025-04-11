@@ -1,1 +1,16 @@
-spring.application.name=Order-Service
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/Order-service
+    username: postgres
+    password: yahyasd56
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update  # Change to 'none' or 'validate' based on your use case
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+    properties:
+      hibernate.format_sql: true
+
+server:
+  port: 8083

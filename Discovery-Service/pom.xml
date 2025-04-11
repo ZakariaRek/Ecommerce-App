@@ -12,7 +12,7 @@
 	<artifactId>Discovery-Service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Discovery-Service</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Discovery Service Ecommerce app</description>
 	<url/>
 	<licenses>
 		<license/>

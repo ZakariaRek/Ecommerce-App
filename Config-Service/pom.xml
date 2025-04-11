@@ -12,7 +12,7 @@
 	<artifactId>Config-Service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Config-Service</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Config server Service Ecommerce app</description>
 	<url/>
 	<licenses>
 		<license/>

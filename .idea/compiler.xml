@@ -11,7 +11,7 @@
         <module name="Config-Service" />
         <module name="Discovery-Service" />
       </profile>
-      <profile name="Annotation profile for User-Service" enabled="true">
+      <profile name="Annotation profile for Loyalty-Service" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
@@ -20,8 +20,8 @@
         </processorPath>
         <module name="Notification-Service" />
         <module name="Order-Service" />
-        <module name="Product-Service" />
         <module name="Loyalty-Service" />
+        <module name="Product-Service" />
         <module name="User-Service" />
       </profile>
     </annotationProcessing>

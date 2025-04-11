@@ -1,6 +1,6 @@
 # src/main/resources/application.yml
 server:
-  port: 8080
+  port: 8084
   servlet:
     context-path: /loyalty
 
@@ -9,7 +9,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/loyalty-service
     username: postgres
-    password: postgres
+    password: yahyasd56
     driver-class-name: org.postgresql.Driver
   
   # JPA / Hibernate configuration

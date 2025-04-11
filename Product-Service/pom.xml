@@ -12,7 +12,7 @@
 	<artifactId>Product-Service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Product-Service</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Product Service Ecommerce app</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -54,12 +54,7 @@
 			<scope>runtime</scope>
 			<optional>true</optional>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-docker-compose</artifactId>
-			<scope>runtime</scope>
-			<optional>true</optional>
-		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
