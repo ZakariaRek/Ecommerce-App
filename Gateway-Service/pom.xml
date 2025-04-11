@@ -12,7 +12,7 @@
 	<artifactId>Gateway-Service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Gateway-Service</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Api-Gateway Service Ecommerce app</description>
 	<url/>
 	<licenses>
 		<license/>
