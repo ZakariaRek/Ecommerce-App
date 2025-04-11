@@ -28,8 +28,15 @@ public class ShoppingCart {
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;
 
+
+
     // Business methods
     public void addItem(CartItem item) {
+        // Check if items is still null (defensive programming)
+        if (items == null) {
+            items = new ArrayList<>();
+        }
+
         for (CartItem existingItem : items) {
             if (existingItem.getProductId().equals(item.getProductId())) {
                 existingItem.updateQuantity(existingItem.getQuantity() + item.getQuantity());
@@ -43,7 +50,6 @@ public class ShoppingCart {
         items.add(item);
         this.updatedAt = LocalDateTime.now();
     }
-
     public void removeItem(UUID productId) {
         items.removeIf(item -> item.getProductId().equals(productId));
         this.updatedAt = LocalDateTime.now();
