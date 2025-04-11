@@ -11,23 +11,34 @@
         <module name="Config-Service" />
         <module name="Discovery-Service" />
       </profile>
-      <profile name="Annotation profile for Loyalty-Service" enabled="true">
+      <profile name="Annotation profile for Product-Service" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.36/lombok-1.18.36.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.36/lombok-1.18.36.jar" />
+        </processorPath>
+        <module name="Notification-Service" />
+        <module name="Order-Service" />
+        <module name="Product-Service" />
+        <module name="Loyalty-Service" />
+        <module name="User-Service" />
+      </profile>
+      <profile name="Annotation profile for Cart-Service" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.36/lombok-1.18.36.jar" />
         </processorPath>
-        <module name="Notification-Service" />
-        <module name="Order-Service" />
-        <module name="Loyalty-Service" />
-        <module name="Product-Service" />
-        <module name="User-Service" />
+        <module name="Cart-Service" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="Cart-Service" options="-parameters" />
       <module name="Config-Service" options="-parameters" />
       <module name="Discovery-Service" options="-parameters" />
       <module name="Gateway-Service" options="-parameters" />
