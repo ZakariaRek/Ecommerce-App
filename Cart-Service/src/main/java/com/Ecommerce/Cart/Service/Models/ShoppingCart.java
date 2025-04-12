@@ -1,6 +1,6 @@
 package com.Ecommerce.Cart.Service.Models;
 
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +19,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "shopping_carts")
+@JsonIgnoreProperties(ignoreUnknown = true)  // Ignore unknown properties during deserialization
 public class ShoppingCart {
     @Id
     private UUID id;
@@ -27,8 +28,6 @@ public class ShoppingCart {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;
-
-
 
     // Business methods
     public void addItem(CartItem item) {
@@ -50,6 +49,7 @@ public class ShoppingCart {
         items.add(item);
         this.updatedAt = LocalDateTime.now();
     }
+
     public void removeItem(UUID productId) {
         items.removeIf(item -> item.getProductId().equals(productId));
         this.updatedAt = LocalDateTime.now();

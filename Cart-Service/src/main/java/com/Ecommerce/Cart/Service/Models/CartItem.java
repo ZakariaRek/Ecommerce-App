@@ -1,5 +1,7 @@
 package com.Ecommerce.Cart.Service.Models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +15,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)  // Ignore unknown properties during deserialization
 public class CartItem {
     private UUID id;
     private UUID cartId;
@@ -28,6 +31,7 @@ public class CartItem {
         this.quantity = newQuantity;
     }
 
+    @JsonIgnore  // Ignore this property during deserialization
     public BigDecimal getSubtotal() {
         return price.multiply(BigDecimal.valueOf(quantity));
     }
