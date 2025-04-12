@@ -1,6 +1,6 @@
 package com.Ecommerce.Cart.Service.Models;
 
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "saved_for_later")
+@JsonIgnoreProperties(ignoreUnknown = true)  // Ignore unknown properties during deserialization
 public class SavedForLater {
     @Id
     private UUID id;
