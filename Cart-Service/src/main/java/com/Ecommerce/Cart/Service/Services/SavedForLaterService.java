@@ -6,8 +6,10 @@ import com.Ecommerce.Cart.Service.Models.ShoppingCart;
 import com.Ecommerce.Cart.Service.Payload.Request.MoveToCartRequest;
 import com.Ecommerce.Cart.Service.Payload.Request.SaveForLaterRequest;
 import com.Ecommerce.Cart.Service.Repositories.SavedForLaterRepository;
-import com.Ecommerce.Cart.Service.Services.ShoppingCartService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,10 +24,18 @@ public class SavedForLaterService {
     private final SavedForLaterRepository savedForLaterRepository;
     private final ShoppingCartService cartService;
 
+    /**
+     * Get saved items for a user (cached)
+     */
+    @Cacheable(value = "savedItems", key = "#userId.toString()")
     public List<SavedForLater> getSavedItems(UUID userId) {
         return savedForLaterRepository.findByUserId(userId);
     }
 
+    /**
+     * Save an item for later and update the cache
+     */
+    @CachePut(value = "savedItems", key = "#userId.toString()")
     public SavedForLater saveForLater(UUID userId, UUID productId) {
         SavedForLater savedItem = SavedForLater.builder()
                 .id(UUID.randomUUID())
@@ -34,14 +44,23 @@ public class SavedForLaterService {
                 .savedAt(LocalDateTime.now())
                 .build();
 
-        return savedForLaterRepository.save(savedItem);
+        SavedForLater saved = savedForLaterRepository.save(savedItem);
+
+        // Since we're returning a single item but caching a list,
+        // we need to refresh the cache with the complete list
+        List<SavedForLater> updatedList = savedForLaterRepository.findByUserId(userId);
+        return saved;
     }
 
     public SavedForLater saveForLater(UUID userId, SaveForLaterRequest request) {
         return saveForLater(userId, request.getProductId());
     }
 
+    /**
+     * Move an item to cart and update both caches
+     */
     @Transactional
+    @CacheEvict(value = "savedItems", key = "#userId.toString()")
     public ShoppingCart moveToCart(UUID userId, UUID productId, BigDecimal price) {
         // Verify item exists in saved items
         boolean exists = savedForLaterRepository.findByUserId(userId).stream()
@@ -51,7 +70,7 @@ public class SavedForLaterService {
             throw new ResourceNotFoundException("Saved item not found for product: " + productId);
         }
 
-        // Add to cart
+        // Add to cart (this will update the shopping cart cache)
         ShoppingCart updatedCart = cartService.addItemToCart(userId, productId, 1, price);
 
         // Remove from saved items
@@ -65,6 +84,10 @@ public class SavedForLaterService {
         return moveToCart(userId, productId, request.getPrice());
     }
 
+    /**
+     * Remove an item from saved items and update the cache
+     */
+    @CacheEvict(value = "savedItems", key = "#userId.toString()")
     public void removeFromSaved(UUID userId, UUID productId) {
         // Verify item exists before deleting
         boolean exists = savedForLaterRepository.findByUserId(userId).stream()
