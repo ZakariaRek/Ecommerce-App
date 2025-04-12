@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.Ecommerce.User_Service.Models.UserStatus;
+import com.Ecommerce.User_Service.Services.Kafka.KafkaProducerService;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,9 @@ public class AuthController {
     @Autowired
     JwtUtils jwtUtils;
 
+    @Autowired
+    KafkaProducerService kafkaProducerService;
+
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
 
@@ -72,6 +76,15 @@ public class AuthController {
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(item -> item.getAuthority())
                 .collect(Collectors.toList());
+
+        // Update user status if needed and send Kafka event
+        userRepository.findById(userDetails.getId()).ifPresent(user -> {
+            if (user.getStatus() != UserStatus.ACTIVE) {
+                user.setStatus(UserStatus.ACTIVE);
+                User updatedUser = userRepository.save(user);
+                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
+            }
+        });
 
         return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .body(new UserInfoResponse(userDetails.getId(),
@@ -130,10 +143,14 @@ public class AuthController {
         }
 
         user.setRoles(roles);
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // Send Kafka event for user creation
+        kafkaProducerService.sendUserCreatedEvent(savedUser);
 
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
     }
+
     @PostMapping("/signout")
     public ResponseEntity<?> logoutUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -145,7 +162,10 @@ public class AuthController {
 
             if (user != null) {
                 user.setStatus(UserStatus.INACTIVE); // Or UserStatus.SUSPENDED if needed
-                userRepository.save(user);
+                User updatedUser = userRepository.save(user);
+
+                // Send Kafka event for user status change
+                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
             }
         }
 
