@@ -7,6 +7,7 @@ import com.Ecommerce.Cart.Service.Payload.Request.MoveToCartRequest;
 import com.Ecommerce.Cart.Service.Payload.Request.SaveForLaterRequest;
 import com.Ecommerce.Cart.Service.Repositories.SavedForLaterRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,9 +21,11 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SavedForLaterService {
     private final SavedForLaterRepository savedForLaterRepository;
     private final ShoppingCartService cartService;
+    private final KafkaProducerService kafkaProducerService;
 
     /**
      * Get saved items for a user (cached)
@@ -33,7 +36,7 @@ public class SavedForLaterService {
     }
 
     /**
-     * Save an item for later and update the cache
+     * Save an item for later, update the cache, and publish event to Kafka
      */
     @CachePut(value = "savedItems", key = "#userId.toString()")
     public SavedForLater saveForLater(UUID userId, UUID productId) {
@@ -46,6 +49,9 @@ public class SavedForLaterService {
 
         SavedForLater saved = savedForLaterRepository.save(savedItem);
 
+        // Publish item saved event to Kafka
+        kafkaProducerService.sendItemSavedEvent(userId, productId);
+
         // Since we're returning a single item but caching a list,
         // we need to refresh the cache with the complete list
         List<SavedForLater> updatedList = savedForLaterRepository.findByUserId(userId);
@@ -57,7 +63,7 @@ public class SavedForLaterService {
     }
 
     /**
-     * Move an item to cart and update both caches
+     * Move an item to cart, update both caches, and publish events to Kafka
      */
     @Transactional
     @CacheEvict(value = "savedItems", key = "#userId.toString()")
@@ -70,7 +76,7 @@ public class SavedForLaterService {
             throw new ResourceNotFoundException("Saved item not found for product: " + productId);
         }
 
-        // Add to cart (this will update the shopping cart cache)
+        // Add to cart (this will update the shopping cart cache and publish cart event)
         ShoppingCart updatedCart = cartService.addItemToCart(userId, productId, 1, price);
 
         // Remove from saved items
@@ -85,7 +91,7 @@ public class SavedForLaterService {
     }
 
     /**
-     * Remove an item from saved items and update the cache
+     * Remove an item from saved items, update the cache
      */
     @CacheEvict(value = "savedItems", key = "#userId.toString()")
     public void removeFromSaved(UUID userId, UUID productId) {
