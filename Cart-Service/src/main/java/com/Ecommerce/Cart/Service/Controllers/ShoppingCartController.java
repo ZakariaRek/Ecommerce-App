@@ -9,6 +9,8 @@ import com.Ecommerce.Cart.Service.Payload.Request.UpdateQuantityRequest;
 import com.Ecommerce.Cart.Service.Payload.Response.*;
 import com.Ecommerce.Cart.Service.Services.SavedForLaterService;
 import com.Ecommerce.Cart.Service.Services.ShoppingCartService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,11 +24,13 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/cart")
+@Tag(name = "Shopping Cart", description = "Cart management endpoints")
 @RequiredArgsConstructor
 public class ShoppingCartController {
     private final ShoppingCartService cartService;
     private final SavedForLaterService savedForLaterService;
 
+    @Operation(summary = "Get cart by ID", description = "Retrieves a shopping cart by its unique identifier")
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<ShoppingCartResponse>> getCart(@PathVariable UUID userId) {
         ShoppingCart cart = cartService.getOrCreateCart(userId);
