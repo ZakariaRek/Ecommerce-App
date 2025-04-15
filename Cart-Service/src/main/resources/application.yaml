@@ -29,8 +29,9 @@ springdoc:
     path: /swagger-ui.html
     url: /v3/api-docs
     config-url: /v3/api-docs/swagger-config
+    version: 5.0.0
   api-docs:
     path: /v3/api-docs
-    version: OPENAPI_3_0
+    version: openapi_3_1
   show-actuator: true
   packages-to-scan: com.Ecommerce.Cart.Service
