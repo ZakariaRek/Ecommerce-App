@@ -34,9 +34,39 @@ spring:
             - Path=/user-service/v3/api-docs/**
           filters:
             - RewritePath=/user-service/v3/api-docs/(?<segment>.*), /v3/api-docs/$\{segment}
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
-    org.springframework.cloud.netflix: DEBUG
-    com.netflix.discovery: DEBUG
-    com.netflix.eureka: DEBUG
+
+        # Swagger Config for User Service
+        - id: user-service-swagger-config
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/v3/api-docs/swagger-config
+
+        # Order Service API Routes
+        - id: order-service-api
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/api/orders/**
+
+        # Order Service Swagger UI - Try without the index.html suffix
+        - id: order-service-swagger-ui
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/order-service/swagger-ui/**
+          filters:
+            - RewritePath=/order-service/swagger-ui/(?<segment>.*), /swagger-ui/$\{segment}
+
+        # Order Service API Docs
+        - id: order-service-api-docs
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/order-service/v3/api-docs/**
+          filters:
+            - RewritePath=/order-service/v3/api-docs/(?<segment>.*), /v3/api-docs/$\{segment}
+
+        # Add a direct route to the swagger-ui.html for Order Service
+        - id: order-service-swagger-ui-direct
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/order-service/swagger-ui.html
+          filters:
+            - RewritePath=/order-service/swagger-ui.html, /swagger-ui.html

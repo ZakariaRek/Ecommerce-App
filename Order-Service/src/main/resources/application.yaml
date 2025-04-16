@@ -14,6 +14,8 @@ spring:
     properties:
       hibernate.format_sql: true
 
+
+
 server:
   port: 8083
 springdoc:
@@ -30,3 +32,10 @@ springdoc:
     - group: order-service
       paths-to-match:
         - /**
+eureka:
+  instance:
+    preferIpAddress: true
+    instanceId: ${spring.application.name}:${server.port}
+    hostname: localhost
+    metadataMap:
+      instanceId: ${spring.application.name}:${server.port}
