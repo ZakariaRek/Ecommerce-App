@@ -29,7 +29,8 @@ public class Product {
     private BigDecimal weight;
 
     @Column(columnDefinition = "json")
-    private String dimensions; // Stored as JSON string
+    private String dimensions;
+
 
     @ElementCollection
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
