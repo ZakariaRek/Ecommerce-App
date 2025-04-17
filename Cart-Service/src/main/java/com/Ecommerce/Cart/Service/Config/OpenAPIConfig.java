@@ -1,13 +1,12 @@
 package com.Ecommerce.Cart.Service.Config;
 
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.servers.Server;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 
 import java.util.List;
 
@@ -18,22 +17,23 @@ public class OpenAPIConfig {
     private String applicationName;
 
     @Bean
-    public OpenAPI cartServiceOpenAPI() {
+    public OpenAPI customOpenAPI() {
+        final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
-                .openapi("3.0.1")  // Add this line to explicitly set the OpenAPI version
+                .openapi("3.1.0") // Add explicit OpenAPI version
                 .info(new Info()
-                        .title(applicationName + " API")
-                        .description("Shopping Cart Service API for Ecommerce application")
-                        .version("v1.0")
-                        .contact(new Contact()
-                                .name("Ecommerce Team")
-                                .email("support@ecommerce.com"))
-                        .license(new License()
-                                .name("API License")
-                                .url("https://www.example.com/licenses")))
-                .servers(List.of(
-                        new Server().url("/").description("Default Server URL"),
-                        new Server().url("http://localhost:8087").description("Local development server")
-                ));
+                        .title("APP ")
+                        .version("1.0")
+                        .description("API documentation for Cart service  APP"))
+                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
+                .components(new Components()
+                        .addSecuritySchemes(securitySchemeName,
+                                new SecurityScheme()
+                                        .name(securitySchemeName)
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                        )
+                );
     }
 }

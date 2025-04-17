@@ -53,9 +53,7 @@ spring:
 
 server:
   port: 8087
-management:
-  tracing:
-    enabled: false
+
 redis:
 #  timeout: 2000
   maximumActiveConnectionCount: 128
