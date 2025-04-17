@@ -3,13 +3,29 @@ server:
   port: 8084
   servlet:
     context-path: /loyalty
-
+#
+#springdoc:
+#  api-docs:
+#    path: /api-docs
+#  swagger-ui:
+#    path: /swagger-ui.html
+#    operations-sorter: method
+#    tags-sorter: alpha
+#    doc-expansion: none
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    doc-expansion: none
 spring:
   # Database configuration
   datasource:
     url: jdbc:postgresql://localhost:5432/loyalty-service
     username: postgres
-    password: yahyasd56
+    password: zakaria
     driver-class-name: org.postgresql.Driver
   
   # JPA / Hibernate configuration
@@ -28,6 +44,8 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     serialization:
       write-dates-as-timestamps: false
+  application:
+    name: loyalty-service
 
 # Logging configuration
 logging:

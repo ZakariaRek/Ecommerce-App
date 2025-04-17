@@ -22,7 +22,7 @@ import java.util.UUID;
 @Slf4j
 public class ShoppingCartService {
     private final ShoppingCartRepository cartRepository;
-    private final KafkaProducerService kafkaProducerService;
+//    private final KafkaProducerService kafkaProducerService;
 
     /**
      * Get or create a shopping cart for a user
@@ -68,7 +68,7 @@ public class ShoppingCartService {
         ShoppingCart updatedCart = cartRepository.save(cart);
 
         // Publish item added event to Kafka
-        kafkaProducerService.sendCartItemAddedEvent(updatedCart, item);
+//        kafkaProducerService.sendCartItemAddedEvent(updatedCart, item);
 
         return updatedCart;
     }
@@ -87,7 +87,7 @@ public class ShoppingCartService {
         ShoppingCart updatedCart = cartRepository.save(cart);
 
         // Publish item removed event to Kafka
-        kafkaProducerService.sendCartItemRemovedEvent(userId, cart.getId(), productId);
+//        kafkaProducerService.sendCartItemRemovedEvent(userId, cart.getId(), productId);
 
         return updatedCart;
     }
@@ -102,7 +102,7 @@ public class ShoppingCartService {
         ShoppingCart updatedCart = cartRepository.save(cart);
 
         // Publish item updated event to Kafka
-        kafkaProducerService.sendCartItemUpdatedEvent(updatedCart, productId, newQuantity);
+//        kafkaProducerService.sendCartItemUpdatedEvent(updatedCart, productId, newQuantity);
 
         return updatedCart;
     }
@@ -126,7 +126,7 @@ public class ShoppingCartService {
         cartRepository.save(cart);
 
         // Publish cart checkout event to Kafka
-        kafkaProducerService.sendCartCheckoutEvent(cart);
+//        kafkaProducerService.sendCartCheckoutEvent(cart);
     }
 
     /**

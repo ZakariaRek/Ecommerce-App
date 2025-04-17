@@ -25,7 +25,7 @@ import java.util.UUID;
 public class SavedForLaterService {
     private final SavedForLaterRepository savedForLaterRepository;
     private final ShoppingCartService cartService;
-    private final KafkaProducerService kafkaProducerService;
+//    private final KafkaProducerService kafkaProducerService;
 
     /**
      * Get saved items for a user (cached)
@@ -50,7 +50,7 @@ public class SavedForLaterService {
         SavedForLater saved = savedForLaterRepository.save(savedItem);
 
         // Publish item saved event to Kafka
-        kafkaProducerService.sendItemSavedEvent(userId, productId);
+//        kafkaProducerService.sendItemSavedEvent(userId, productId);
 
         // Since we're returning a single item but caching a list,
         // we need to refresh the cache with the complete list
