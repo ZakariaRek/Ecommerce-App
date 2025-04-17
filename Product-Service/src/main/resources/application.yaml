@@ -13,6 +13,27 @@ spring:
     show-sql: true
     properties:
       hibernate.format_sql: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        spring.json.type.mapping: >-
+          productCreatedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductCreatedEvent,
+          productUpdatedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductUpdatedEvent,
+          productDeletedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductDeletedEvent,
+          productStockChangedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductStockChangedEvent,
+          productPriceChangedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductPriceChangedEvent,
+          productStatusChangedEvent:com.Ecommerce.Product_Service.events.ProductEvents$ProductStatusChangedEvent
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    admin:
+      auto-create: true
+
+
 
 server:
   port: 8082
