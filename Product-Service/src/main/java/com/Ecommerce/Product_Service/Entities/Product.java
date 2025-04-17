@@ -1,5 +1,6 @@
 package com.Ecommerce.Product_Service.Entities;
 
+import com.Ecommerce.Product_Service.Listener.ProductEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -14,6 +15,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "products")
+@EntityListeners(ProductEntityListener.class)  // Added EntityListener for Kafka events
 public class Product {
     @Id
     @GeneratedValue
@@ -68,6 +70,25 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
     private List<Discount> discounts = new ArrayList<>();
 
+    // Transient fields to track changes for Kafka events
+    @Transient
+    private BigDecimal previousPrice;
+
+    @Transient
+    private Integer previousStock;
+
+    @Transient
+    private ProductStatus previousStatus;
+
+    // Initialize tracking fields before update
+    @PreUpdate
+    private void preUpdate() {
+        // These will be used by the EntityListener to determine if events should be published
+        this.previousPrice = this.price;
+        this.previousStock = this.stock;
+        this.previousStatus = this.status;
+    }
+
     public void addToCart() {
         // Implementation logic here
     }
@@ -76,7 +97,21 @@ public class Product {
         // Implementation logic here
     }
 
-    public void changeStatus() {
-        // Implementation logic here
+    public void changeStatus(ProductStatus newStatus) {
+        this.previousStatus = this.status;
+        this.status = newStatus;
+        // Status change will trigger a Kafka event via EntityListener
+    }
+
+    public void updateStock(Integer newStock) {
+        this.previousStock = this.stock;
+        this.stock = newStock;
+        // Stock change will trigger a Kafka event via EntityListener
+    }
+
+    public void updatePrice(BigDecimal newPrice) {
+        this.previousPrice = this.price;
+        this.price = newPrice;
+        // Price change will trigger a Kafka event via EntityListener
     }
 }

@@ -30,19 +30,15 @@ public class ProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping
-    public ResponseEntity<Product> createProduct(@RequestBody Product product) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(productService.saveProduct(product));
+    @GetMapping("/status/{status}")
+    public ResponseEntity<List<Product>> getProductsByStatus(@PathVariable ProductStatus status) {
+        return ResponseEntity.ok(productService.findProductsByStatus(status));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Product> updateProduct(@PathVariable UUID id, @RequestBody Product product) {
-        if (!productService.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        product.setId(id);
-        return ResponseEntity.ok(productService.saveProduct(product));
+    @PostMapping
+    public ResponseEntity<Product> createProduct(@RequestBody Product product) {
+        Product savedProduct = productService.saveProduct(product);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedProduct);
     }
 
     @DeleteMapping("/{id}")
@@ -63,8 +59,32 @@ public class ProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<Product>> getProductsByStatus(@PathVariable ProductStatus status) {
-        return ResponseEntity.ok(productService.findProductsByStatus(status));
+    /**
+     * Updates a product with the provided data (PUT).
+     * This method will replace the entire product.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Product> updateProductFull(
+            @PathVariable UUID id,
+            @RequestBody Product product) {
+        if (!productService.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        product.setId(id); // Ensure the ID is set correctly
+        Product updatedProduct = productService.saveProduct(product);
+        return ResponseEntity.ok(updatedProduct);
+    }
+
+    /**
+     * Partially updates a product with the provided data (PATCH).
+     * This method only updates the fields that are provided in the request.
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<Product> updateProductPartial(
+            @PathVariable UUID id,
+            @RequestBody Product productData) {
+        return productService.updateProduct(id, productData)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }
