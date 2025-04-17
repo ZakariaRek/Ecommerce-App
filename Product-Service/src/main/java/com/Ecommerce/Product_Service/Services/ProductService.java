@@ -40,7 +40,7 @@ public class ProductService {
     @Transactional
     public Product saveProduct(Product product) {
 
-        productEventService.publishProductCreatedEvent(product);
+        productEventService.createProductCreatedEvent(product);
 
         return productRepository.save(product);
     }
@@ -51,7 +51,7 @@ public class ProductService {
 
     @Transactional
     public void deleteProduct(UUID id) {
-        productEventService.publishProductDeletedEvent(id);
+        productEventService.createProductDeletedEvent(id);
 
         productRepository.deleteById(id);
     }
@@ -61,7 +61,7 @@ public class ProductService {
         return productRepository.findById(id)
                 .map(product -> {
                     product.setStatus(status);
-                    productEventService.publishStatusChangedEvent(product, status);
+                    productEventService.createStatusChangedEvent(product, status);
                     // Handling inventory implications
                     if (status == ProductStatus.OUT_OF_STOCK) {
                         product.getInventory().setQuantity(0);
@@ -126,15 +126,15 @@ public class ProductService {
 
                     // Publish relevant events
                     if (productData.getStatus() != null && !productData.getStatus().equals(originalStatus)) {
-                        productEventService.publishStatusChangedEvent(existingProduct, productData.getStatus());
+                        productEventService.createStatusChangedEvent(existingProduct, productData.getStatus());
                     }
                     if (productData.getPrice() != null && !productData.getPrice().equals(originalPrice)) {
-                        productEventService.publishPriceChangedEvent(existingProduct, productData.getPrice());
+                        productEventService.createPriceChangedEvent(existingProduct, productData.getPrice());
                     }
                     if (productData.getStock() != null && !productData.getStock().equals(originalStock)) {
-                        productEventService.publishStockChangedEvent(existingProduct, productData.getStock());
+                        productEventService.createStockChangedEvent(existingProduct, productData.getStock());
                     }
-                    productEventService.publishProductUpdatedEvent(existingProduct);
+                    productEventService.createProductUpdatedEvent(existingProduct);
                     return productRepository.save(existingProduct);
                 });
     }
