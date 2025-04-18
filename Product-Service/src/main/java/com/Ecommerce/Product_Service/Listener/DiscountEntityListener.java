@@ -2,7 +2,7 @@ package com.Ecommerce.Product_Service.Listener;
 
 
 import com.Ecommerce.Product_Service.Entities.Discount;
-import com.Ecommerce.Product_Service.Services.DiscountEventService;
+import com.Ecommerce.Product_Service.Services.Kakfa.DiscountEventService;
 import jakarta.persistence.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

@@ -28,7 +28,7 @@ public class ReviewEntityListener {
             }
 
             // Also update product average rating
-            reviewEventService.calculateAndPublishProductAverageRatingChangedEvent(review.getProduct().getId());
+
         }
     }
 
@@ -43,7 +43,6 @@ public class ReviewEntityListener {
             // and store them in thread-local variables or a similar mechanism
 
             // Also update product average rating if the rating changed
-            reviewEventService.calculateAndPublishProductAverageRatingChangedEvent(review.getProduct().getId());
         }
     }
 
@@ -53,7 +52,6 @@ public class ReviewEntityListener {
             reviewEventService.publishReviewDeletedEvent(review);
 
             // Also update product average rating
-            reviewEventService.calculateAndPublishProductAverageRatingChangedEvent(review.getProduct().getId());
         }
     }
 
