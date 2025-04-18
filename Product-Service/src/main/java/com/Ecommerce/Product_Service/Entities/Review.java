@@ -11,6 +11,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "reviews")
+@EntityListeners(ReviewEntityListener.class)
 public class Review {
     @Id
     @GeneratedValue

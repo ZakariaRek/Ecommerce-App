@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Entities;
 
 import com.Ecommerce.Product_Service.Config.JsonConverter;
+import com.Ecommerce.Product_Service.Listener.SupplierEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "suppliers")
+@EntityListeners(SupplierEntityListener.class)
 public class Supplier {
     @Id
     @GeneratedValue
