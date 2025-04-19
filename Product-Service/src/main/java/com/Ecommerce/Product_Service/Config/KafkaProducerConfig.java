@@ -184,7 +184,152 @@ public class KafkaProducerConfig {
                 .replicas(2)
                 .build();
     }
+    // Category Topic definitions with partitions and replication factor
+    @Bean
+    public NewTopic categoryCreatedTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_CREATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
 
+    @Bean
+    public NewTopic categoryUpdatedTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_UPDATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic categoryDeletedTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_DELETED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic categoryHierarchyChangedTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_HIERARCHY_CHANGED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic categoryProductAssociationTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_PRODUCT_ASSOCIATION)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic categoryImageUpdatedTopic() {
+        return TopicBuilder.name(TOPIC_CATEGORY_IMAGE_UPDATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    // Discount Topic definitions with partitions and replication factor
+    @Bean
+    public NewTopic discountCreatedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_CREATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountUpdatedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_UPDATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountDeletedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_DELETED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountActivatedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_ACTIVATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountDeactivatedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_DEACTIVATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountValueChangedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_VALUE_CHANGED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic discountPeriodChangedTopic() {
+        return TopicBuilder.name(TOPIC_DISCOUNT_PERIOD_CHANGED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    // Review Topic definitions with partitions and replication factor
+    @Bean
+    public NewTopic reviewCreatedTopic() {
+        return TopicBuilder.name(TOPIC_REVIEW_CREATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic reviewUpdatedTopic() {
+        return TopicBuilder.name(TOPIC_REVIEW_UPDATED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic reviewDeletedTopic() {
+        return TopicBuilder.name(TOPIC_REVIEW_DELETED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic reviewVerifiedTopic() {
+        return TopicBuilder.name(TOPIC_REVIEW_VERIFIED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
+
+    @Bean
+    public NewTopic reviewRatingChangedTopic() {
+        return TopicBuilder.name(TOPIC_REVIEW_RATING_CHANGED)
+                .partitions(3)
+                .replicas(2)
+                .build();
+    }
     // Inventory Topic definitions with partitions and replication factor
     @Bean
     public NewTopic inventoryCreatedTopic() {
