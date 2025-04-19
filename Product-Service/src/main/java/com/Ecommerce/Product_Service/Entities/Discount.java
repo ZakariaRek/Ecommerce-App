@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Entities;
 
 
+import com.Ecommerce.Product_Service.Listener.DiscountEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -11,6 +12,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "discounts")
+@EntityListeners(DiscountEntityListener.class)
 public class Discount {
     @Id
     @GeneratedValue

@@ -1,5 +1,6 @@
 package com.Ecommerce.Product_Service.Entities;
 
+import com.Ecommerce.Product_Service.Listener.ReviewEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -11,6 +12,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "reviews")
+@EntityListeners(ReviewEntityListener.class)
 public class Review {
     @Id
     @GeneratedValue
