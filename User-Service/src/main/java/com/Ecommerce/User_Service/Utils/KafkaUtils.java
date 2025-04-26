@@ -1,6 +1,6 @@
 package com.Ecommerce.User_Service.Utils;
 
-import com.Ecommerce.User_Service.Events.UserEvent;
+import com.Ecommerce.User_Service.Events.UserEvents;
 import com.Ecommerce.User_Service.Models.Role;
 import com.Ecommerce.User_Service.Models.User;
 import org.slf4j.Logger;
@@ -22,12 +22,12 @@ public class KafkaUtils {
     /**
      * Creates a UserEvent from a User entity
      */
-    public static UserEvent createUserEvent(User user, UserEvent.EventType eventType) {
+    public static UserEvents.UserCreatedEvent createUserEvent(User user, UserEvent.EventType eventType) {
         Set<String> roles = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
 
-        return new UserEvent(
+        return new UserEvent.(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
