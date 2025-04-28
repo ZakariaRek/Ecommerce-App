@@ -2,6 +2,7 @@ package com.Ecommerce.User_Service.Listeners;
 
 import com.Ecommerce.User_Service.Models.User;
 import com.Ecommerce.User_Service.Models.UserStatus;
+import com.Ecommerce.User_Service.Repositories.UserRepository;
 import com.Ecommerce.User_Service.Services.Kafka.UserEventService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,8 @@ public class UserEntityListener extends AbstractMongoEventListener<User> {
     private final ConcurrentHashMap<String, Set<String>> previousRolesMap = new ConcurrentHashMap<>();
 
     private UserEventService userEventService;
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     public void setUserEventService(UserEventService userEventService) {
@@ -84,7 +87,10 @@ public class UserEntityListener extends AbstractMongoEventListener<User> {
 
     @Override
     public void onAfterDelete(AfterDeleteEvent<User> event) {
-        User user = event.getSource();
+        Object id  = event.getSource().get("_id");
+
+        User user = userRepository.findById(id.toString());
+
         if (user != null) {
             userEventService.publishUserDeletedEvent(user);
 

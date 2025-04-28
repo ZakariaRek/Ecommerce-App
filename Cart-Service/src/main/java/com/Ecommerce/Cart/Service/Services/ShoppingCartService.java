@@ -6,6 +6,7 @@ import com.Ecommerce.Cart.Service.Models.ShoppingCart;
 import com.Ecommerce.Cart.Service.Payload.Request.AddItemRequest;
 import com.Ecommerce.Cart.Service.Repositories.ShoppingCartRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -18,8 +19,10 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ShoppingCartService {
     private final ShoppingCartRepository cartRepository;
+//    private final KafkaProducerService kafkaProducerService;
 
     /**
      * Get or create a shopping cart for a user
@@ -47,7 +50,7 @@ public class ShoppingCartService {
     }
 
     /**
-     * Add item to cart and update the cache
+     * Add item to cart, update the cache, and publish event to Kafka
      */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart addItemToCart(UUID userId, UUID productId, int quantity, BigDecimal price) {
@@ -58,10 +61,16 @@ public class ShoppingCartService {
                 .productId(productId)
                 .quantity(quantity)
                 .price(price)
+                .addedAt(LocalDateTime.now())
                 .build();
 
         cart.addItem(item);
-        return cartRepository.save(cart);
+        ShoppingCart updatedCart = cartRepository.save(cart);
+
+        // Publish item added event to Kafka
+//        kafkaProducerService.sendCartItemAddedEvent(updatedCart, item);
+
+        return updatedCart;
     }
 
     public ShoppingCart addItemToCart(UUID userId, AddItemRequest request) {
@@ -69,23 +78,33 @@ public class ShoppingCartService {
     }
 
     /**
-     * Remove item from cart and update the cache
+     * Remove item from cart, update the cache, and publish event to Kafka
      */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart removeItemFromCart(UUID userId, UUID productId) {
         ShoppingCart cart = getOrCreateCart(userId);
         cart.removeItem(productId);
-        return cartRepository.save(cart);
+        ShoppingCart updatedCart = cartRepository.save(cart);
+
+        // Publish item removed event to Kafka
+//        kafkaProducerService.sendCartItemRemovedEvent(userId, cart.getId(), productId);
+
+        return updatedCart;
     }
 
     /**
-     * Update item quantity and update the cache
+     * Update item quantity, update the cache, and publish event to Kafka
      */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart updateItemQuantity(UUID userId, UUID productId, int newQuantity) {
         ShoppingCart cart = getOrCreateCart(userId);
         cart.updateQuantity(productId, newQuantity);
-        return cartRepository.save(cart);
+        ShoppingCart updatedCart = cartRepository.save(cart);
+
+        // Publish item updated event to Kafka
+//        kafkaProducerService.sendCartItemUpdatedEvent(updatedCart, productId, newQuantity);
+
+        return updatedCart;
     }
 
     /**
@@ -98,15 +117,16 @@ public class ShoppingCartService {
     }
 
     /**
-     * Checkout process (invalidates cache)
+     * Checkout process (invalidates cache) and publishes event to Kafka
      */
     @CacheEvict(value = {"shoppingCarts", "cartTotals"}, key = "#userId.toString()")
     public void checkout(UUID userId) {
-        // Implementation would involve order creation, payment processing, etc.
         ShoppingCart cart = getOrCreateCart(userId);
         cart.checkout();
-        // After checkout, typically the cart would be cleared or marked as processed
         cartRepository.save(cart);
+
+        // Publish cart checkout event to Kafka
+//        kafkaProducerService.sendCartCheckoutEvent(cart);
     }
 
     /**

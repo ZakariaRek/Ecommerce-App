@@ -8,7 +8,6 @@ services:
       - '2181:2181'
     networks:
       - kafka-network
-
   kafka:
     image: confluentinc/cp-kafka:latest
     depends_on:

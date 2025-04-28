@@ -8,8 +8,13 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
+import java.util.List;
+
 @Configuration
 public class OpenAPIConfig {
+
+    @Value("${spring.application.name:Cart Service}")
+    private String applicationName;
 
     @Bean
     public OpenAPI customOpenAPI() {
