@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.mapping.event.AfterSaveEvent;
 import org.springframework.data.mongodb.core.mapping.event.BeforeConvertEvent;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -89,14 +90,14 @@ public class UserEntityListener extends AbstractMongoEventListener<User> {
     public void onAfterDelete(AfterDeleteEvent<User> event) {
         Object id  = event.getSource().get("_id");
 
-        User user = userRepository.findById(id.toString());
+        Optional<User> user = userRepository.findById(id.toString());
 
-        if (user != null) {
-            userEventService.publishUserDeletedEvent(user);
+        if (user.isPresent()) {
+            userEventService.publishUserDeletedEvent(user.orElse(null));
 
             // Clean up our maps
-            previousStatusMap.remove(user.getId());
-            previousRolesMap.remove(user.getId());
+            previousStatusMap.remove(user.get().getId());
+            previousRolesMap.remove(user.get().getId());
         }
 
         super.onAfterDelete(event);

@@ -2,6 +2,7 @@ package com.Ecommerce.User_Service.Services.Kafka;
 
 import com.Ecommerce.User_Service.Events.UserEvents;
 import com.Ecommerce.User_Service.Models.User;
+import com.Ecommerce.User_Service.Models.UserStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +21,7 @@ public class KafkaProducerService {
     private static final Logger logger = LoggerFactory.getLogger(KafkaProducerService.class);
 
     @Autowired
-    private KafkaTemplate<String, UserEvent> kafkaTemplate;
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Value("${User-service.kafka.topics.user-created}")
     private String userCreatedTopic;
@@ -34,59 +35,113 @@ public class KafkaProducerService {
     @Value("${User-service.kafka.topics.user-status-changed}")
     private String userStatusChangedTopic;
 
+    @Value("${User-service.kafka.topics.user-role-changed}")
+    private String userRoleChangedTopic;
+
     public void sendUserCreatedEvent(User user) {
-        UserEvents.UserCreatedEvent event = createUserEvent(user, UserEvents.UserCreatedEvent.EventType.CREATED);
+        UserEvents.UserCreatedEvent event = createUserCreatedEvent(user);
         send(userCreatedTopic, user.getId(), event);
     }
 
     public void sendUserUpdatedEvent(User user) {
-        UserEvent event = createUserEvent(user, UserEvent.EventType.UPDATED);
+        UserEvents.UserUpdatedEvent event = createUserUpdatedEvent(user);
         send(userUpdatedTopic, user.getId(), event);
     }
 
     public void sendUserDeletedEvent(User user) {
-        UserEvent event = createUserEvent(user, UserEvent.EventType.DELETED);
+        UserEvents.UserDeletedEvent event = createUserDeletedEvent(user);
         send(userDeletedTopic, user.getId(), event);
     }
 
-    public void sendUserStatusChangedEvent(User user) {
-        UserEvent event = createUserEvent(user, UserEvent.EventType.STATUS_CHANGED);
+    public void sendUserStatusChangedEvent(User user, UserStatus UpdatedUserStatus) {
+        UserEvents.UserStatusChangedEvent event = createUserStatusChangedEvent(user, UpdatedUserStatus);
         send(userStatusChangedTopic, user.getId(), event);
     }
 
-    private UserEvent createUserEvent(User user, UserEvent.EventType eventType) {
+    public void sendUserRoleChangedEvent(User user, Set<String> previousRoles) {
+        UserEvents.UserRoleChangedEvent event = createUserRoleChangedEvent(user, previousRoles);
+        send(userRoleChangedTopic, user.getId(), event);
+    }
+
+    private UserEvents.UserCreatedEvent createUserCreatedEvent(User user) {
         Set<String> roles = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
 
-        return new UserEvent(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                roles,
-                user.getStatus(),
-                eventType,
-                LocalDateTime.now()
-        );
+        return UserEvents.UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .status(user.getStatus())
+                .roles(roles)
+                .createdAt(LocalDateTime.now())
+                .build();
     }
 
-    private void send(String topic, String key, UserEvent event) {
+    private UserEvents.UserUpdatedEvent createUserUpdatedEvent(User user) {
+        Set<String> roles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toSet());
+
+        return UserEvents.UserUpdatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .status(user.getStatus())
+                .roles(roles)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private UserEvents.UserDeletedEvent createUserDeletedEvent(User user) {
+        return UserEvents.UserDeletedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .deletedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private UserEvents.UserStatusChangedEvent createUserStatusChangedEvent(User user, UserStatus
+            UpdatedUserSatus) {
+        return UserEvents.UserStatusChangedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .previousStatus(user.getStatus())
+                .newStatus(UpdatedUserSatus)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private UserEvents.UserRoleChangedEvent createUserRoleChangedEvent(User user, Set<String> previousRoles) {
+        Set<String> newRoles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toSet());
+
+        return UserEvents.UserRoleChangedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .previousRoles(previousRoles)
+                .newRoles(newRoles)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private <T> void send(String topic, String key, T event) {
         try {
-            CompletableFuture<SendResult<String, UserEvent>> future = kafkaTemplate.send(topic, key, event);
+            CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, event);
 
             future.whenComplete((result, ex) -> {
                 if (ex == null) {
-                    logger.info("Sent event [{}] with key={} to topic={}, partition={}, offset={}",
-                            event.getEventType(),
-                            key,
+                    logger.info("Sent event to topic={}, partition={}, offset={}, key={}",
                             result.getRecordMetadata().topic(),
                             result.getRecordMetadata().partition(),
-                            result.getRecordMetadata().offset());
+                            result.getRecordMetadata().offset(),
+                            key);
                 } else {
-                    logger.error("Unable to send event [{}] with key={} to topic={} due to : {}",
-                            event.getEventType(),
-                            key,
+                    logger.error("Unable to send event to topic={} with key={} due to : {}",
                             topic,
+                            key,
                             ex.getMessage());
                 }
             });

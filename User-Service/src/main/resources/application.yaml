@@ -37,6 +37,7 @@ User-service:
       user-updated: user-updated
       user-deleted: user-deleted
       user-status-changed: user-status-changed
+      user-role-changed: user-role-changed
 eureka:
   instance:
     preferIpAddress: true

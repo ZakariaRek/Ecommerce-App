@@ -82,7 +82,7 @@ public class AuthController {
             if (user.getStatus() != UserStatus.ACTIVE) {
                 user.setStatus(UserStatus.ACTIVE);
                 User updatedUser = userRepository.save(user);
-                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
+                kafkaProducerService.sendUserStatusChangedEvent(updatedUser,UserStatus.ACTIVE);
             }
         });
 
@@ -166,7 +166,7 @@ public class AuthController {
                 User updatedUser = userRepository.save(user);
 
                 // Send Kafka event for user status change
-                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
+                kafkaProducerService.sendUserStatusChangedEvent(updatedUser, UserStatus.INACTIVE);
             }
         }
 

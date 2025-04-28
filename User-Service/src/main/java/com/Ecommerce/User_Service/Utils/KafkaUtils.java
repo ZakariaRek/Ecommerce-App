@@ -1,7 +1,6 @@
 package com.Ecommerce.User_Service.Utils;
 
 import com.Ecommerce.User_Service.Events.UserEvents;
-import com.Ecommerce.User_Service.Models.Role;
 import com.Ecommerce.User_Service.Models.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,22 +19,81 @@ public class KafkaUtils {
     private static final Logger logger = LoggerFactory.getLogger(KafkaUtils.class);
 
     /**
-     * Creates a UserEvent from a User entity
+     * Creates a UserCreatedEvent from a User entity
      */
-    public static UserEvents.UserCreatedEvent createUserEvent(User user, UserEvents.UserCreatedEvent) {
+    public static UserEvents.UserCreatedEvent createUserCreatedEvent(User user) {
         Set<String> roles = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
 
-        return new UserEvents.UserCreatedEvent(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                roles,
-                user.getStatus(),
-                eventType,
-                LocalDateTime.now()
-        );
+        return UserEvents.UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .roles(roles)
+                .status(user.getStatus())
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Creates a UserUpdatedEvent from a User entity
+     */
+    public static UserEvents.UserUpdatedEvent createUserUpdatedEvent(User user) {
+        Set<String> roles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toSet());
+
+        return UserEvents.UserUpdatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .roles(roles)
+                .status(user.getStatus())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Creates a UserDeletedEvent from a User entity
+     */
+    public static UserEvents.UserDeletedEvent createUserDeletedEvent(User user) {
+        return UserEvents.UserDeletedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .deletedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Creates a UserStatusChangedEvent from current and previous User states
+     */
+    public static UserEvents.UserStatusChangedEvent createUserStatusChangedEvent(User user, User previousUser) {
+        return UserEvents.UserStatusChangedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .previousStatus(previousUser.getStatus())
+                .newStatus(user.getStatus())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Creates a UserRoleChangedEvent from a User entity and previous roles
+     */
+    public static UserEvents.UserRoleChangedEvent createUserRoleChangedEvent(User user, Set<String> previousRoles) {
+        Set<String> newRoles = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toSet());
+
+        return UserEvents.UserRoleChangedEvent.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .previousRoles(previousRoles)
+                .newRoles(newRoles)
+                .updatedAt(LocalDateTime.now())
+                .build();
     }
 
     /**

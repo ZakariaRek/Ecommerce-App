@@ -59,7 +59,8 @@ public class UserAddressEntityListener extends AbstractMongoEventListener<UserAd
     @Override
     public void onBeforeDelete(BeforeDeleteEvent<UserAddress> event) {
         // Store the entity before it's deleted
-        UserAddress address = event.getSource();
+        Object id  = event.getSource().get("_id");
+        UserAddress address = userAddressService.getAddressById(id.toString()).orElse(null);
         if (address != null && address.getId() != null) {
             deletedEntities.put(address.getId(), address);
         }
