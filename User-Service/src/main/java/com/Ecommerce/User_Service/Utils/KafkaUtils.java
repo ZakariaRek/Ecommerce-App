@@ -22,12 +22,12 @@ public class KafkaUtils {
     /**
      * Creates a UserEvent from a User entity
      */
-    public static UserEvents.UserCreatedEvent createUserEvent(User user, UserEvent.EventType eventType) {
+    public static UserEvents.UserCreatedEvent createUserEvent(User user, UserEvents.UserCreatedEvent) {
         Set<String> roles = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
 
-        return new UserEvent.(
+        return new UserEvents.UserCreatedEvent(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),

@@ -92,7 +92,7 @@ public class KafkaProducerConfig {
     public NewTopic productCreatedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -100,7 +100,7 @@ public class KafkaProducerConfig {
     public NewTopic productUpdatedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -108,7 +108,7 @@ public class KafkaProducerConfig {
     public NewTopic productDeletedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -116,7 +116,7 @@ public class KafkaProducerConfig {
     public NewTopic productStockChangedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_STOCK_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -124,7 +124,7 @@ public class KafkaProducerConfig {
     public NewTopic productPriceChangedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_PRICE_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -132,7 +132,7 @@ public class KafkaProducerConfig {
     public NewTopic productStatusChangedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_STATUS_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -141,7 +141,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierCreatedTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -149,7 +149,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierUpdatedTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -157,7 +157,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierDeletedTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -165,7 +165,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierRatingChangedTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_RATING_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -173,7 +173,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierContractUpdatedTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_CONTRACT_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -181,7 +181,7 @@ public class KafkaProducerConfig {
     public NewTopic supplierProductAssociationTopic() {
         return TopicBuilder.name(TOPIC_SUPPLIER_PRODUCT_ASSOCIATION)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
     // Category Topic definitions with partitions and replication factor
@@ -189,7 +189,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryCreatedTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -197,7 +197,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryUpdatedTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -205,7 +205,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryDeletedTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -213,7 +213,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryHierarchyChangedTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_HIERARCHY_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -221,7 +221,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryProductAssociationTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_PRODUCT_ASSOCIATION)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -229,7 +229,7 @@ public class KafkaProducerConfig {
     public NewTopic categoryImageUpdatedTopic() {
         return TopicBuilder.name(TOPIC_CATEGORY_IMAGE_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -238,7 +238,7 @@ public class KafkaProducerConfig {
     public NewTopic discountCreatedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -246,7 +246,7 @@ public class KafkaProducerConfig {
     public NewTopic discountUpdatedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -254,7 +254,7 @@ public class KafkaProducerConfig {
     public NewTopic discountDeletedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -262,7 +262,7 @@ public class KafkaProducerConfig {
     public NewTopic discountActivatedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_ACTIVATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -270,7 +270,7 @@ public class KafkaProducerConfig {
     public NewTopic discountDeactivatedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_DEACTIVATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -278,7 +278,7 @@ public class KafkaProducerConfig {
     public NewTopic discountValueChangedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_VALUE_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -286,7 +286,7 @@ public class KafkaProducerConfig {
     public NewTopic discountPeriodChangedTopic() {
         return TopicBuilder.name(TOPIC_DISCOUNT_PERIOD_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -295,7 +295,7 @@ public class KafkaProducerConfig {
     public NewTopic reviewCreatedTopic() {
         return TopicBuilder.name(TOPIC_REVIEW_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -303,7 +303,7 @@ public class KafkaProducerConfig {
     public NewTopic reviewUpdatedTopic() {
         return TopicBuilder.name(TOPIC_REVIEW_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -311,7 +311,7 @@ public class KafkaProducerConfig {
     public NewTopic reviewDeletedTopic() {
         return TopicBuilder.name(TOPIC_REVIEW_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -319,7 +319,7 @@ public class KafkaProducerConfig {
     public NewTopic reviewVerifiedTopic() {
         return TopicBuilder.name(TOPIC_REVIEW_VERIFIED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -327,7 +327,7 @@ public class KafkaProducerConfig {
     public NewTopic reviewRatingChangedTopic() {
         return TopicBuilder.name(TOPIC_REVIEW_RATING_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
     // Inventory Topic definitions with partitions and replication factor
@@ -335,7 +335,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryCreatedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -343,7 +343,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryUpdatedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -351,7 +351,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryDeletedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -359,7 +359,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryStockChangedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_STOCK_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -367,7 +367,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryThresholdChangedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_THRESHOLD_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -375,7 +375,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryLowStockTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_LOW_STOCK)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -383,7 +383,7 @@ public class KafkaProducerConfig {
     public NewTopic inventoryRestockedTopic() {
         return TopicBuilder.name(TOPIC_INVENTORY_RESTOCKED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 }

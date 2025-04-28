@@ -1,6 +1,6 @@
 package com.Ecommerce.Loyalty_Service.Services.Kafka;
 
-import com.Ecommerce.Loyalty_Service.config.KafkaConfig;
+import com.Ecommerce.Loyalty_Service.Config.KafkaConfig;
 import com.Ecommerce.Loyalty_Service.Entities.PointTransaction;
 import com.Ecommerce.Loyalty_Service.Events.LoyaltyEvents;
 import lombok.RequiredArgsConstructor;

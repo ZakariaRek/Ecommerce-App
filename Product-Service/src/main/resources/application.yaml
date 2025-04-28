@@ -51,3 +51,7 @@ springdoc:
     - group: product-service
       paths-to-match:
         - /**
+# ELK configuration - include in all services
+logstash:
+  host: ${LOGSTASH_HOST:localhost}
+  port: ${LOGSTASH_PORT:5000}

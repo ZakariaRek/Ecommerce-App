@@ -63,7 +63,7 @@
             <appender-ref ref="FILE" />
         </root>
 
-        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+        <logger name="com.Ecommerce" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="FILE" />
         </logger>
@@ -75,7 +75,7 @@
             <appender-ref ref="KAFKA" />
         </root>
 
-        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+        <logger name="com.Ecommerce" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="KAFKA" />
         </logger>
@@ -87,7 +87,7 @@
             <appender-ref ref="LOGSTASH" />
         </root>
 
-        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+        <logger name="com.Ecommerce" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="LOGSTASH" />
         </logger>
@@ -101,7 +101,7 @@
             <appender-ref ref="KAFKA" />
         </root>
 
-        <logger name="com.yourcompany.yourapp" level="INFO" additivity="false">
+        <logger name="com.Ecommerce" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="FILE" />
             <appender-ref ref="LOGSTASH" />
