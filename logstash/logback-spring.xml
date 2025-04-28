@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}/}spring.log}"/>
+
+    <!-- Console appender for local development -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+    </appender>
+
+    <!-- File appender -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.gz</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Logstash appender for direct ELK stack integration -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>localhost:5000</destination>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <customFields>{"application":"spring-boot-elk-example","log_source":"direct"}</customFields>
+        </encoder>
+    </appender>
+
+    <!-- Kafka appender for sending logs through Kafka -->
+    <appender name="KAFKA" class="com.github.danielwegener.logback.kafka.KafkaAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <customFields>{"application":"spring-boot-elk-example","log_source":"kafka"}</customFields>
+        </encoder>
+        <topic>app-logs</topic>
+        <keyingStrategy class="com.github.danielwegener.logback.kafka.keying.NoKeyKeyingStrategy" />
+        <deliveryStrategy class="com.github.danielwegener.logback.kafka.delivery.AsynchronousDeliveryStrategy" />
+
+        <!-- Kafka producer properties -->
+        <producerConfig>bootstrap.servers=localhost:9092</producerConfig>
+        <producerConfig>acks=1</producerConfig>
+        <producerConfig>linger.ms=500</producerConfig>
+        <producerConfig>max.block.ms=1000</producerConfig>
+        <producerConfig>client.id=${HOSTNAME}-${CONTEXT_NAME}</producerConfig>
+
+        <!-- Failover to a different appender if Kafka is down -->
+        <appender-ref ref="CONSOLE" />
+    </appender>
+
+    <!-- Route logs to different targets based on profile -->
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+        </root>
+
+        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+        </logger>
+    </springProfile>
+
+    <springProfile name="kafka">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="KAFKA" />
+        </root>
+
+        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="KAFKA" />
+        </logger>
+    </springProfile>
+
+    <springProfile name="logstash">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="LOGSTASH" />
+        </root>
+
+        <logger name="com.yourcompany.yourapp" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="LOGSTASH" />
+        </logger>
+    </springProfile>
+
+    <springProfile name="production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="LOGSTASH" />
+            <appender-ref ref="KAFKA" />
+        </root>
+
+        <logger name="com.yourcompany.yourapp" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="LOGSTASH" />
+            <appender-ref ref="KAFKA" />
+        </logger>
+    </springProfile>
+</configuration>
