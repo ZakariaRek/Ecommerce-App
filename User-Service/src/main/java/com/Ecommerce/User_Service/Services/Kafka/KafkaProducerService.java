@@ -1,6 +1,6 @@
 package com.Ecommerce.User_Service.Services.Kafka;
 
-import com.Ecommerce.User_Service.Events.UserEvent;
+import com.Ecommerce.User_Service.Events.UserEvents;
 import com.Ecommerce.User_Service.Models.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +35,7 @@ public class KafkaProducerService {
     private String userStatusChangedTopic;
 
     public void sendUserCreatedEvent(User user) {
-        UserEvent event = createUserEvent(user, UserEvent.EventType.CREATED);
+        UserEvents.UserCreatedEvent event = createUserEvent(user, UserEvents.UserCreatedEvent.EventType.CREATED);
         send(userCreatedTopic, user.getId(), event);
     }
 
