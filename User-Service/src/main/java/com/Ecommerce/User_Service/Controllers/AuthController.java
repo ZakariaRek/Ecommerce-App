@@ -148,6 +148,7 @@ public class AuthController {
         // Send Kafka event for user creation
         kafkaProducerService.sendUserCreatedEvent(savedUser);
 
+
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
     }
 

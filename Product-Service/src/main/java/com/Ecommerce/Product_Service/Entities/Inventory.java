@@ -1,5 +1,6 @@
 package com.Ecommerce.Product_Service.Entities;
 
+import com.Ecommerce.Product_Service.Listener.InventoryEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,6 +11,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "inventory")
+@EntityListeners(InventoryEntityListener.class)
 public class Inventory {
     @Id
     private UUID id;

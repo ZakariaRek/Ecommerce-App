@@ -1,5 +1,6 @@
 package com.Ecommerce.Product_Service.Entities;
 
+import com.Ecommerce.Product_Service.Listener.CategoryEntityListener;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -12,6 +13,7 @@ import java.util.UUID;
 @Entity
 @Data
 @Table(name = "categories")
+@EntityListeners(CategoryEntityListener.class)
 public class Category {
     @Id
     @GeneratedValue
