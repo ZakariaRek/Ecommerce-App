@@ -6,7 +6,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.Ecommerce.User_Service.Models.UserStatus;
-import com.Ecommerce.User_Service.Services.Kafka.KafkaProducerService;
+
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,8 +58,6 @@ public class AuthController {
     @Autowired
     JwtUtils jwtUtils;
 
-    @Autowired
-    KafkaProducerService kafkaProducerService;
 
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
@@ -82,7 +80,6 @@ public class AuthController {
             if (user.getStatus() != UserStatus.ACTIVE) {
                 user.setStatus(UserStatus.ACTIVE);
                 User updatedUser = userRepository.save(user);
-                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
             }
         });
 
@@ -145,8 +142,7 @@ public class AuthController {
         user.setRoles(roles);
         User savedUser = userRepository.save(user);
 
-        // Send Kafka event for user creation
-        kafkaProducerService.sendUserCreatedEvent(savedUser);
+
 
 
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
@@ -165,8 +161,6 @@ public class AuthController {
                 user.setStatus(UserStatus.INACTIVE); // Or UserStatus.SUSPENDED if needed
                 User updatedUser = userRepository.save(user);
 
-                // Send Kafka event for user status change
-                kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
             }
         }
 

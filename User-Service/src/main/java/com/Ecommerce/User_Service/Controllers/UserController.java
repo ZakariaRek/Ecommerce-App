@@ -1,4 +1,3 @@
-
 package com.Ecommerce.User_Service.Controllers;
 
 import com.Ecommerce.User_Service.Models.ERole;
@@ -8,7 +7,6 @@ import com.Ecommerce.User_Service.Models.UserStatus;
 import com.Ecommerce.User_Service.Payload.Request.UpdateUserRequest;
 import com.Ecommerce.User_Service.Payload.Response.MessageResponse;
 import com.Ecommerce.User_Service.Repositories.RoleRepository;
-import com.Ecommerce.User_Service.Services.Kafka.KafkaProducerService;
 import com.Ecommerce.User_Service.Services.RoleService;
 import com.Ecommerce.User_Service.Services.UserService;
 import jakarta.validation.Valid;
@@ -36,8 +34,6 @@ public class UserController {
 
     @Autowired
     private RoleRepository roleRepository;
-    @Autowired
-    private KafkaProducerService kafkaProducerService;
 
     @PreAuthorize("ROLE_ADMIN")
     @GetMapping
@@ -78,7 +74,7 @@ public class UserController {
                     existingUser.setUsername(request.getUsername());
                     existingUser.setEmail(request.getEmail());
                     existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
-                        System.out.println(request.getRoles());
+                    System.out.println(request.getRoles());
                     Set<Role> roles = new HashSet<>();
                     for (String roleStr : request.getRoles()) {
                         try {
@@ -95,7 +91,6 @@ public class UserController {
                     existingUser.setRoles(roles);
 
                     User updatedUser = userService.updateUser(existingUser);
-                    kafkaProducerService.sendUserUpdatedEvent(updatedUser);
                     return new ResponseEntity<>(updatedUser, HttpStatus.OK);
                 })
                 .orElse(ResponseEntity
@@ -107,21 +102,16 @@ public class UserController {
     @PatchMapping("/{id}/status/{status}")
     public ResponseEntity<?> updateUserStatus(@PathVariable String id, @PathVariable String status) {
         try {
-//            System.out.println(status);
-
             return userService.getUserById(id)
                     .map(existingUser -> {
-            System.out.println(status);
-            System.out.println(existingUser);
+                        System.out.println(status);
+                        System.out.println(existingUser);
                         System.out.println("existingUser");
-
-
 
                         existingUser.setStatus(UserStatus.valueOf(status));
                         System.out.println("existingUser");
 
                         User updatedUser = userService.updateUser(existingUser);
-                        kafkaProducerService.sendUserStatusChangedEvent(updatedUser);
                         return new ResponseEntity<>(updatedUser, HttpStatus.OK);
                     })
                     .orElse(new ResponseEntity(new MessageResponse("User not found"),HttpStatus.NOT_FOUND));
@@ -139,7 +129,6 @@ public class UserController {
         return userService.getUserById(id)
                 .map(user -> {
                     userService.deleteUser(id);
-                    kafkaProducerService.sendUserDeletedEvent(user);
                     return ResponseEntity
                             .ok()
                             .body(new MessageResponse("User deleted successfully"));
