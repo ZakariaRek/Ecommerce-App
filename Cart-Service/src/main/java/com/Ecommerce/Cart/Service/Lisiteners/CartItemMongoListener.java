@@ -2,6 +2,7 @@ package com.Ecommerce.Cart.Service.Lisiteners;
 
 import com.Ecommerce.Cart.Service.Models.CartItem;
 import com.Ecommerce.Cart.Service.Services.Kafka.CartItemKafkaService;
+import com.Ecommerce.Cart.Service.Services.CartItemService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.mapping.event.AbstractMongoEventListener;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,9 +27,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CartItemMongoListener extends AbstractMongoEventListener<CartItem> {
 
     private final CartItemKafkaService kafkaService;
+    private final CartItemService cartItemService;
 
     // Store pre-change state for events
     private static final Map<String, EntityState> entityStateMap = new ConcurrentHashMap<>();
+
+    // Store items before deletion to use in after-delete events
+    private static final Map<String, CartItem> preDeleteItemMap = new ConcurrentHashMap<>();
 
     /**
      * Called after a document is saved (created or updated)
@@ -52,25 +59,7 @@ public class CartItemMongoListener extends AbstractMongoEventListener<CartItem> 
         }
     }
 
-    /**
-     * Called before a document is deleted
-     */
-    @Override
-    public void onBeforeDelete(BeforeDeleteEvent<CartItem> event) {
-        try {
-            // We don't have direct access to the document here, just the id
-            // We'll need to rely on the CartItemService to publish removal events
 
-            // The document id is in the event's DBObject as _id
-            Object id = event.getSource().get("_id");
-            log.debug("Preparing to delete cart item with id: {}", id);
-
-            // We can't access the actual CartItem here
-            // The service layer should handle publishing removal events
-        } catch (Exception e) {
-            log.error("Error in cart item MongoDB listener before delete", e);
-        }
-    }
 
     /**
      * Called after a document is deleted
@@ -78,11 +67,24 @@ public class CartItemMongoListener extends AbstractMongoEventListener<CartItem> 
     @Override
     public void onAfterDelete(AfterDeleteEvent<CartItem> event) {
         try {
-            // Similar to onBeforeDelete, we only have access to the document id
-            // The service layer should handle publishing removal events
-
+            // Extract the ID from the deleted document
             Object id = event.getSource().get("_id");
-            log.debug("Cart item with id: {} was deleted", id);
+            if (id != null) {
+                String documentId = id.toString();
+                log.debug("Cart item with id: {} was deleted", documentId);
+
+                // Look for the stored CartItem from the beforeDelete event
+                String key = "CartItem:" + documentId;
+                CartItem deletedItem = preDeleteItemMap.remove(key);
+
+                if (deletedItem != null) {
+                    // Now we have the complete item that was deleted, publish the event
+                    kafkaService.publishCartItemRemoved(deletedItem, "user_removed");
+                    log.debug("Published Kafka event for removed cart item: {}", documentId);
+                } else {
+                    log.warn("Could not find pre-delete state for cart item with id: {}", documentId);
+                }
+            }
         } catch (Exception e) {
             log.error("Error in cart item MongoDB listener after delete", e);
         }
@@ -92,7 +94,9 @@ public class CartItemMongoListener extends AbstractMongoEventListener<CartItem> 
      * Handle the creation of a new cart item
      */
     private void handleCartItemCreation(CartItem cartItem) {
-        kafkaService.publishCartItemAdded(cartItem, null);
+        // Fetch product ID if needed (could be from a product service)
+        UUID ProductID = cartItem.getProductId();
+        kafkaService.publishCartItemAdded(cartItem, ProductID);
         log.debug("MongoDB listener triggered for cart item creation: {}", cartItem.getId());
     }
 

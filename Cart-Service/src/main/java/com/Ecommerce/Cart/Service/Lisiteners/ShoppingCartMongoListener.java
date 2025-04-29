@@ -2,6 +2,7 @@ package com.Ecommerce.Cart.Service.Lisiteners;
 
 import com.Ecommerce.Cart.Service.Models.ShoppingCart;
 import com.Ecommerce.Cart.Service.Services.Kafka.ShoppingCartKafkaService;
+import com.Ecommerce.Cart.Service.Services.ShoppingCartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.mapping.event.AbstractMongoEventListener;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,9 +27,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ShoppingCartMongoListener extends AbstractMongoEventListener<ShoppingCart> {
 
     private final ShoppingCartKafkaService kafkaService;
+    private final ShoppingCartService shoppingCartService;
 
     // Store pre-change state for events
     private static final Map<String, EntityState> entityStateMap = new ConcurrentHashMap<>();
+
+    // Store carts before deletion to use in after-delete events
+    private static final Map<String, ShoppingCart> preDeleteCartMap = new ConcurrentHashMap<>();
 
     /**
      * Called after a document is saved (created or updated)
@@ -53,25 +59,7 @@ public class ShoppingCartMongoListener extends AbstractMongoEventListener<Shoppi
         }
     }
 
-    /**
-     * Called before a document is deleted
-     */
-    @Override
-    public void onBeforeDelete(BeforeDeleteEvent<ShoppingCart> event) {
-        try {
-            // We don't have direct access to the document here, just the id
-            // We'll need to rely on the CartService to publish removal events
 
-            // The document id is in the event's DBObject as _id
-            Object id = event.getSource().get("_id");
-            log.debug("Preparing to delete shopping cart with id: {}", id);
-
-            // We can't access the actual ShoppingCart here
-            // The service layer should handle publishing removal events
-        } catch (Exception e) {
-            log.error("Error in shopping cart MongoDB listener before delete", e);
-        }
-    }
 
     /**
      * Called after a document is deleted
@@ -79,11 +67,24 @@ public class ShoppingCartMongoListener extends AbstractMongoEventListener<Shoppi
     @Override
     public void onAfterDelete(AfterDeleteEvent<ShoppingCart> event) {
         try {
-            // Similar to onBeforeDelete, we only have access to the document id
-            // The service layer should handle publishing removal events
-
+            // Extract the ID from the deleted document
             Object id = event.getSource().get("_id");
-            log.debug("Shopping cart with id: {} was deleted", id);
+            if (id != null) {
+                String documentId = id.toString();
+                log.debug("Shopping cart with id: {} was deleted", documentId);
+
+                // Look for the stored ShoppingCart from the beforeDelete event
+                String key = "ShoppingCart:" + documentId;
+                ShoppingCart deletedCart = preDeleteCartMap.remove(key);
+
+                if (deletedCart != null) {
+                    // Now we have the complete cart that was deleted, publish the event
+                    kafkaService.publishCartDeleted(deletedCart, "user_deleted");
+                    log.debug("Published Kafka event for removed shopping cart: {}", documentId);
+                } else {
+                    log.warn("Could not find pre-delete state for shopping cart with id: {}", documentId);
+                }
+            }
         } catch (Exception e) {
             log.error("Error in shopping cart MongoDB listener after delete", e);
         }
@@ -93,12 +94,9 @@ public class ShoppingCartMongoListener extends AbstractMongoEventListener<Shoppi
      * Handle the creation of a new shopping cart
      */
     private void handleCartCreation(ShoppingCart cart) {
-        // Device and channel info would typically come from the request context
-        // For this example, we're setting default values
-        String deviceInfo = "UNKNOWN_DEVICE";
-        String channelType = "WEB";
 
-        kafkaService.publishCartCreated(cart, deviceInfo, channelType);
+
+        kafkaService.publishCartCreated(cart);
         log.debug("MongoDB listener triggered for shopping cart creation: {}", cart.getId());
     }
 
@@ -123,10 +121,23 @@ public class ShoppingCartMongoListener extends AbstractMongoEventListener<Shoppi
 
         if (oldItemCount == 0 && newItemCount > 0) {
             log.debug("First item added to shopping cart: {}", cart.getId());
+            // Could publish a special "first item added" event if needed
         }
 
         if (oldItemCount > 0 && newItemCount == 0) {
             log.debug("All items removed from shopping cart: {}", cart.getId());
+            // Could publish a special "cart emptied" event if needed
+        }
+
+        // Check for cart abandonment potential
+        LocalDateTime lastUpdated = oldState.lastUpdatedAt;
+        LocalDateTime now = LocalDateTime.now();
+        long hoursSinceLastUpdate = java.time.Duration.between(lastUpdated, now).toHours();
+
+        // If cart hasn't been updated in 24 hours and has items, consider it abandoned
+        if (oldItemCount > 0 && hoursSinceLastUpdate >= 24) {
+            kafkaService.publishCartAbandoned(cart, now);
+            log.debug("Published cart abandoned event for cart: {}", cart.getId());
         }
     }
 

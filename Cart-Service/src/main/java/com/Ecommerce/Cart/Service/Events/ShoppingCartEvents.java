@@ -46,17 +46,13 @@ public class ShoppingCartEvents {
         private UUID userId;
         private LocalDateTime createdAt;
         private LocalDateTime expiresAt;
-        private String deviceInfo;
-        private String channelType; // WEB, MOBILE_APP, etc.
 
-        public CartCreatedEvent(ShoppingCart cart, String deviceInfo, String channelType) {
+        public CartCreatedEvent(ShoppingCart cart) {
             super("CART_CREATED");
             this.cartId = cart.getId();
             this.userId = cart.getUserId();
             this.createdAt = cart.getCreatedAt();
             this.expiresAt = cart.getExpiresAt();
-            this.deviceInfo = deviceInfo;
-            this.channelType = channelType;
         }
     }
 

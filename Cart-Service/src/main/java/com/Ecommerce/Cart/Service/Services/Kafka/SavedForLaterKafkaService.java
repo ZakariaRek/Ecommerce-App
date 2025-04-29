@@ -23,9 +23,9 @@ public class SavedForLaterKafkaService {
     /**
      * Publish an event when an item is saved for later
      */
-    public void publishItemSavedForLater(SavedForLater savedItem, String productName, UUID sourceCartId, String source) {
+    public void publishItemSavedForLater(SavedForLater savedItem) {
         SavedForLaterEvents.ItemSavedForLaterEvent event =
-                new SavedForLaterEvents.ItemSavedForLaterEvent(savedItem, productName, sourceCartId, source);
+                new SavedForLaterEvents.ItemSavedForLaterEvent(savedItem);
 
         kafkaTemplate.send(KafkaProducerConfig.TOPIC_ITEM_SAVED_FOR_LATER,
                 savedItem.getUserId().toString(), event);
@@ -36,9 +36,9 @@ public class SavedForLaterKafkaService {
     /**
      * Publish an event when a saved item is moved to cart
      */
-    public void publishSavedItemMovedToCart(SavedForLater savedItem, UUID cartId, UUID newCartItemId) {
+    public void publishSavedItemMovedToCart(SavedForLater savedItem) {
         SavedForLaterEvents.SavedItemMovedToCartEvent event =
-                new SavedForLaterEvents.SavedItemMovedToCartEvent(savedItem, cartId, newCartItemId);
+                new SavedForLaterEvents.SavedItemMovedToCartEvent(savedItem);
 
         kafkaTemplate.send(KafkaProducerConfig.TOPIC_SAVED_ITEM_MOVED_TO_CART,
                 savedItem.getUserId().toString(), event);
