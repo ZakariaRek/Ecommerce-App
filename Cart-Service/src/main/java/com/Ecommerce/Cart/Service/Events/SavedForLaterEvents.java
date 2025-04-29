@@ -42,18 +42,14 @@ public class SavedForLaterEvents {
         private UUID savedItemId;
         private UUID userId;
         private UUID productId;
-        private String productName;
-        private UUID sourceCartId;
-        private String source; // "CART", "PRODUCT_PAGE", etc.
 
-        public ItemSavedForLaterEvent(SavedForLater savedItem, String productName, UUID sourceCartId, String source) {
+
+        public ItemSavedForLaterEvent(SavedForLater savedItem) {
             super("ITEM_SAVED_FOR_LATER");
             this.savedItemId = savedItem.getId();
             this.userId = savedItem.getUserId();
             this.productId = savedItem.getProductId();
-            this.productName = productName;
-            this.sourceCartId = sourceCartId;
-            this.source = source;
+
         }
     }
 
@@ -68,16 +64,13 @@ public class SavedForLaterEvents {
         private UUID savedItemId;
         private UUID userId;
         private UUID productId;
-        private UUID cartId;
-        private UUID newCartItemId;
 
-        public SavedItemMovedToCartEvent(SavedForLater savedItem, UUID cartId, UUID newCartItemId) {
+        public SavedItemMovedToCartEvent(SavedForLater savedItem) {
             super("SAVED_ITEM_MOVED_TO_CART");
             this.savedItemId = savedItem.getId();
             this.userId = savedItem.getUserId();
             this.productId = savedItem.getProductId();
-            this.cartId = cartId;
-            this.newCartItemId = newCartItemId;
+
         }
     }
 

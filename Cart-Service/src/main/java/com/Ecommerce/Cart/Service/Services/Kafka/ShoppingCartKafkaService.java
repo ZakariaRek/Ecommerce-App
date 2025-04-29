@@ -25,8 +25,8 @@ public class ShoppingCartKafkaService {
     /**
      * Publish an event when a shopping cart is created
      */
-    public void publishCartCreated(ShoppingCart cart, String deviceInfo, String channelType) {
-        ShoppingCartEvents.CartCreatedEvent event = new ShoppingCartEvents.CartCreatedEvent(cart, deviceInfo, channelType);
+    public void publishCartCreated(ShoppingCart cart) {
+        ShoppingCartEvents.CartCreatedEvent event = new ShoppingCartEvents.CartCreatedEvent(cart);
         kafkaTemplate.send(KafkaProducerConfig.TOPIC_CART_CREATED, cart.getUserId().toString(), event);
         log.info("Published cart created event: {}", event);
     }

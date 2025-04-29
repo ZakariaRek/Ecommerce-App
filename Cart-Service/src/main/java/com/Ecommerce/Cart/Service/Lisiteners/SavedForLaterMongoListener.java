@@ -2,6 +2,7 @@ package com.Ecommerce.Cart.Service.Lisiteners;
 
 import com.Ecommerce.Cart.Service.Models.SavedForLater;
 import com.Ecommerce.Cart.Service.Services.Kafka.SavedForLaterKafkaService;
+import com.Ecommerce.Cart.Service.Services.SavedForLaterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.mapping.event.AbstractMongoEventListener;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,9 +27,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SavedForLaterMongoListener extends AbstractMongoEventListener<SavedForLater> {
 
     private final SavedForLaterKafkaService kafkaService;
+    private final SavedForLaterService savedForLaterService;
 
     // Store pre-change state for events
     private static final Map<String, EntityState> entityStateMap = new ConcurrentHashMap<>();
+
+    // Store items before deletion to use in after-delete events
+    private static final Map<String, SavedForLater> preDeleteItemMap = new ConcurrentHashMap<>();
 
     /**
      * Called after a document is saved (created or updated)
@@ -54,23 +60,7 @@ public class SavedForLaterMongoListener extends AbstractMongoEventListener<Saved
         }
     }
 
-    /**
-     * Called before a document is deleted
-     */
-    @Override
-    public void onBeforeDelete(BeforeDeleteEvent<SavedForLater> event) {
-        try {
-            // We don't have direct access to the document here, just the id
-            // The document id is in the event's DBObject as _id
-            Object id = event.getSource().get("_id");
-            log.debug("Preparing to delete saved-for-later item with id: {}", id);
 
-            // We can't access the actual SavedForLater here
-            // The service layer should handle publishing removal events
-        } catch (Exception e) {
-            log.error("Error in saved-for-later MongoDB listener before delete", e);
-        }
-    }
 
     /**
      * Called after a document is deleted
@@ -78,9 +68,27 @@ public class SavedForLaterMongoListener extends AbstractMongoEventListener<Saved
     @Override
     public void onAfterDelete(AfterDeleteEvent<SavedForLater> event) {
         try {
-            // Similar to onBeforeDelete, we only have access to the document id
+            // Extract the ID from the deleted document
             Object id = event.getSource().get("_id");
-            log.debug("Saved-for-later item with id: {} was deleted", id);
+            if (id != null) {
+                String documentId = id.toString();
+                log.debug("Saved-for-later item with id: {} was deleted", documentId);
+
+                // Look for the stored SavedForLater item from the beforeDelete event
+                String key = "SavedForLater:" + documentId;
+                SavedForLater deletedItem = preDeleteItemMap.remove(key);
+
+                if (deletedItem != null) {
+                    // Determine the reason for removal (could be expanded with more context)
+                    String removalReason = "user_deleted";
+
+                    // Always publish the remove event with the appropriate reason
+                    kafkaService.publishSavedItemRemoved(deletedItem, removalReason);
+                    log.debug("Published Kafka event for removed saved-for-later item: {}", documentId);
+                } else {
+                    log.warn("Could not find pre-delete state for saved-for-later item with id: {}", documentId);
+                }
+            }
         } catch (Exception e) {
             log.error("Error in saved-for-later MongoDB listener after delete", e);
         }
@@ -90,15 +98,11 @@ public class SavedForLaterMongoListener extends AbstractMongoEventListener<Saved
      * Handle the creation of a new saved-for-later item
      */
     private void handleSavedItemCreation(SavedForLater savedItem) {
-        // Product name would typically come from a product service
-        // For this example, we're setting it to null
-        String productName = null;
 
-        // Source cart ID may be null if saved directly from product page
-        UUID sourceCartId = null;
-        String source = "PRODUCT_PAGE";
 
-        kafkaService.publishItemSavedForLater(savedItem, productName, sourceCartId, source);
+
+
+        kafkaService.publishItemSavedForLater(savedItem);
         log.debug("MongoDB listener triggered for saved-for-later item creation: {}", savedItem.getId());
     }
 
@@ -107,7 +111,15 @@ public class SavedForLaterMongoListener extends AbstractMongoEventListener<Saved
      * (These are rare, but included for completeness)
      */
     private void handleSavedItemUpdate(SavedForLater savedItem, EntityState oldState) {
-        // No specific update events for SavedForLater as of now
+        // Check for specific changes that might need events
+        LocalDateTime oldSavedAt = oldState.savedAt;
+        LocalDateTime newSavedAt = savedItem.getSavedAt();
+
+        if (!oldSavedAt.equals(newSavedAt)) {
+            log.debug("SavedForLater item timestamp changed from {} to {}", oldSavedAt, newSavedAt);
+            // Could publish a specific update event if needed
+        }
+
         log.debug("MongoDB listener triggered for saved-for-later item update: {}", savedItem.getId());
     }
 
