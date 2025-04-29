@@ -27,8 +27,8 @@ public class CartItemKafkaService {
     /**
      * Publish an event when a cart item is added
      */
-    public void publishCartItemAdded(CartItem cartItem, String productName) {
-        CartItemEvents.CartItemAddedEvent event = new CartItemEvents.CartItemAddedEvent(cartItem, productName);
+    public void publishCartItemAdded(CartItem cartItem, UUID ProductId) {
+        CartItemEvents.CartItemAddedEvent event = new CartItemEvents.CartItemAddedEvent(cartItem, ProductId);
         kafkaTemplate.send(KafkaProducerConfig.TOPIC_CART_ITEM_ADDED, cartItem.getCartId().toString(), event);
         log.info("Published cart item added event: {}", event);
     }

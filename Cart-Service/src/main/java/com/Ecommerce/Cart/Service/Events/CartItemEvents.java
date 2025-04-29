@@ -43,17 +43,15 @@ public class CartItemEvents {
         private UUID cartId;
         private UUID cartItemId;
         private UUID productId;
-        private String productName;
         private int quantity;
         private BigDecimal price;
         private BigDecimal subtotal;
 
-        public CartItemAddedEvent(CartItem cartItem, String productName) {
+        public CartItemAddedEvent(CartItem cartItem, UUID productId) {
             super("CART_ITEM_ADDED");
             this.cartId = cartItem.getCartId();
             this.cartItemId = cartItem.getId();
             this.productId = cartItem.getProductId();
-            this.productName = productName;
             this.quantity = cartItem.getQuantity();
             this.price = cartItem.getPrice();
             this.subtotal = cartItem.getSubtotal();
