@@ -17,6 +17,12 @@ type Config struct {
 	DBPassword  string
 	DBName      string
 	Environment string
+
+	// Eureka configuration
+	EurekaURL string
+	HostName  string
+	IPAddress string
+	AppName   string
 }
 
 // LoadConfig loads configuration from environment
@@ -27,6 +33,12 @@ func LoadConfig() *Config {
 		log.Println("No .env file found or error loading it")
 	}
 
+	// Get hostname for registration
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+
 	return &Config{
 		ServerPort:  getEnv("SERVER_PORT", "8080"),
 		DBHost:      getEnv("DB_HOST", "localhost"),
@@ -35,6 +47,12 @@ func LoadConfig() *Config {
 		DBPassword:  getEnv("DB_PASSWORD", "yahyasd56"),
 		DBName:      getEnv("DB_NAME", "payment_system"),
 		Environment: getEnv("ENVIRONMENT", "development"),
+
+		// Eureka configuration
+		EurekaURL: getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
+		HostName:  getEnv("HOST_NAME", hostname),
+		IPAddress: getEnv("SERVICE_IP", getOutboundIP()),
+		AppName:   getEnv("APP_NAME", "PAYMENT-SERVICE"),
 	}
 }
 
@@ -54,4 +72,11 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		return val
 	}
 	return defaultValue
+}
+
+// getOutboundIP gets the preferred outbound IP of this machine
+func getOutboundIP() string {
+	// In a real implementation, you would determine the actual IP
+	// For now, we'll use a placeholder approach
+	return "127.0.0.1" // Default to localhost
 }
