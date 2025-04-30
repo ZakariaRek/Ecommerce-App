@@ -89,8 +89,8 @@ Our platform embraces a cloud-native microservices architecture, where each serv
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/nexuscommerce.git
-   cd nexuscommerce
+   https://github.com/ZakariaRek/Ecommerce-App.git
+   cd Ecommerce-App
    ```
 
 2. Start the infrastructure services:
