@@ -1,9 +1,11 @@
 package com.Ecommerce.Notification_Service.Services;
 
+import com.Ecommerce.Notification_Service.Listeners.NotificationMongoListener;
 import com.Ecommerce.Notification_Service.Models.Notification;
 import com.Ecommerce.Notification_Service.Models.NotificationChannel;
 import com.Ecommerce.Notification_Service.Models.NotificationType;
 import com.Ecommerce.Notification_Service.Repositories.NotificationRepository;
+import com.Ecommerce.Notification_Service.Services.Kafka.NotificationKafkaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +28,12 @@ public class NotificationService {
     @Autowired
     private NotificationSenderService senderService;
 
+    @Autowired
+    private NotificationKafkaService kafkaService;
+
+    @Autowired
+    private NotificationMongoListener notificationMongoListener;
+
     public List<Notification> getAllNotificationsByUserId(UUID userId) {
         return notificationRepository.findByUserId(userId);
     }
@@ -40,7 +48,11 @@ public class NotificationService {
 
     public Notification createNotification(UUID userId, NotificationType type, String content, LocalDateTime expiresAt) {
         Notification notification = new Notification(userId, type, content, expiresAt);
-        return notificationRepository.save(notification);
+        Notification savedNotification = notificationRepository.save(notification);
+
+        // The Kafka event will be automatically published by the MongoDB listener
+
+        return savedNotification;
     }
 
     public Notification sendNotification(UUID userId, NotificationType type, String content, LocalDateTime expiresAt) {
@@ -60,6 +72,10 @@ public class NotificationService {
         Optional<Notification> optionalNotification = notificationRepository.findById(id);
         if (optionalNotification.isPresent()) {
             Notification notification = optionalNotification.get();
+
+            // Store the notification state before saving for event tracking
+            notificationMongoListener.storeStateBeforeSave(notification);
+
             notification.setRead(true);
             return notificationRepository.save(notification);
         }
@@ -67,6 +83,26 @@ public class NotificationService {
     }
 
     public void deleteNotification(String id) {
-        notificationRepository.deleteById(id);
+        Optional<Notification> optionalNotification = notificationRepository.findById(id);
+        if (optionalNotification.isPresent()) {
+            Notification notification = optionalNotification.get();
+
+            // Store the notification before deleting for event tracking
+            notificationMongoListener.storeBeforeDelete(notification);
+
+            notificationRepository.deleteById(id);
+        }
+    }
+
+    /**
+     * Send bulk notifications to multiple users
+     */
+    public void sendBulkNotifications(List<UUID> userIds, NotificationType type, String content, LocalDateTime expiresAt) {
+        for (UUID userId : userIds) {
+            sendNotification(userId, type, content, expiresAt);
+        }
+
+        // Publish a bulk notification event
+        kafkaService.publishBulkNotificationSent(type, content, userIds.size());
     }
 }
