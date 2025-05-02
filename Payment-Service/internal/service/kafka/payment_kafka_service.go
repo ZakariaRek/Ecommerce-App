@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"encoding/json"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
 	"log"
 
 	"github.com/IBM/sarama"
@@ -46,7 +47,7 @@ func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent) error {
 
 // PublishPaymentCreated publishes a payment created event
 func (s *PaymentKafkaService) PublishPaymentCreated(payment *models.Payment) error {
-	paymentMap, err := structToMap(payment)
+	paymentMap, err := service.structToMap(payment)
 	if err != nil {
 		return err
 	}
@@ -57,7 +58,7 @@ func (s *PaymentKafkaService) PublishPaymentCreated(payment *models.Payment) err
 
 // PublishPaymentUpdated publishes a payment updated event
 func (s *PaymentKafkaService) PublishPaymentUpdated(payment *models.Payment) error {
-	paymentMap, err := structToMap(payment)
+	paymentMap, err := service.structToMap(payment)
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func (s *PaymentKafkaService) PublishPaymentUpdated(payment *models.Payment) err
 
 // PublishPaymentStatusChanged publishes a payment status changed event
 func (s *PaymentKafkaService) PublishPaymentStatusChanged(payment *models.Payment, oldStatus models.PaymentStatus) error {
-	paymentMap, err := structToMap(payment)
+	paymentMap, err := service.structToMap(payment)
 	if err != nil {
 		return err
 	}

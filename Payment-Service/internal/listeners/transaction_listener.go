@@ -1,11 +1,8 @@
 package listeners
 
 import (
-	"context"
-	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
-	"reflect"
-
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
 	"gorm.io/gorm"
 )
 

@@ -1,23 +1,21 @@
 package listeners
 
 import (
-	"context"
-	"reflect"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
 	"time"
 
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
-	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
-	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
+
 	"gorm.io/gorm"
 )
 
 // InvoiceListener handles GORM callbacks for Invoice entities
 type InvoiceListener struct {
-	kafkaService *service.InvoiceKafkaService
+	kafkaService *kafka.InvoiceKafkaService
 }
 
 // NewInvoiceListener creates a new invoice listener
-func NewInvoiceListener(kafkaService *service.InvoiceKafkaService) *InvoiceListener {
+func NewInvoiceListener(kafkaService *kafka.InvoiceKafkaService) *InvoiceListener {
 	return &InvoiceListener{
 		kafkaService: kafkaService,
 	}

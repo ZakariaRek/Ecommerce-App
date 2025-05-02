@@ -2,6 +2,7 @@ package listeners
 
 import (
 	"context"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
 	"reflect"
 
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
@@ -11,11 +12,11 @@ import (
 
 // PaymentListener handles GORM callbacks for Payment entities
 type PaymentListener struct {
-	kafkaService *service.PaymentKafkaService
+	kafkaService *kafka.PaymentKafkaService
 }
 
 // NewPaymentListener creates a new payment listener
-func NewPaymentListener(kafkaService *service.PaymentKafkaService) *PaymentListener {
+func NewPaymentListener(kafkaService *kafka.PaymentKafkaService) *PaymentListener {
 	return &PaymentListener{
 		kafkaService: kafkaService,
 	}
