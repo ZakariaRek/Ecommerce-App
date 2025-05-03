@@ -12,6 +12,7 @@ const (
 	InvoiceCreated        InvoiceEventType = "INVOICE_CREATED"
 	InvoiceUpdated        InvoiceEventType = "INVOICE_UPDATED"
 	InvoiceDueDateChanged InvoiceEventType = "INVOICE_DUE_DATE_CHANGED"
+	InvoiceDeleted        InvoiceEventType = "INVOICE_DELETED"
 )
 
 // InvoiceEvent represents an invoice-related event

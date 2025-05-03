@@ -4,10 +4,12 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
+// Config holds all configuration
 // Config holds all configuration
 type Config struct {
 	ServerPort  string
@@ -23,8 +25,13 @@ type Config struct {
 	HostName  string
 	IPAddress string
 	AppName   string
+
+	// Kafka configuration
+	KafkaBrokers      []string
+	KafkaInvoiceTopic string
 }
 
+// LoadConfig loads configuration from environment
 // LoadConfig loads configuration from environment
 func LoadConfig() *Config {
 	// Load .env file if it exists
@@ -38,6 +45,10 @@ func LoadConfig() *Config {
 	if err != nil {
 		hostname = "unknown"
 	}
+
+	// Parse Kafka brokers from comma-separated list
+	kafkaBrokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
+	kafkaBrokers := strings.Split(kafkaBrokersStr, ",")
 
 	return &Config{
 		ServerPort:  getEnv("SERVER_PORT", "8080"),
@@ -53,9 +64,12 @@ func LoadConfig() *Config {
 		HostName:  getEnv("HOST_NAME", hostname),
 		IPAddress: getEnv("SERVICE_IP", getOutboundIP()),
 		AppName:   getEnv("APP_NAME", "PAYMENT-SERVICE"),
+
+		// Kafka configuration
+		KafkaBrokers:      kafkaBrokers,
+		KafkaInvoiceTopic: getEnv("KAFKA_INVOICE_TOPIC", "invoices"),
 	}
 }
-
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value

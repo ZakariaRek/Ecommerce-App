@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"encoding/json"
-	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
 	"log"
 
 	"github.com/IBM/sarama"
@@ -16,28 +15,28 @@ type PaymentEventHandler func(event *events.PaymentEvent) error
 // PaymentKafkaService handles kafka operations for payments
 type PaymentKafkaService struct {
 	producer sarama.AsyncProducer
-	topic    string
+	topics   map[string]string
 	handlers map[events.PaymentEventType][]PaymentEventHandler
 }
 
 // NewPaymentKafkaService creates a new PaymentKafkaService
-func NewPaymentKafkaService(producer sarama.AsyncProducer, topic string) *PaymentKafkaService {
+func NewPaymentKafkaService(producer sarama.AsyncProducer, topics map[string]string) *PaymentKafkaService {
 	return &PaymentKafkaService{
 		producer: producer,
-		topic:    topic,
+		topics:   topics,
 		handlers: make(map[events.PaymentEventType][]PaymentEventHandler),
 	}
 }
 
 // PublishEvent publishes a payment event to kafka
-func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent) error {
+func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent, topic string) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
 	s.producer.Input() <- &sarama.ProducerMessage{
-		Topic: s.topic,
+		Topic: topic,
 		Key:   sarama.StringEncoder(event.PaymentID.String()),
 		Value: sarama.ByteEncoder(data),
 	}
@@ -47,29 +46,29 @@ func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent) error {
 
 // PublishPaymentCreated publishes a payment created event
 func (s *PaymentKafkaService) PublishPaymentCreated(payment *models.Payment) error {
-	paymentMap, err := service.structToMap(payment)
+	paymentMap, err := structToMap(payment)
 	if err != nil {
 		return err
 	}
 
 	event := events.NewPaymentEvent(events.PaymentCreated, payment.ID, paymentMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventCreated])
 }
 
 // PublishPaymentUpdated publishes a payment updated event
 func (s *PaymentKafkaService) PublishPaymentUpdated(payment *models.Payment) error {
-	paymentMap, err := service.structToMap(payment)
+	paymentMap, err := structToMap(payment)
 	if err != nil {
 		return err
 	}
 
 	event := events.NewPaymentEvent(events.PaymentUpdated, payment.ID, paymentMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventUpdated])
 }
 
 // PublishPaymentStatusChanged publishes a payment status changed event
 func (s *PaymentKafkaService) PublishPaymentStatusChanged(payment *models.Payment, oldStatus models.PaymentStatus) error {
-	paymentMap, err := service.structToMap(payment)
+	paymentMap, err := structToMap(payment)
 	if err != nil {
 		return err
 	}
@@ -78,7 +77,18 @@ func (s *PaymentKafkaService) PublishPaymentStatusChanged(payment *models.Paymen
 	paymentMap["old_status"] = oldStatus
 
 	event := events.NewPaymentEvent(events.PaymentStatusChanged, payment.ID, paymentMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventChanged])
+}
+
+// PublishPaymentDeleted publishes a payment deleted event
+func (s *PaymentKafkaService) PublishPaymentDeleted(payment *models.Payment) error {
+	paymentMap, err := structToMap(payment)
+	if err != nil {
+		return err
+	}
+
+	event := events.NewPaymentEvent(events.PaymentDeleted, payment.ID, paymentMap)
+	return s.PublishEvent(event, s.topics[EventDeleted])
 }
 
 // RegisterHandler registers a handler for a specific payment event type
