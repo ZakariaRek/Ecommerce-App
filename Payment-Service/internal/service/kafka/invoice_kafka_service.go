@@ -10,49 +10,34 @@ import (
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
 )
 
-// structToMap converts a struct to a map using JSON marshaling/unmarshaling
-func structToMap(obj interface{}) (map[string]interface{}, error) {
-	data, err := json.Marshal(obj)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 // InvoiceEventHandler defines a function to handle invoice events
 type InvoiceEventHandler func(event *events.InvoiceEvent) error
 
 // InvoiceKafkaService handles kafka operations for invoices
 type InvoiceKafkaService struct {
 	producer sarama.AsyncProducer
-	topic    string
+	topics   map[string]string
 	handlers map[events.InvoiceEventType][]InvoiceEventHandler
 }
 
 // NewInvoiceKafkaService creates a new InvoiceKafkaService
-func NewInvoiceKafkaService(producer sarama.AsyncProducer, topic string) *InvoiceKafkaService {
+func NewInvoiceKafkaService(producer sarama.AsyncProducer, topics map[string]string) *InvoiceKafkaService {
 	return &InvoiceKafkaService{
 		producer: producer,
-		topic:    topic,
+		topics:   topics,
 		handlers: make(map[events.InvoiceEventType][]InvoiceEventHandler),
 	}
 }
 
 // PublishEvent publishes an invoice event to kafka
-func (s *InvoiceKafkaService) PublishEvent(event *events.InvoiceEvent) error {
+func (s *InvoiceKafkaService) PublishEvent(event *events.InvoiceEvent, topic string) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
 	s.producer.Input() <- &sarama.ProducerMessage{
-		Topic: s.topic,
+		Topic: topic,
 		Key:   sarama.StringEncoder(event.InvoiceID.String()),
 		Value: sarama.ByteEncoder(data),
 	}
@@ -68,7 +53,7 @@ func (s *InvoiceKafkaService) PublishInvoiceCreated(invoice *models.Invoice) err
 	}
 
 	event := events.NewInvoiceEvent(events.InvoiceCreated, invoice.ID, invoiceMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventCreated])
 }
 
 // PublishInvoiceUpdated publishes an invoice updated event
@@ -79,7 +64,7 @@ func (s *InvoiceKafkaService) PublishInvoiceUpdated(invoice *models.Invoice) err
 	}
 
 	event := events.NewInvoiceEvent(events.InvoiceUpdated, invoice.ID, invoiceMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventUpdated])
 }
 
 // PublishInvoiceDueDateChanged publishes an invoice due date changed event
@@ -93,7 +78,18 @@ func (s *InvoiceKafkaService) PublishInvoiceDueDateChanged(invoice *models.Invoi
 	invoiceMap["old_due_date"] = oldDueDate
 
 	event := events.NewInvoiceEvent(events.InvoiceDueDateChanged, invoice.ID, invoiceMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventChanged])
+}
+
+// PublishInvoiceDeleted publishes an invoice deleted event
+func (s *InvoiceKafkaService) PublishInvoiceDeleted(invoice *models.Invoice) error {
+	invoiceMap, err := structToMap(invoice)
+	if err != nil {
+		return err
+	}
+
+	event := events.NewInvoiceEvent(events.InvoiceDeleted, invoice.ID, invoiceMap)
+	return s.PublishEvent(event, s.topics[EventDeleted])
 }
 
 // RegisterHandler registers a handler for a specific invoice event type

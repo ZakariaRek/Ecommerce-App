@@ -8,19 +8,55 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/config"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/database"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/events"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/handler"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/listeners"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/repository"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service/kafka"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hudl/fargo"
 )
+
+// Constants for Kafka event types
+const (
+	EventCreated = "created"
+	EventUpdated = "updated"
+	EventChanged = "changed"
+	EventDeleted = "deleted"
+)
+
+// Constants for Kafka entity types
+const (
+	EntityPayment     = "payment"
+	EntityInvoice     = "invoice"
+	EntityTransaction = "transaction"
+)
+
+// Helper functions for getting environment values
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	strValue := getEnv(key, "")
+	if strValue == "" {
+		return defaultValue
+	}
+	return strValue == "true" || strValue == "1" || strValue == "yes"
+}
 
 func main() {
 	// Load configuration
@@ -39,6 +75,119 @@ func main() {
 	// Initialize services
 	paymentService := service.NewPaymentService(paymentRepo, txRepo)
 
+	// Initialize Kafka - Get Kafka configuration
+	brokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
+	brokers := strings.Split(brokersStr, ",")
+
+	// Create topic maps for each entity type
+	paymentTopics := map[string]string{
+		EventCreated: getEnv("KAFKA_PAYMENT_CREATED_TOPIC", "payment-created"),
+		EventUpdated: getEnv("KAFKA_PAYMENT_UPDATED_TOPIC", "payment-updated"),
+		EventChanged: getEnv("KAFKA_PAYMENT_STATUS_CHANGED_TOPIC", "payment-status-changed"),
+		EventDeleted: getEnv("KAFKA_PAYMENT_DELETED_TOPIC", "payment-deleted"),
+	}
+
+	invoiceTopics := map[string]string{
+		EventCreated: getEnv("KAFKA_INVOICE_CREATED_TOPIC", "invoice-created"),
+		EventUpdated: getEnv("KAFKA_INVOICE_UPDATED_TOPIC", "invoice-updated"),
+		EventChanged: getEnv("KAFKA_INVOICE_DUE_DATE_CHANGED_TOPIC", "invoice-due-date-changed"),
+		EventDeleted: getEnv("KAFKA_INVOICE_DELETED_TOPIC", "invoice-deleted"),
+	}
+
+	transactionTopics := map[string]string{
+		EventCreated: getEnv("KAFKA_TRANSACTION_CREATED_TOPIC", "transaction-created"),
+		EventUpdated: getEnv("KAFKA_TRANSACTION_UPDATED_TOPIC", "transaction-updated"),
+		EventChanged: getEnv("KAFKA_TRANSACTION_STATUS_CHANGED_TOPIC", "transaction-status-changed"),
+		EventDeleted: getEnv("KAFKA_TRANSACTION_DELETED_TOPIC", "transaction-deleted"),
+	}
+
+	// Collect all topics for consumer
+	allTopics := []string{}
+	for _, topic := range paymentTopics {
+		allTopics = append(allTopics, topic)
+	}
+	for _, topic := range invoiceTopics {
+		allTopics = append(allTopics, topic)
+	}
+	for _, topic := range transactionTopics {
+		allTopics = append(allTopics, topic)
+	}
+
+	// Get consumer configuration
+	enableConsumer := getEnvAsBool("KAFKA_ENABLE_CONSUMER", true)
+	consumerGroup := getEnv("KAFKA_CONSUMER_GROUP", "payment-service-group")
+	consumerTopicsStr := getEnv("KAFKA_CONSUMER_TOPICS", strings.Join(allTopics, ","))
+	consumerTopics := strings.Split(consumerTopicsStr, ",")
+
+	// Log Kafka configuration
+	log.Println("Kafka Configuration:")
+	log.Printf("Brokers: %s", strings.Join(brokers, ", "))
+	log.Printf("Consumer Group: %s", consumerGroup)
+	log.Printf("Enable Consumer: %t", enableConsumer)
+	log.Printf("Topics to consume: %s", strings.Join(consumerTopics, ", "))
+
+	// Create Kafka producer
+	producerConfig := sarama.NewConfig()
+	producerConfig.Producer.RequiredAcks = sarama.WaitForLocal
+	producerConfig.Producer.Compression = sarama.CompressionSnappy
+	producerConfig.Producer.Return.Successes = true
+	producerConfig.Producer.Return.Errors = true
+
+	producer, producerErr := sarama.NewAsyncProducer(brokers, producerConfig)
+	if producerErr != nil {
+		log.Printf("Warning: Failed to create Kafka producer: %v", producerErr)
+		log.Println("Continuing without Kafka support...")
+	} else {
+		// Monitor producer errors in background
+		go func() {
+			for err := range producer.Errors() {
+				log.Printf("Failed to produce Kafka message: %v", err)
+			}
+		}()
+
+		// Create Kafka services
+		paymentKafka := kafka.NewPaymentKafkaService(producer, paymentTopics)
+		invoiceKafka := kafka.NewInvoiceKafkaService(producer, invoiceTopics)
+		transactionKafka := kafka.NewTransactionKafkaService(producer, transactionTopics)
+
+		// Register GORM listeners for publishing events
+		paymentListener := listeners.NewPaymentListener(paymentKafka)
+		paymentListener.RegisterCallbacks(db)
+
+		invoiceListener := listeners.NewInvoiceListener(invoiceKafka)
+		invoiceListener.RegisterCallbacks(db)
+
+		transactionListener := listeners.NewTransactionListener(transactionKafka)
+		transactionListener.RegisterCallbacks(db)
+
+		// Create and start consumer if enabled
+		if enableConsumer {
+			consumer, err := kafka.NewConsumer(brokers, consumerGroup, consumerTopics)
+			if err != nil {
+				log.Printf("Warning: Failed to create Kafka consumer: %v", err)
+			} else {
+				// Register event handlers
+				consumer.RegisterPaymentEventHandler(events.PaymentCreated, func(event *events.PaymentEvent) error {
+					log.Printf("Handling payment created event: %s", event.PaymentID)
+					return nil
+				})
+
+				consumer.RegisterInvoiceEventHandler(events.InvoiceCreated, func(event *events.InvoiceEvent) error {
+					log.Printf("Handling invoice created event: %s", event.InvoiceID)
+					return nil
+				})
+
+				consumer.RegisterTransactionEventHandler(events.TransactionCreated, func(event *events.TransactionEvent) error {
+					log.Printf("Handling transaction created event: %s", event.TransactionID)
+					return nil
+				})
+
+				// Start the consumer in a separate goroutine
+				go consumer.Start()
+			}
+		}
+	}
+
 	// Initialize handlers
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 
@@ -53,14 +202,8 @@ func main() {
 
 	// Routes
 	r.Route("/api", func(r chi.Router) {
-		// Payment routes
-		r.Route("/payments", func(r chi.Router) {
-			r.Post("/", paymentHandler.CreatePayment)
-			r.Get("/{id}", paymentHandler.GetPayment)
-			// Add more payment routes as needed
-		})
-
-		// Invoice routes
+		// Register payment routes
+		paymentHandler.RegisterRoutes(r)
 	})
 
 	// Health check
@@ -154,7 +297,6 @@ func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 		return nil, fmt.Errorf("failed to register with Eureka: %v", err)
 	}
 
-	// Correction: Return the address of eurekaConn
 	return &eurekaConn, nil
 }
 

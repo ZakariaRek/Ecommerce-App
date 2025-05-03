@@ -12,6 +12,7 @@ const (
 	TransactionCreated       TransactionEventType = "TRANSACTION_CREATED"
 	TransactionUpdated       TransactionEventType = "TRANSACTION_UPDATED"
 	TransactionStatusChanged TransactionEventType = "TRANSACTION_STATUS_CHANGED"
+	TransactionDeleted       TransactionEventType = "TRANSACTION_DELETED"
 )
 
 // TransactionEvent represents a transaction-related event

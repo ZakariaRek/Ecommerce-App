@@ -15,28 +15,28 @@ type TransactionEventHandler func(event *events.TransactionEvent) error
 // TransactionKafkaService handles kafka operations for transactions
 type TransactionKafkaService struct {
 	producer sarama.AsyncProducer
-	topic    string
+	topics   map[string]string
 	handlers map[events.TransactionEventType][]TransactionEventHandler
 }
 
 // NewTransactionKafkaService creates a new TransactionKafkaService
-func NewTransactionKafkaService(producer sarama.AsyncProducer, topic string) *TransactionKafkaService {
+func NewTransactionKafkaService(producer sarama.AsyncProducer, topics map[string]string) *TransactionKafkaService {
 	return &TransactionKafkaService{
 		producer: producer,
-		topic:    topic,
+		topics:   topics,
 		handlers: make(map[events.TransactionEventType][]TransactionEventHandler),
 	}
 }
 
 // PublishEvent publishes a transaction event to kafka
-func (s *TransactionKafkaService) PublishEvent(event *events.TransactionEvent) error {
+func (s *TransactionKafkaService) PublishEvent(event *events.TransactionEvent, topic string) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
 	s.producer.Input() <- &sarama.ProducerMessage{
-		Topic: s.topic,
+		Topic: topic,
 		Key:   sarama.StringEncoder(event.TransactionID.String()),
 		Value: sarama.ByteEncoder(data),
 	}
@@ -52,7 +52,7 @@ func (s *TransactionKafkaService) PublishTransactionCreated(transaction *models.
 	}
 
 	event := events.NewTransactionEvent(events.TransactionCreated, transaction.ID, transactionMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventCreated])
 }
 
 // PublishTransactionUpdated publishes a transaction updated event
@@ -63,7 +63,7 @@ func (s *TransactionKafkaService) PublishTransactionUpdated(transaction *models.
 	}
 
 	event := events.NewTransactionEvent(events.TransactionUpdated, transaction.ID, transactionMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventUpdated])
 }
 
 // PublishTransactionStatusChanged publishes a transaction status changed event
@@ -77,7 +77,18 @@ func (s *TransactionKafkaService) PublishTransactionStatusChanged(transaction *m
 	transactionMap["old_status"] = oldStatus
 
 	event := events.NewTransactionEvent(events.TransactionStatusChanged, transaction.ID, transactionMap)
-	return s.PublishEvent(event)
+	return s.PublishEvent(event, s.topics[EventChanged])
+}
+
+// PublishTransactionDeleted publishes a transaction deleted event
+func (s *TransactionKafkaService) PublishTransactionDeleted(transaction *models.PaymentTransaction) error {
+	transactionMap, err := structToMap(transaction)
+	if err != nil {
+		return err
+	}
+
+	event := events.NewTransactionEvent(events.TransactionStatusChanged, transaction.ID, transactionMap)
+	return s.PublishEvent(event, s.topics[EventDeleted])
 }
 
 // RegisterHandler registers a handler for a specific transaction event type

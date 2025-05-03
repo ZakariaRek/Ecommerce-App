@@ -12,6 +12,7 @@ const (
 	PaymentCreated       PaymentEventType = "PAYMENT_CREATED"
 	PaymentUpdated       PaymentEventType = "PAYMENT_UPDATED"
 	PaymentStatusChanged PaymentEventType = "PAYMENT_STATUS_CHANGED"
+	PaymentDeleted       PaymentEventType = "PAYMENT_DELETED"
 )
 
 // PaymentEvent represents a payment-related event
