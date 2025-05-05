@@ -1,5 +1,6 @@
 package com.Ecommerce.Order_Service.Entities;
 
+import com.Ecommerce.Order_Service.Listeners.OrderItemEntityListener;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EntityListeners(OrderItemEntityListener.class)
 public class OrderItem {
     @Id
     @GeneratedValue

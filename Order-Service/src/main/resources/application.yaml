@@ -4,7 +4,9 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/Order-service
     username: postgres
-    password: yahyasd56
+#    password: yahyasd56
+    password: zakaria
+
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -13,6 +15,20 @@ spring:
     show-sql: true
     properties:
       hibernate.format_sql: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: user-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
 
 
 
