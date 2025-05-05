@@ -1,5 +1,6 @@
 package com.Ecommerce.Order_Service.Entities;
 
+import com.Ecommerce.Order_Service.Listeners.OrderEntityListener;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EntityListeners(OrderEntityListener.class)
 public class Order {
     @Id
     @GeneratedValue
@@ -110,4 +112,3 @@ public class Order {
         return "Invoice for Order " + this.id;
     }
 }
-

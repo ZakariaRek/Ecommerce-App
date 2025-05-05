@@ -5,6 +5,7 @@ import com.Ecommerce.Order_Service.Entities.OrderItem;
 import com.Ecommerce.Order_Service.Entities.OrderStatus;
 import com.Ecommerce.Order_Service.Repositories.OrderItemRepository;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
+import com.Ecommerce.Order_Service.Services.Kafka.OrderKafkaService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,12 +25,20 @@ public class OrderService {
     @Autowired
     private OrderItemRepository orderItemRepository;
 
+    @Autowired
+    private OrderKafkaService kafkaService;
+
     /**
      * Creates a new order
      */
     public Order createOrder(UUID userId, UUID cartId, UUID billingAddressId, UUID shippingAddressId) {
         Order order = Order.createOrder(userId, cartId, billingAddressId, shippingAddressId);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        // Publish event to Kafka
+        kafkaService.publishOrderCreated(savedOrder);
+
+        return savedOrder;
     }
 
     /**
@@ -53,8 +62,15 @@ public class OrderService {
     public Order updateOrderStatus(UUID orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+
+        OrderStatus oldStatus = order.getStatus();
         order.updateStatus(newStatus);
-        return orderRepository.save(order);
+        Order updatedOrder = orderRepository.save(order);
+
+        // Publish event to Kafka
+        kafkaService.publishOrderStatusChanged(updatedOrder, oldStatus);
+
+        return updatedOrder;
     }
 
     /**
@@ -66,8 +82,15 @@ public class OrderService {
         if (order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.DELIVERED) {
             throw new IllegalStateException("Cannot cancel an order that has been shipped or delivered");
         }
+
+        OrderStatus previousStatus = order.getStatus();
         order.cancelOrder();
-        return orderRepository.save(order);
+        Order canceledOrder = orderRepository.save(order);
+
+        // Publish event to Kafka
+        kafkaService.publishOrderCanceled(canceledOrder, previousStatus);
+
+        return canceledOrder;
     }
 
     /**
@@ -109,6 +132,9 @@ public class OrderService {
         order.setTotalAmount(newTotal);
         orderRepository.save(order);
 
+        // Publish event to Kafka
+        kafkaService.publishOrderItemAdded(order, savedItem);
+
         return savedItem;
     }
 
@@ -134,6 +160,9 @@ public class OrderService {
             throw new IllegalArgumentException("Item does not belong to the specified order");
         }
 
+        // Store old quantity for event
+        int oldQuantity = item.getQuantity();
+
         item.updateQuantity(newQuantity);
         OrderItem updatedItem = orderItemRepository.save(item);
 
@@ -141,6 +170,9 @@ public class OrderService {
         BigDecimal newTotal = calculateOrderTotal(orderId);
         order.setTotalAmount(newTotal);
         orderRepository.save(order);
+
+        // Publish event to Kafka
+        kafkaService.publishOrderItemUpdated(order, updatedItem, oldQuantity);
 
         return updatedItem;
     }
