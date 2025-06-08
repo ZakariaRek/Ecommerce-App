@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import com.Ecommerce.User_Service.Models.UserStatus;
 
+import com.Ecommerce.User_Service.Payload.Response.JwtResponse;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,10 +85,12 @@ public class AuthController {
         });
 
         return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
-                .body(new UserInfoResponse(userDetails.getId(),
+                .body(new JwtResponse(jwtCookie.getValue(),
+                        userDetails.getId(),
                         userDetails.getUsername(),
                         userDetails.getEmail(),
-                        roles));
+                        roles
+                        ));
     }
 
     @PostMapping("/signup")

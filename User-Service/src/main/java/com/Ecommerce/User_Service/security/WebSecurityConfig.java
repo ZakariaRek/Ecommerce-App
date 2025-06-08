@@ -20,6 +20,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import com.Ecommerce.User_Service.security.jwt.AuthEntryPointJwt;
 import com.Ecommerce.User_Service.security.jwt.AuthTokenFilter;
 import com.Ecommerce.User_Service.security.services.UserDetailsServiceImpl;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 //@EnableWebSecurity
@@ -33,6 +34,10 @@ public class WebSecurityConfig { // extends WebSecurityConfigurerAdapter {
 
   @Autowired
   private AuthEntryPointJwt unauthorizedHandler;
+
+
+  @Autowired
+  private CorsConfigurationSource corsConfigurationSource;
 
   @Bean
   public AuthTokenFilter authenticationJwtTokenFilter() {
@@ -84,7 +89,7 @@ public class WebSecurityConfig { // extends WebSecurityConfigurerAdapter {
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http.csrf(csrf -> csrf.disable())
+    http.cors(cors -> cors.configurationSource(corsConfigurationSource)).csrf(csrf -> csrf.disable())
             .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth ->
