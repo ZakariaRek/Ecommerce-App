@@ -1,6 +1,9 @@
 server:
   port: 8099
-
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
 spring:
   application:
     name: gateway-service

@@ -35,7 +35,7 @@ public class UserController {
     @Autowired
     private RoleRepository roleRepository;
 
-    @PreAuthorize("ROLE_ADMIN")
+//    @PreAuthorize("ROLE_ADMIN")
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
         List<User> users = userService.getAllUsers();
