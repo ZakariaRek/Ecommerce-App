@@ -42,7 +42,7 @@ import com.Ecommerce.User_Service.security.jwt.JwtUtils;
 //@CrossOrigin(origins = "http://localhost:8081", maxAge = 3600, allowCredentials="true")
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
     @Autowired
     AuthenticationManager authenticationManager;
@@ -144,7 +144,6 @@ public class AuthController {
 
         user.setRoles(roles);
         User savedUser = userRepository.save(user);
-
 
 
 
