@@ -1,6 +1,6 @@
 server:
   port: 8099
-
+ # add auth
 spring:
   application:
     name: gateway-service
