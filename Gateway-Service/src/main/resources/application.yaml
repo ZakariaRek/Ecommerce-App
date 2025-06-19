@@ -4,69 +4,231 @@ server:
 spring:
   application:
     name: gateway-service
+
+  # Redis Configuration for Rate Limiting
+  data:
+    redis:
+      host: localhost
+      port: 6379
+#      password: # Leave empty if no password
+      timeout: 2000ms
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
   cloud:
     gateway:
+      # Built-in Redis Rate Limiter (Alternative option)
+      redis-rate-limiter:
+        replenish-rate: 10    # Tokens added per second
+        burst-capacity: 20    # Maximum tokens in bucket
+        requested-tokens: 1   # Tokens requested per request
+
+      # Global CORS Configuration
       globalcors:
         corsConfigurations:
           '[/**]':
-            allowedOrigins: "*"
-            allowedMethods: "*"
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+              - PATCH
             allowedHeaders: "*"
-      routes:
-        # User Service API Routes
-        - id: user-service-api
-          uri: lb://USER-SERVICE
-          predicates:
-            - Path=/api/users/**
+            allowCredentials: true
+            maxAge: 3600
 
-        # User Service Swagger UI
-        - id: user-service-swagger-ui
-          uri: lb://USER-SERVICE
-          predicates:
-            - Path=/user-service/swagger-ui/**
-          filters:
-            - RewritePath=/user-service/swagger-ui/(?<segment>.*), /swagger-ui/$\{segment}
+      # Circuit Breaker Configuration
+      circuitbreaker:
+        resilience4j:
+          instances:
+            auth-cb:
+              slidingWindowSize: 10
+              minimumNumberOfCalls: 5
+              failureRateThreshold: 50
+              waitDurationInOpenState: 30s
+            user-mgmt-cb:
+              slidingWindowSize: 10
+              minimumNumberOfCalls: 5
+              failureRateThreshold: 50
+              waitDurationInOpenState: 30s
+            product-read-cb:
+              slidingWindowSize: 20
+              minimumNumberOfCalls: 10
+              failureRateThreshold: 60
+              waitDurationInOpenState: 30s
+            product-write-cb:
+              slidingWindowSize: 10
+              minimumNumberOfCalls: 5
+              failureRateThreshold: 40
+              waitDurationInOpenState: 30s
+            order-cb:
+              slidingWindowSize: 15
+              minimumNumberOfCalls: 7
+              failureRateThreshold: 50
+              waitDurationInOpenState: 30s
+            payment-cb:
+              slidingWindowSize: 5
+              minimumNumberOfCalls: 3
+              failureRateThreshold: 30
+              waitDurationInOpenState: 60s
+            cart-cb:
+              slidingWindowSize: 15
+              minimumNumberOfCalls: 8
+              failureRateThreshold: 55
+              waitDurationInOpenState: 30s
 
-        # User Service API Docs
-        - id: user-service-api-docs
-          uri: lb://USER-SERVICE
-          predicates:
-            - Path=/user-service/v3/api-docs/**
-          filters:
-            - RewritePath=/user-service/v3/api-docs/(?<segment>.*), /v3/api-docs/$\{segment}
+      # Discovery Configuration
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
 
-        # Swagger Config for User Service
-        - id: user-service-swagger-config
-          uri: lb://USER-SERVICE
-          predicates:
-            - Path=/v3/api-docs/swagger-config
+# JWT Configuration (same secret as User Service)
+gateway1:
+  jwt:
+    secret: "c03a546beee68b92784e681b537540349c386d02b6dbf9917cf438e47e5c1ee93fdebc55652af00cb3ebc6bff17dc3bedaa33ea6cfdd1959b114ede448c4ac87853021cc3c32f1ef6d5951d0c6b1398bc01c563c7638a0000e6b4064c5733c5552aa232aa8547be8b4b1f8dddacac8256f319acd6832ff5ae9365358e20624fc99dab8489d33e582cf621444e9d944442559707a1f92d556862bb53ce12deb3ec17d3a8bc3c7159b672e4f02189af368a8e71d8547a5b71518de7a1d9a4997d20b4f646fae73e73c26666799b21cdec5544b74319756bb0a27d4e124ec5f13bf8f338ce3ba5ad8b3af1a8aae211bef3eb6ca4f8a24e6b80662c94530e168b0dc"
 
-        # Order Service API Routes
-        - id: order-service-api
-          uri: lb://ORDER-SERVICE
-          predicates:
-            - Path=/api/orders/**
+rate-limiting:
+  default:
+    limit: 100
+    window-seconds: 60
+    key-type: IP
 
-        # Order Service Swagger UI - Try without the index.html suffix
-        - id: order-service-swagger-ui
-          uri: lb://ORDER-SERVICE
-          predicates:
-            - Path=/order-service/swagger-ui/**
-          filters:
-            - RewritePath=/order-service/swagger-ui/(?<segment>.*), /swagger-ui/$\{segment}
+  endpoints:
+    auth:
+      limit: 5
+      window-seconds: 60
+      key-type: IP
+      description: "Strict limit for authentication to prevent brute force"
 
-        # Order Service API Docs
-        - id: order-service-api-docs
-          uri: lb://ORDER-SERVICE
-          predicates:
-            - Path=/order-service/v3/api-docs/**
-          filters:
-            - RewritePath=/order-service/v3/api-docs/(?<segment>.*), /v3/api-docs/$\{segment}
+    payment:
+      limit: 3
+      window-seconds: 300  # 5 minutes
+      key-type: USER
+      description: "Very restrictive for payment operations"
 
-        # Add a direct route to the swagger-ui.html for Order Service
-        - id: order-service-swagger-ui-direct
-          uri: lb://ORDER-SERVICE
-          predicates:
-            - Path=/order-service/swagger-ui.html
-          filters:
-            - RewritePath=/order-service/swagger-ui.html, /swagger-ui.html
+    admin:
+      limit: 20
+      window-seconds: 60
+      key-type: USER
+      description: "Moderate limit for admin operations"
+
+    public-read:
+      limit: 200
+      window-seconds: 60
+      key-type: IP
+      description: "Higher limit for public read operations"
+
+    user-operations:
+      limit: 50
+      window-seconds: 60
+      key-type: USER
+      description: "Standard limit for authenticated user operations"
+
+  # Token Bucket Configuration
+  token-bucket:
+    payment:
+      capacity: 3
+      refill-tokens: 1
+      refill-interval-seconds: 60
+      description: "Payment operations with token bucket"
+
+    upload:
+      capacity: 5
+      refill-tokens: 1
+      refill-interval-seconds: 30
+      description: "File upload operations"
+
+
+
+# Eureka Configuration
+eureka:
+  instance:
+    preferIpAddress: true
+    instanceId: ${spring.application.name}:${server.port}
+    hostname: localhost
+    metadataMap:
+      instanceId: ${spring.application.name}:${server.port}
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+# Logging Configuration
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.data.redis: DEBUG
+
+
+# Management and Monitoring
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,redis
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+# Service Discovery Timeout Configuration
+ribbon:
+  ReadTimeout: 60000
+  ConnectTimeout: 60000
+
+# Custom Security Configuration
+gateway:
+  security:
+    public-endpoints:
+      - "/api/users/auth/signin"
+      - "/api/users/auth/signup"
+      - "/api/test/all"
+      - "/swagger-ui/**"
+      - "/v3/api-docs/**"
+      - "/actuator/**"
+      - "/health"
+    admin-only-endpoints:
+      - "/api/users/api/users/**"
+      - "/api/test/admin"
+    moderator-endpoints:
+      - "/api/test/mod"
+
+
+
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+  ratelimiter:
+    configs:
+      default:
+        limitForPeriod: 100
+        limitRefreshPeriod: 60s
+        timeoutDuration: 1s

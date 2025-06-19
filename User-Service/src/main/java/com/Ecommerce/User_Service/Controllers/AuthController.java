@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import com.Ecommerce.User_Service.Models.UserStatus;
 
+import com.Ecommerce.User_Service.Payload.Response.JwtResponse;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ import com.Ecommerce.User_Service.security.jwt.JwtUtils;
 //@CrossOrigin(origins = "http://localhost:8081", maxAge = 3600, allowCredentials="true")
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
     @Autowired
     AuthenticationManager authenticationManager;
@@ -84,10 +85,12 @@ public class AuthController {
         });
 
         return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
-                .body(new UserInfoResponse(userDetails.getId(),
+                .body(new JwtResponse(jwtCookie.getValue(),
+                        userDetails.getId(),
                         userDetails.getUsername(),
                         userDetails.getEmail(),
-                        roles));
+                        roles
+                        ));
     }
 
     @PostMapping("/signup")
@@ -141,7 +144,6 @@ public class AuthController {
 
         user.setRoles(roles);
         User savedUser = userRepository.save(user);
-
 
 
 
