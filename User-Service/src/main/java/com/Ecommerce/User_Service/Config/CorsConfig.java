@@ -20,16 +20,12 @@ public class CorsConfig {
         // Allow specific origins (add your production URL later)
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:3000",
-                "http://localhost:3001",
+                "http://localhost:5173",
                 "http://localhost:8761",
-                "http://localhost:8099/api/users",
-
-                "https://yourdomain.com"  // Add your production domain
+                "http://localhost:8099/api/users"
         ));
-
         // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-
         // Allow all headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
 
