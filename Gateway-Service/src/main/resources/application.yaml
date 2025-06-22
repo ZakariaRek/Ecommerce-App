@@ -33,6 +33,7 @@ spring:
         corsConfigurations:
           '[/**]':
             allowedOriginPatterns: "*"
+
             allowedMethods:
               - GET
               - POST
