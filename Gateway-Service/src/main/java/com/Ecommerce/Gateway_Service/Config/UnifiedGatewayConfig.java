@@ -26,7 +26,6 @@ public class UnifiedGatewayConfig {
     }
 
     @Bean
-    @Primary  // Make this the primary RouteLocator
     public RouteLocator gatewayRoutes(RouteLocatorBuilder builder) {
         return builder.routes()
                 // Authentication endpoints - More restrictive rate limiting
