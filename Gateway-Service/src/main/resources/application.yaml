@@ -30,6 +30,22 @@ spring:
 
       # Global CORS Configuration
 
+#      globalcors:
+#        corsConfigurations:
+#          '[/**]':
+#            allowedOriginPatterns: "*"
+#            allowedMethods:
+#              - GET
+#              - POST
+#              - PUT
+#              - DELETE
+#              - OPTIONS
+#              - PATCH
+#            allowedHeaders: "*"
+#            allowCredentials: true
+#            maxAge: 3600
+
+
       # Circuit Breaker Configuration
       circuitbreaker:
         resilience4j:
@@ -155,6 +171,7 @@ logging:
     org.springframework.web: DEBUG
     com.Ecommerce.Gateway_Service: DEBUG
     org.springframework.data.redis: DEBUG
+    org.springframework.web.cors: DEBUG
 
 
 # Management and Monitoring
