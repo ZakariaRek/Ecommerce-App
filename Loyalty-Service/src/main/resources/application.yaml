@@ -2,7 +2,8 @@
 server:
   port: 8084
   servlet:
-    context-path: /loyalty
+    context-path: /api/loyalty
+
 #
 #springdoc:
 #  api-docs:

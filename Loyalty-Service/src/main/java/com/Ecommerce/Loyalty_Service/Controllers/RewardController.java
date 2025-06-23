@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 
 @RestController
-@RequestMapping("/api/rewards")
+@RequestMapping("/rewards")
 public class RewardController {
     @Autowired
     private LoyaltyRewardService rewardService;

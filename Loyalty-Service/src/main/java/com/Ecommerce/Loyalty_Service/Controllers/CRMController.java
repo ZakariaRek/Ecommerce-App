@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/crm")
+@RequestMapping("/crm")
 public class CRMController {
     @Autowired
     private CRMService crmService;
