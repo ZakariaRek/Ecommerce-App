@@ -37,6 +37,8 @@ spring:
 
 server:
   port: 8082
+  servlet:
+    context-path: /api/products
 springdoc:
   api-docs:
     path: /api-docs

@@ -29,21 +29,6 @@ spring:
         requested-tokens: 1   # Tokens requested per request
 
       # Global CORS Configuration
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOriginPatterns: "*"
-
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-              - PATCH
-            allowedHeaders: "*"
-            allowCredentials: true
-            maxAge: 3600
 
       # Circuit Breaker Configuration
       circuitbreaker:

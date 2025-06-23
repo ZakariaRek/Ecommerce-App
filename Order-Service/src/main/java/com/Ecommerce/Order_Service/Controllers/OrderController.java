@@ -21,7 +21,6 @@ import java.util.UUID;
  * REST controller for order operations
  */
 @RestController
-@RequestMapping("/api/orders")
 public class OrderController {
 
     @Autowired

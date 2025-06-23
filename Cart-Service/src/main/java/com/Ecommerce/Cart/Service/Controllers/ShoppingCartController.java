@@ -27,7 +27,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/cart")
 @Tag(name = "Shopping Cart", description = "Cart management endpoints")
 @RequiredArgsConstructor
 public class ShoppingCartController {
