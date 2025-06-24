@@ -34,7 +34,7 @@ public class UnifiedGatewayConfig {
                         .filters(f -> f
                                 .filter(customRateLimitFilterFactory.apply(createConfig(5, 60, CustomRateLimitFilterFactory.KeyType.IP)))
                                 .circuitBreaker(config -> config.setName("auth-cb")))
-                        .uri("lb://USER-SERVICE"))
+                        .uri("lb://user-service"))  // Changed from USER-SERVICE to user-service
 
                 // User Service Test endpoints
                 .route("user-service-test", r -> r
@@ -43,7 +43,7 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(50, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("user-test-cb")))
-                        .uri("lb://USER-SERVICE"))
+                        .uri("lb://user-service"))  // Changed from USER-SERVICE to user-service
 
                 // User management - Admin only with moderate limits
                 .route("user-service-management", r -> r
@@ -52,18 +52,18 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(20, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("user-mgmt-cb")))
-                        .uri("lb://USER-SERVICE"))
+                        .uri("lb://user-service"))  // Changed from USER-SERVICE to user-service
 
                 // User Service Swagger Documentation
                 .route("user-service-swagger-ui", r -> r
                         .path("/user-service/swagger-ui/**")
                         .filters(f -> f.rewritePath("/user-service/swagger-ui/(?<segment>.*)", "/swagger-ui/${segment}"))
-                        .uri("lb://USER-SERVICE"))
+                        .uri("lb://user-service"))  // Changed from USER-SERVICE to user-service
 
                 .route("user-service-api-docs", r -> r
                         .path("/user-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/user-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
-                        .uri("lb://USER-SERVICE"))
+                        .uri("lb://user-service"))
 
                 // Product service - Higher limits for read operations
                 .route("product-service-read", r -> r

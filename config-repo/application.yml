@@ -1,0 +1,36 @@
+cors:
+  configuration:
+    allowed-origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+      - "http://localhost:8761"
+      - "http://localhost:8099/api/users"
+    allowed-methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+      - "PATCH"
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
+    exposed-headers:
+      - "Set-Cookie"
+
+# Global logging configuration
+logging:
+  level:
+    com.ecommerce: DEBUG
+    org.springframework.cloud: DEBUG
+
+# Global management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,refresh
+  endpoint:
+    health:
+      show-details: always

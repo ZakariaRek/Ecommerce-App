@@ -2,6 +2,9 @@ server:
   port: 8099
  # add auth
 spring:
+  config:
+    import: configserver:http://localhost:8888
+
   application:
     name: gateway-service
 
@@ -22,13 +25,22 @@ spring:
 
   cloud:
     gateway:
+
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: ${cors.configuration.allowed-origins}
+            allowed-methods: ${cors.configuration.allowed-methods}
+            allowed-headers: ${cors.configuration.allowed-headers}
+            allow-credentials: ${cors.configuration.allow-credentials}
+            max-age: ${cors.configuration.max-age}
+
       # Built-in Redis Rate Limiter (Alternative option)
       redis-rate-limiter:
         replenish-rate: 10    # Tokens added per second
         burst-capacity: 20    # Maximum tokens in bucket
         requested-tokens: 1   # Tokens requested per request
 
-      # Global CORS Configuration
 
 #      globalcors:
 #        corsConfigurations:
@@ -229,9 +241,15 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
 
-  ratelimiter:
+
+  timelimiter:
     configs:
       default:
-        limitForPeriod: 100
-        limitRefreshPeriod: 60s
-        timeoutDuration: 1s
+        timeoutDuration: 10s
+    instances:
+      auth-cb:
+        base-config: default
+      user-test-cb:
+        base-config: default
+      user-mgmt-cb:
+        base-config: default
