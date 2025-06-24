@@ -1,1 +1,34 @@
-spring.application.name=Config-Service
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: file:./config-repo
+          # For production, use a Git repository:
+          # uri: https://github.com/your-org/microservices-config.git
+          # username: ${GIT_USERNAME}
+          # password: ${GIT_PASSWORD}
+        default-label: main
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+eureka:
+  instance:
+    preferIpAddress: true
+    instanceId: ${spring.application.name}:${server.port}
+    hostname: localhost
+    metadataMap:
+      instanceId: ${spring.application.name}:${server.port}
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
