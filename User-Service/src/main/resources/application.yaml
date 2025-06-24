@@ -57,7 +57,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: env,configprops
+        include: "*"
   endpoint:
     env:
       show-values: ALWAYS

@@ -2,6 +2,9 @@ server:
   port: 8099
  # add auth
 spring:
+  config:
+    import: configserver:http://localhost:8888
+
   application:
     name: gateway-service
 
@@ -23,7 +26,14 @@ spring:
   cloud:
     gateway:
 
-
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: ${cors.configuration.allowed-origins}
+            allowed-methods: ${cors.configuration.allowed-methods}
+            allowed-headers: ${cors.configuration.allowed-headers}
+            allow-credentials: ${cors.configuration.allow-credentials}
+            max-age: ${cors.configuration.max-age}
 
       # Built-in Redis Rate Limiter (Alternative option)
       redis-rate-limiter:
