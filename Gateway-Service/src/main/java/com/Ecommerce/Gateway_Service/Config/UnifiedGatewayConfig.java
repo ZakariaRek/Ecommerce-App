@@ -38,7 +38,7 @@ public class UnifiedGatewayConfig {
 
                 // User Service Test endpoints
                 .route("user-service-test", r -> r
-                        .path("/api/users/api/test/**")
+                        .path("/api/users/test/**")
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(50, 60, CustomRateLimitFilterFactory.KeyType.USER)))
@@ -47,7 +47,7 @@ public class UnifiedGatewayConfig {
 
                 // User management - Admin only with moderate limits
                 .route("user-service-management", r -> r
-                        .path("/api/users/api/users/**")
+                        .path("/api/users/**")
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(20, 60, CustomRateLimitFilterFactory.KeyType.USER)))
@@ -73,7 +73,7 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("product-read-cb")))
-                        .uri("lb://PRODUCT-SERVICE"))
+                        .uri("lb://product-service"))
 
                 // Product service - Lower limits for write operations
                 .route("product-service-write", r -> r
@@ -83,7 +83,7 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(10, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("product-write-cb")))
-                        .uri("lb://PRODUCT-SERVICE"))
+                        .uri("lb://product-service"))
 
                 // Order service - Moderate limits
                 .route("order-service", r -> r

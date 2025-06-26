@@ -25,7 +25,6 @@ spring:
 
   cloud:
     gateway:
-
       globalcors:
         cors-configurations:
           '[/**]':

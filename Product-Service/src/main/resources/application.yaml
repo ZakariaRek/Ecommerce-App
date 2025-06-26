@@ -1,10 +1,14 @@
 spring:
+  config:
+    import: configserver:http://localhost:8888
   application:
     name: product-service
   datasource:
     url: jdbc:postgresql://localhost:5432/Product-service
     username: postgres
-    password: yahyasd56
+#    password: yahyasd56
+    password: zakaria
+
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -69,3 +73,13 @@ eureka:
     fetchRegistry: true
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    env:
+      show-values: ALWAYS
