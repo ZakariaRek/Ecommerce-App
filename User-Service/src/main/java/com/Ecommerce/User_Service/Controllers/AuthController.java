@@ -159,14 +159,11 @@ public class AuthController {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             User user = userRepository.findById(userDetails.getId())
                     .orElse(null);
-
             if (user != null) {
                 user.setStatus(UserStatus.INACTIVE); // Or UserStatus.SUSPENDED if needed
                 User updatedUser = userRepository.save(user);
-
             }
         }
-
         ResponseCookie cookie = jwtUtils.getCleanJwtCookie();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())

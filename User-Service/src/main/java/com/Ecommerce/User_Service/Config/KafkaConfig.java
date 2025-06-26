@@ -94,7 +94,7 @@ public class KafkaConfig {
     public NewTopic userCreatedTopic() {
         return TopicBuilder.name(TOPIC_USER_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -102,7 +102,7 @@ public class KafkaConfig {
     public NewTopic userUpdatedTopic() {
         return TopicBuilder.name(TOPIC_USER_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -110,7 +110,7 @@ public class KafkaConfig {
     public NewTopic userDeletedTopic() {
         return TopicBuilder.name(TOPIC_USER_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -118,7 +118,7 @@ public class KafkaConfig {
     public NewTopic userStatusChangedTopic() {
         return TopicBuilder.name(TOPIC_USER_STATUS_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -126,7 +126,7 @@ public class KafkaConfig {
     public NewTopic userRoleChangedTopic() {
         return TopicBuilder.name(TOPIC_USER_ROLE_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -135,7 +135,7 @@ public class KafkaConfig {
     public NewTopic userAddressCreatedTopic() {
         return TopicBuilder.name(TOPIC_USER_ADDRESS_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -143,7 +143,7 @@ public class KafkaConfig {
     public NewTopic userAddressUpdatedTopic() {
         return TopicBuilder.name(TOPIC_USER_ADDRESS_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -151,7 +151,7 @@ public class KafkaConfig {
     public NewTopic userAddressDeletedTopic() {
         return TopicBuilder.name(TOPIC_USER_ADDRESS_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -159,7 +159,7 @@ public class KafkaConfig {
     public NewTopic userDefaultAddressChangedTopic() {
         return TopicBuilder.name(TOPIC_USER_DEFAULT_ADDRESS_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -167,7 +167,7 @@ public class KafkaConfig {
     public NewTopic userAddressTypeChangedTopic() {
         return TopicBuilder.name(TOPIC_USER_ADDRESS_TYPE_CHANGED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -176,7 +176,7 @@ public class KafkaConfig {
     public NewTopic roleCreatedTopic() {
         return TopicBuilder.name(TOPIC_ROLE_CREATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -184,7 +184,7 @@ public class KafkaConfig {
     public NewTopic roleUpdatedTopic() {
         return TopicBuilder.name(TOPIC_ROLE_UPDATED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -192,7 +192,7 @@ public class KafkaConfig {
     public NewTopic roleDeletedTopic() {
         return TopicBuilder.name(TOPIC_ROLE_DELETED)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -200,7 +200,7 @@ public class KafkaConfig {
     public NewTopic roleAssignedToUserTopic() {
         return TopicBuilder.name(TOPIC_ROLE_ASSIGNED_TO_USER)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 
@@ -208,7 +208,7 @@ public class KafkaConfig {
     public NewTopic roleRemovedFromUserTopic() {
         return TopicBuilder.name(TOPIC_ROLE_REMOVED_FROM_USER)
                 .partitions(3)
-                .replicas(2)
+                .replicas(1)
                 .build();
     }
 }

@@ -24,7 +24,8 @@ import java.util.Set;
 
 @RestController
 
-//@CrossOrigin(origins = "*", maxAge = 3600)
+//@CrossOrigin(origins = "*", maxAge =
+
 public class UserController {
 
     @Autowired
