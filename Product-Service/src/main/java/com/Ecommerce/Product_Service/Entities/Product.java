@@ -27,9 +27,11 @@ public class Product {
     private Integer stock;
     private String sku;
     private BigDecimal weight;
-
-    @Column(columnDefinition = "json")
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String dimensions;
+//    @Column(columnDefinition = "json")
+//    private String dimensions;
 
 
     @ElementCollection

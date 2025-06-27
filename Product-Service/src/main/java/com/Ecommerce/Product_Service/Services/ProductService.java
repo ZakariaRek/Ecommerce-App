@@ -39,9 +39,7 @@ public class ProductService {
 
     @Transactional
     public Product saveProduct(Product product) {
-
         productEventService.createProductCreatedEvent(product);
-
         return productRepository.save(product);
     }
 
