@@ -1,10 +1,10 @@
 package com.Ecommerce.Product_Service.Services;
 
-
 import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Entities.Supplier;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import com.Ecommerce.Product_Service.Repositories.SupplierRepository;
+import com.Ecommerce.Product_Service.Utlis.ContractDetailsHelper;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,8 +12,10 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class SupplierService {
@@ -45,6 +47,10 @@ public class SupplierService {
         if (supplier.getId() == null) {
             supplier.setCreatedAt(LocalDateTime.now());
         }
+
+        // Validate contract details if present
+        validateContractDetails(supplier.getContractDetails());
+
         return supplierRepository.save(supplier);
     }
 
@@ -62,6 +68,8 @@ public class SupplierService {
                         existingSupplier.setAddress(updatedSupplier.getAddress());
                     }
                     if (updatedSupplier.getContractDetails() != null) {
+                        // Validate new contract details before updating
+                        validateContractDetails(updatedSupplier.getContractDetails());
                         existingSupplier.setContractDetails(updatedSupplier.getContractDetails());
                     }
 
@@ -129,5 +137,261 @@ public class SupplierService {
         return supplierRepository.findById(supplierId)
                 .map(Supplier::getProducts)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier not found"));
+    }
+
+    // NEW METHODS USING ContractDetailsHelper
+
+    /**
+     * Create a supplier with standard contract details
+     */
+    @Transactional
+    public Supplier createSupplierWithStandardContract(
+            String name,
+            String contactInfo,
+            String address,
+            String contractType,
+            BigDecimal contractValue,
+            String paymentTerms,
+            int contractDurationMonths) {
+
+        Supplier supplier = new Supplier();
+        supplier.setName(name);
+        supplier.setContactInfo(contactInfo);
+        supplier.setAddress(address);
+        supplier.setCreatedAt(LocalDateTime.now());
+
+        // Create contract details using helper
+        Map<String, Object> contractDetails = ContractDetailsHelper.createContractDetails(
+                contractType,
+                LocalDateTime.now(),
+                LocalDateTime.now().plusMonths(contractDurationMonths),
+                contractValue,
+                paymentTerms
+        );
+
+        supplier.setContractDetails(contractDetails);
+
+        return supplierRepository.save(supplier);
+    }
+
+    /**
+     * Update contract details for a supplier
+     */
+    @Transactional
+    public Optional<Supplier> updateSupplierContract(
+            UUID supplierId,
+            String contractType,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            BigDecimal contractValue,
+            String paymentTerms) {
+
+        return supplierRepository.findById(supplierId)
+                .map(supplier -> {
+                    Map<String, Object> newContractDetails = ContractDetailsHelper.createContractDetails(
+                            contractType, startDate, endDate, contractValue, paymentTerms
+                    );
+
+                    validateContractDetails(newContractDetails);
+                    supplier.setContractDetails(newContractDetails);
+
+                    return supplierRepository.save(supplier);
+                });
+    }
+
+    /**
+     * Find suppliers with active contracts
+     */
+    public List<Supplier> findSuppliersWithActiveContracts() {
+        return supplierRepository.findAll()
+                .stream()
+                .filter(supplier -> ContractDetailsHelper.isContractActive(supplier.getContractDetails()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find suppliers with expired contracts
+     */
+    public List<Supplier> findSuppliersWithExpiredContracts() {
+        LocalDateTime now = LocalDateTime.now();
+        return supplierRepository.findAll()
+                .stream()
+                .filter(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    if (contractDetails == null) {
+                        return false;
+                    }
+
+                    LocalDateTime endDate = ContractDetailsHelper.getContractDetail(
+                            contractDetails, "endDate", LocalDateTime.class
+                    );
+
+                    return endDate != null && endDate.isBefore(now);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Find suppliers with contracts expiring soon (within specified days)
+     */
+    public List<Supplier> findSuppliersWithContractsExpiringSoon(int daysAhead) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime threshold = now.plusDays(daysAhead);
+
+        return supplierRepository.findAll()
+                .stream()
+                .filter(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    if (contractDetails == null) {
+                        return false;
+                    }
+
+                    LocalDateTime endDate = ContractDetailsHelper.getContractDetail(
+                            contractDetails, "endDate", LocalDateTime.class
+                    );
+
+                    return endDate != null &&
+                            endDate.isAfter(now) &&
+                            endDate.isBefore(threshold);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get contract value for a supplier
+     */
+    public BigDecimal getSupplierContractValue(UUID supplierId) {
+        return supplierRepository.findById(supplierId)
+                .map(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    return ContractDetailsHelper.getContractDetail(
+                            contractDetails, "contractValue", BigDecimal.class
+                    );
+                })
+                .orElse(BigDecimal.ZERO);
+    }
+
+    /**
+     * Get total contract value across all suppliers
+     */
+    public BigDecimal getTotalContractValue() {
+        return supplierRepository.findAll()
+                .stream()
+                .map(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    BigDecimal contractValue = ContractDetailsHelper.getContractDetail(
+                            contractDetails, "contractValue", BigDecimal.class
+                    );
+                    return contractValue != null ? contractValue : BigDecimal.ZERO;
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Check if supplier has an active contract
+     */
+    public boolean hasActiveContract(UUID supplierId) {
+        return supplierRepository.findById(supplierId)
+                .map(supplier -> ContractDetailsHelper.isContractActive(supplier.getContractDetails()))
+                .orElse(false);
+    }
+
+    /**
+     * Get contract type for a supplier
+     */
+    public String getSupplierContractType(UUID supplierId) {
+        return supplierRepository.findById(supplierId)
+                .map(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    return ContractDetailsHelper.getContractDetail(
+                            contractDetails, "contractType", String.class
+                    );
+                })
+                .orElse("No Contract");
+    }
+
+    /**
+     * Find suppliers by contract type
+     */
+    public List<Supplier> findSuppliersByContractType(String contractType) {
+        return supplierRepository.findAll()
+                .stream()
+                .filter(supplier -> {
+                    String supplierContractType = ContractDetailsHelper.getContractDetail(
+                            supplier.getContractDetails(), "contractType", String.class
+                    );
+                    return contractType.equals(supplierContractType);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Validate contract details using helper methods
+     */
+    private void validateContractDetails(Map<String, Object> contractDetails) {
+        if (contractDetails == null) {
+            return; // Contract details are optional
+        }
+
+        // Validate start and end dates
+        LocalDateTime startDate = ContractDetailsHelper.getContractDetail(
+                contractDetails, "startDate", LocalDateTime.class
+        );
+        LocalDateTime endDate = ContractDetailsHelper.getContractDetail(
+                contractDetails, "endDate", LocalDateTime.class
+        );
+
+        if (startDate != null && endDate != null) {
+            if (startDate.isAfter(endDate)) {
+                throw new IllegalArgumentException("Contract start date cannot be after end date");
+            }
+        }
+
+        // Validate contract value
+        BigDecimal contractValue = ContractDetailsHelper.getContractDetail(
+                contractDetails, "contractValue", BigDecimal.class
+        );
+
+        if (contractValue != null && contractValue.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Contract value cannot be negative");
+        }
+
+        // Validate contract type
+        String contractType = ContractDetailsHelper.getContractDetail(
+                contractDetails, "contractType", String.class
+        );
+
+        if (contractType != null && contractType.trim().isEmpty()) {
+            throw new IllegalArgumentException("Contract type cannot be empty");
+        }
+    }
+
+    /**
+     * Extend contract for a supplier
+     */
+    @Transactional
+    public Optional<Supplier> extendSupplierContract(UUID supplierId, int additionalMonths) {
+        return supplierRepository.findById(supplierId)
+                .map(supplier -> {
+                    Map<String, Object> contractDetails = supplier.getContractDetails();
+                    if (contractDetails == null) {
+                        throw new IllegalArgumentException("Supplier has no contract to extend");
+                    }
+
+                    LocalDateTime currentEndDate = ContractDetailsHelper.getContractDetail(
+                            contractDetails, "endDate", LocalDateTime.class
+                    );
+
+                    if (currentEndDate == null) {
+                        throw new IllegalArgumentException("Contract has no end date to extend");
+                    }
+
+                    // Extend the contract
+                    LocalDateTime newEndDate = currentEndDate.plusMonths(additionalMonths);
+                    contractDetails.put("endDate", newEndDate);
+
+                    supplier.setContractDetails(contractDetails);
+                    return supplierRepository.save(supplier);
+                });
     }
 }

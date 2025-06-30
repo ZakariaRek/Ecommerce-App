@@ -1,7 +1,7 @@
 package com.Ecommerce.Product_Service.Controllers;
 
-import com.Ecommerce.Product_Service.Payload.Request.ProductRequestDTO;
-import com.Ecommerce.Product_Service.Payload.Response.ProductResponseDTO;
+import com.Ecommerce.Product_Service.Payload.Product.ProductRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Product.ProductResponseDTO;
 import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
 import com.Ecommerce.Product_Service.Services.FileStorageService;
