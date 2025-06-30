@@ -1,0 +1,56 @@
+server:
+  port: 8082
+
+app:
+  name: SHIPPING-SERVICE
+  environment: development
+
+# Database configuration
+datasource:
+  host: localhost
+  port: 5432
+  username: postgres
+  password: yahyasd56
+  database: shipping_service
+
+# Eureka configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+# Kafka configuration
+kafka:
+  brokers: localhost:9092
+  consumer:
+    group: shipping-service-group
+    enable: true
+  topics:
+    shipping:
+      created: shipping-created
+      updated: shipping-updated
+      status-changed: shipping-status-changed
+      deleted: shipping-deleted
+    tracking:
+      created: tracking-created
+      updated: tracking-updated
+      deleted: tracking-deleted
+
+# Shipping business configuration
+shipping:
+  default-carrier: Standard Shipping
+  estimated-delivery-days: 3
+  cost:
+    base-rate: 10.99
+    express-multiplier: 2.0
+    international-multiplier: 3.5
+  tracking:
+    update-interval: 2h
+    retention-days: 365
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
