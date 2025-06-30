@@ -34,16 +34,5 @@ public class Category {
     @ManyToMany(mappedBy = "categories")
     private List<Product> products = new ArrayList<>();
 
-    public void addCategory() {
-        // Implementation logic here
-    }
 
-    public void updateCategory() {
-        // Implementation logic here
-    }
-
-    public String getFullPath() {
-        // Implementation logic here
-        return "";
-    }
 }
