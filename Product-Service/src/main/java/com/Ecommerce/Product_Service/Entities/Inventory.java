@@ -38,4 +38,6 @@ public class Inventory {
     public void notifyLowStock() {
         // Implementation logic here
     }
+
+
 }

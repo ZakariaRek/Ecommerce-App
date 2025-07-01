@@ -3,7 +3,8 @@ package com.Ecommerce.Product_Service.Services;
 import com.Ecommerce.Product_Service.Entities.Inventory;
 import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
-import com.Ecommerce.Product_Service.Payload.Request.InventoryRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Inventory.InventoryUpdateRequest;
+import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
 import com.Ecommerce.Product_Service.Repositories.InventoryRepository;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import com.Ecommerce.Product_Service.Services.Kakfa.InventoryEventService;
@@ -173,7 +174,7 @@ public class InventoryService {
     // ====== UPDATE OPERATIONS ======
 
     @Transactional
-    public Optional<Inventory> updateInventory(UUID productId, Inventory updatedInventory) {
+    public Optional<Inventory> updateInventory(UUID productId, InventoryUpdateRequest updatedInventory) {
         return inventoryRepository.findById(productId)
                 .map(existingInventory -> {
                     Integer previousQuantity = existingInventory.getQuantity();
