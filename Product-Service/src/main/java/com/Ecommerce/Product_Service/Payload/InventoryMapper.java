@@ -2,9 +2,11 @@ package com.Ecommerce.Product_Service.Payload;
 
 import com.Ecommerce.Product_Service.Entities.Inventory;
 import com.Ecommerce.Product_Service.Entities.Product;
-import com.Ecommerce.Product_Service.Payload.Request.InventoryRequestDTO;
-import com.Ecommerce.Product_Service.Payload.Request.InventorySummaryDTO;
-import com.Ecommerce.Product_Service.Payload.inventory.InventoryResponseDTO;
+import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Product.InventorySummaryDTO;
+import com.Ecommerce.Product_Service.Payload.Inventory.InventoryResponseDTO;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -17,7 +19,7 @@ public class InventoryMapper {
     /**
      * Convert InventoryRequestDTO to Inventory entity
      */
-    public Inventory toEntity(InventoryRequestDTO dto) {
+    public Inventory toEntity(@Valid InventoryRequestDTO dto) {
         if (dto == null) return null;
 
         Inventory inventory = new Inventory();
@@ -45,7 +47,7 @@ public class InventoryMapper {
     /**
      * Convert Inventory entity to InventoryResponseDTO
      */
-    public com.Ecommerce.Product_Service.Payload.inventory.InventoryResponseDTO toResponseDTO(Inventory entity) {
+    public com.Ecommerce.Product_Service.Payload.Inventory.InventoryResponseDTO toResponseDTO(Inventory entity) {
         if (entity == null) return null;
 
         InventoryResponseDTO dto = new InventoryResponseDTO();

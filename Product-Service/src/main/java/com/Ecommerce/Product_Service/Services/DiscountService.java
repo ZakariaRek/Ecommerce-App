@@ -3,6 +3,8 @@ package com.Ecommerce.Product_Service.Services;
 import com.Ecommerce.Product_Service.Entities.Discount;
 import com.Ecommerce.Product_Service.Entities.DiscountType;
 import com.Ecommerce.Product_Service.Entities.Product;
+import com.Ecommerce.Product_Service.Payload.Discont.AppliedDiscountDTO;
+import com.Ecommerce.Product_Service.Payload.Discont.PricingResponseDTO;
 import com.Ecommerce.Product_Service.Repositories.DiscountRepository;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import jakarta.transaction.Transactional;
@@ -10,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -190,4 +194,90 @@ public class DiscountService {
             throw new IllegalArgumentException("Percentage discount cannot exceed 100%");
         }
     }
+
+    public PricingResponseDTO calculatePricingDetails(UUID productId) {
+        Optional<Product> productOpt = productRepository.findById(productId);
+        if (productOpt.isEmpty()) {
+            throw new IllegalArgumentException("Product not found");
+        }
+
+        Product product = productOpt.get();
+        BigDecimal originalPrice = product.getPrice();
+
+        // Find active discounts for this product
+        LocalDateTime now = LocalDateTime.now();
+        List<Discount> activeDiscounts = discountRepository.findByProductId(product.getId()).stream()
+                .filter(d -> d.getStartDate().isBefore(now) && d.getEndDate().isAfter(now))
+                .toList();
+
+        PricingResponseDTO pricing = new PricingResponseDTO();
+        pricing.setProductId(productId);
+        pricing.setProductName(product.getName());
+        pricing.setOriginalPrice(originalPrice);
+        pricing.setHasActiveDiscounts(!activeDiscounts.isEmpty());
+
+        List<AppliedDiscountDTO> appliedDiscounts = new ArrayList<>();
+        BigDecimal finalPrice = originalPrice;
+        BigDecimal totalDiscountAmount = BigDecimal.ZERO;
+
+        if (!activeDiscounts.isEmpty()) {
+            // Find the best discount (you can modify this logic as needed)
+            Discount bestDiscount = null;
+            BigDecimal bestPrice = originalPrice;
+
+            for (Discount discount : activeDiscounts) {
+                BigDecimal priceAfterDiscount = applyDiscount(originalPrice, discount);
+                if (priceAfterDiscount.compareTo(bestPrice) < 0) {
+                    bestPrice = priceAfterDiscount;
+                    bestDiscount = discount;
+                }
+            }
+
+            if (bestDiscount != null) {
+                finalPrice = bestPrice;
+                totalDiscountAmount = originalPrice.subtract(finalPrice);
+
+                // Create applied discount DTO
+                AppliedDiscountDTO appliedDiscount = new AppliedDiscountDTO();
+                appliedDiscount.setDiscountId(bestDiscount.getId());
+                appliedDiscount.setDiscountType(bestDiscount.getDiscountType());
+                appliedDiscount.setDiscountValue(bestDiscount.getDiscountValue());
+                appliedDiscount.setDiscountAmount(totalDiscountAmount);
+                appliedDiscount.setDescription(generateDiscountDescription(bestDiscount));
+                appliedDiscounts.add(appliedDiscount);
+            }
+        }
+
+        pricing.setFinalPrice(finalPrice);
+        pricing.setTotalDiscount(totalDiscountAmount);
+
+        // Calculate discount percentage
+        if (originalPrice.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal discountPercentage = totalDiscountAmount
+                    .divide(originalPrice, 4, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"))
+                    .setScale(2, RoundingMode.HALF_UP);
+            pricing.setDiscountPercentage(discountPercentage);
+        } else {
+            pricing.setDiscountPercentage(BigDecimal.ZERO);
+        }
+
+        pricing.setAppliedDiscounts(appliedDiscounts);
+
+        return pricing;
+    }
+    private String generateDiscountDescription(Discount discount) {
+        switch (discount.getDiscountType()) {
+            case PERCENTAGE:
+                return discount.getDiscountValue() + "% off";
+            case FIXED_AMOUNT:
+                return "$" + discount.getDiscountValue() + " off";
+            case BUY_ONE_GET_ONE:
+                return "Buy One Get One Free";
+            default:
+                return "Special Discount";
+        }
+    }
+
+
 }

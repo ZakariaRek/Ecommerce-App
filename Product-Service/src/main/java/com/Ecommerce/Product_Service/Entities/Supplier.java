@@ -38,15 +38,4 @@ public class Supplier {
     @ManyToMany(mappedBy = "suppliers")
     private List<Product> products = new ArrayList<>();
 
-    public void provideProduct() {
-        // Implementation logic here
-    }
-
-    public void updateSupplierInfo() {
-        // Implementation logic here
-    }
-
-    public void rateSupplier() {
-        // Implementation logic here
-    }
 }

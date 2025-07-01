@@ -2,9 +2,9 @@ package com.Ecommerce.Product_Service.Controllers;
 
 import com.Ecommerce.Product_Service.Entities.Inventory;
 import com.Ecommerce.Product_Service.Payload.InventoryMapper;
-import com.Ecommerce.Product_Service.Payload.Request.InventoryRequestDTO;
-import com.Ecommerce.Product_Service.Payload.inventory.InventoryResponseDTO;
-import com.Ecommerce.Product_Service.Payload.Request.InventorySummaryDTO;
+import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Inventory.InventoryResponseDTO;
+import com.Ecommerce.Product_Service.Payload.Product.InventorySummaryDTO;
 import com.Ecommerce.Product_Service.Services.InventoryService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;

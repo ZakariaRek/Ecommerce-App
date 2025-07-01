@@ -1,4 +1,4 @@
-package com.Ecommerce.Product_Service.Payload.Request;
+package com.Ecommerce.Product_Service.Payload.Product;
 
 import lombok.Data;
 

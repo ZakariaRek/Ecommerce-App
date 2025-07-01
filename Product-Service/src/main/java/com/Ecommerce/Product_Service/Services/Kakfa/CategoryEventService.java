@@ -88,7 +88,7 @@ public class CategoryEventService {
                     .previousLevel(previousLevel)
                     .newLevel(category.getLevel())
                     .previousFullPath(previousFullPath)
-                    .newFullPath(category.getFullPath())
+                    .newFullPath(category.getImageUrl())
                     .updatedAt(LocalDateTime.now())
                     .build();
 
