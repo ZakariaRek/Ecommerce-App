@@ -1,4 +1,4 @@
-package com.Ecommerce.Product_Service.Payload.inventory;
+package com.Ecommerce.Product_Service.Payload.Inventory;
 
 import lombok.Data;
 
