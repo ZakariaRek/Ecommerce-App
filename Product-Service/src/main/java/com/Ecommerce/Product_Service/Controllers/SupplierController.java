@@ -10,6 +10,7 @@ import jakarta.validation.constraints.DecimalMin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,19 +31,19 @@ public class SupplierController {
 
     @Autowired
     private SupplierMapper supplierMapper;
-
+    @Transactional(readOnly = true)
     @GetMapping
-    public ResponseEntity<List<SupplierSummaryDTO>> getAllSuppliers() {
-        List<SupplierSummaryDTO> suppliers = supplierService.findAllSuppliers()
+    public ResponseEntity<List<SupplierResponseDTO>> getAllSuppliers() {
+        List<SupplierResponseDTO> suppliers = supplierService.findAllSuppliers()
                 .stream()
-                .map(supplierMapper::toSummaryDTO)
+                .map(supplierMapper::toResponseDTO)
                 .collect(Collectors.toList());
 
         // Sort by creation date (newest first)
         Collections.reverse(suppliers);
         return ResponseEntity.ok(suppliers);
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/{id}")
     public ResponseEntity<SupplierResponseDTO> getSupplierById(@PathVariable UUID id) {
         return supplierService.findSupplierById(id)
@@ -50,7 +51,7 @@ public class SupplierController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/search")
     public ResponseEntity<List<SupplierSummaryDTO>> searchSuppliersByName(
             @RequestParam String name) {
@@ -60,7 +61,7 @@ public class SupplierController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(suppliers);
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/rating/{minRating}")
     public ResponseEntity<List<SupplierSummaryDTO>> getSuppliersByMinimumRating(
             @PathVariable
@@ -171,7 +172,7 @@ public class SupplierController {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error removing product from supplier");
         }
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/{supplierId}/products")
     public ResponseEntity<List<ProductSummaryDTO>> getProductsBySupplier(@PathVariable UUID supplierId) {
         try {
@@ -186,7 +187,7 @@ public class SupplierController {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving products for supplier");
         }
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/top-rated")
     public ResponseEntity<List<SupplierSummaryDTO>> getTopRatedSuppliers(
             @RequestParam(defaultValue = "10") int limit) {
@@ -199,7 +200,7 @@ public class SupplierController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(suppliers);
     }
-
+    @Transactional(readOnly = true)
     @GetMapping("/stats")
     public ResponseEntity<SupplierStatsDTO> getSupplierStatistics() {
         try {
@@ -248,7 +249,7 @@ public class SupplierController {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving supplier statistics");
         }
     }
-
+    @Transactional(readOnly = true)
     // Additional endpoint for advanced search
     @GetMapping("/search/advanced")
     public ResponseEntity<List<SupplierSummaryDTO>> advancedSearch(
