@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Controllers;
 
 import com.Ecommerce.Product_Service.Entities.Inventory;
+import com.Ecommerce.Product_Service.Payload.Inventory.InventoryUpdateRequest;
 import com.Ecommerce.Product_Service.Payload.InventoryMapper;
 import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
 import com.Ecommerce.Product_Service.Payload.Inventory.InventoryResponseDTO;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/inventory")
@@ -90,7 +92,8 @@ public class InventoryController {
             @RequestParam UUID productId,
             @RequestParam Integer quantity,
             @RequestParam(defaultValue = "MAIN_WAREHOUSE") String warehouseLocation,
-            @RequestParam(defaultValue = "10") Integer lowStockThreshold) {
+            @RequestParam(defaultValue = "10") Integer lowStockThreshold)
+    {
 
         try {
             if (inventoryService.inventoryExistsForProduct(productId)) {
@@ -124,36 +127,67 @@ public class InventoryController {
      * Get all inventory records
      */
     @GetMapping
-    public ResponseEntity<List<InventoryResponseDTO>> getAllInventory() {
-        List<InventoryResponseDTO> inventoryList = inventoryMapper.toResponseDTOList(
-                inventoryService.findAllInventory()
-        );
-        return ResponseEntity.ok(inventoryList);
+    public ResponseEntity<Map<String, List<InventoryResponseDTO>>> getAllInventory() {
+        List<Inventory> inventoryList = inventoryService.findAllInventory();
+        Map<String, List<InventoryResponseDTO>> inventoryMap = inventoryList.stream()
+                .map(inventory -> {
+                    InventoryResponseDTO responseDTO = new InventoryResponseDTO();
+                    responseDTO.setId(inventory.getId());
+                    responseDTO.setProductId(inventory.getProduct().getId());
+                    responseDTO.setQuantity(inventory.getQuantity());
+                    responseDTO.setAvailable(inventory.getQuantity() > 0);
+                    responseDTO.setWarehouseLocation(inventory.getWarehouseLocation());
+                    responseDTO.setLastUpdated(inventory.getLastRestocked());
+                    responseDTO.setProductName(inventory.getProduct().getName());
+                    responseDTO.setProductSku(inventory.getProduct().getSku());
+                    responseDTO.setLowStockThreshold(inventory.getLowStockThreshold());
+                    responseDTO.setIsLowStock(responseDTO.getIsLowStock());
+                    responseDTO.setIsOutOfStock(responseDTO.getIsOutOfStock());
+                    return responseDTO;
+                })
+                .collect(Collectors.groupingBy(InventoryResponseDTO::getProductName));
+        return ResponseEntity.ok(inventoryMap);
     }
-
     /**
      * Get inventory by product ID
      */
     @GetMapping("/{productId}")
     public ResponseEntity<InventoryResponseDTO> getInventoryByProductId(@PathVariable UUID productId) {
         return inventoryService.findInventoryByProductId(productId)
-                .map(inventoryMapper::toResponseDTO)
+                .map(inventory -> {
+                    InventoryResponseDTO responseDTO = new InventoryResponseDTO();
+                    responseDTO.setId(inventory.getId());
+                    responseDTO.setProductId(inventory.getProduct().getId());
+                    responseDTO.setQuantity(inventory.getQuantity());
+                    responseDTO.setAvailable(inventory.getQuantity() > 0);
+                    responseDTO.setWarehouseLocation(inventory.getWarehouseLocation());
+//                    responseDTO.setReserved(inventory.getReserved());
+                    responseDTO.setLastUpdated(inventory.getLastRestocked());
+                    responseDTO.setProductName(inventory.getProduct().getName());
+                    responseDTO.setProductSku(inventory.getProduct().getSku());
+                    responseDTO.setLowStockThreshold(inventory.getLowStockThreshold());
+                    responseDTO.setIsLowStock(inventory.getQuantity() <= inventory.getLowStockThreshold());
+                    responseDTO.setIsOutOfStock(inventory.getQuantity() == 0);
+//                    responseDTO.setStockStatus(inventory.getQuantity() > 0 ? "IN_STOCK" : "OUT_OF_STOCK");
+//                    responseDTO.setAvailableQuantity(inventory.getQuantity() - inventory.getReserved());
+                    return responseDTO;
+                })
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-
     /**
      * Update existing inventory
      */
     @PutMapping("/{productId}")
     public ResponseEntity<?> updateInventory(
             @PathVariable UUID productId,
-            @Valid @RequestBody InventoryRequestDTO requestDTO) {
+            @Valid @RequestBody InventoryUpdateRequest requestDTO) {
         try {
-            Inventory inventory = inventoryMapper.toEntity(requestDTO);
-            inventory.setId(productId);
 
-            return inventoryService.updateInventory(productId, inventory)
+//            Inventory inventory = inventoryMapper.toEntity(requestDTO);
+//            inventory.setId(productId);
+
+            return inventoryService.updateInventory(productId, requestDTO)
                     .map(inventoryMapper::toResponseDTO)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());

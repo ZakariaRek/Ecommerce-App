@@ -3,7 +3,8 @@ package com.Ecommerce.Product_Service.Services;
 import com.Ecommerce.Product_Service.Entities.Inventory;
 import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
-import com.Ecommerce.Product_Service.Payload.Inventory.InventoryRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Inventory.InventoryUpdateRequest;
+import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
 import com.Ecommerce.Product_Service.Repositories.InventoryRepository;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import com.Ecommerce.Product_Service.Services.Kakfa.InventoryEventService;
@@ -227,7 +228,7 @@ public class InventoryService {
                     Integer previousThreshold = existingInventory.getLowStockThreshold();
 
                     // Update only provided fields
-                    if (requestDTO.getQuantity() != 0 && requestDTO.getQuantity() >= 0) {
+                    if (requestDTO.getQuantity() != null && requestDTO.getQuantity() >= 0) {
                         existingInventory.setQuantity(requestDTO.getQuantity());
                         existingInventory.setLastRestocked(LocalDateTime.now());
                     }
@@ -236,7 +237,9 @@ public class InventoryService {
                         existingInventory.setWarehouseLocation(requestDTO.getWarehouseLocation());
                     }
 
-
+                    if (requestDTO.getLowStockThreshold() != null) {
+                        existingInventory.setLowStockThreshold(requestDTO.getLowStockThreshold());
+                    }
 
                     // Update product status and stock
                     updateProductStatusBasedOnStock(existingInventory.getProduct(), existingInventory.getQuantity());
