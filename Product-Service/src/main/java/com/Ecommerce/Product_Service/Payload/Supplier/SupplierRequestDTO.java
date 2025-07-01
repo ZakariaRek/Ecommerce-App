@@ -4,7 +4,9 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Data
 public class SupplierRequestDTO {
@@ -26,4 +28,7 @@ public class SupplierRequestDTO {
     @DecimalMin(value = "0.0", message = "Rating cannot be negative")
     @DecimalMax(value = "5.0", message = "Rating cannot exceed 5.0")
     private BigDecimal rating;
+
+    @Size(max = 100, message = "Cannot have more than 100 products")
+    private List<UUID> productIds;
 }

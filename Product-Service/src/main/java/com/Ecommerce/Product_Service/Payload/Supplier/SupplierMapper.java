@@ -27,9 +27,20 @@ public class SupplierMapper {
         supplier.setContractDetails(dto.getContractDetails());
         supplier.setRating(dto.getRating());
 
+        // Handle product IDs - create placeholder products for service layer
+        if (dto.getProductIds() != null && !dto.getProductIds().isEmpty()) {
+            List<Product> placeholderProducts = dto.getProductIds().stream()
+                    .map(productId -> {
+                        Product product = new Product();
+                        product.setId(productId);
+                        return product;
+                    })
+                    .collect(Collectors.toList());
+            supplier.setProducts(placeholderProducts);
+        }
+
         return supplier;
     }
-
     /**
      * Convert Supplier entity to SupplierResponseDTO
      */

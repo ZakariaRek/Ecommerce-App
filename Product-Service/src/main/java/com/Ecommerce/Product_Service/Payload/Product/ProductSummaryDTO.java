@@ -3,7 +3,10 @@ package com.Ecommerce.Product_Service.Payload.Product;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+
+
 
 @Data
 public class ProductSummaryDTO {
@@ -14,4 +17,5 @@ public class ProductSummaryDTO {
     private Integer stockQuantity;
     private String category;
     private Boolean isActive;
+    private List<String> supplierNames; // Added for multiple suppliers
 }

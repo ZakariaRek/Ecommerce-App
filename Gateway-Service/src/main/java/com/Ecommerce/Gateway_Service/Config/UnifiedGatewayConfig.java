@@ -71,7 +71,7 @@ public class UnifiedGatewayConfig {
                         .and().method("GET")
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
-                                .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(200, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("product-read-cb")))
                         .uri("lb://product-service"))
 
@@ -81,7 +81,7 @@ public class UnifiedGatewayConfig {
                         .and().method("POST", "PUT", "DELETE", "PATCH")
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
-                                .filter(customRateLimitFilterFactory.apply(createConfig(10, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(50, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("product-write-cb")))
                         .uri("lb://product-service"))
 
