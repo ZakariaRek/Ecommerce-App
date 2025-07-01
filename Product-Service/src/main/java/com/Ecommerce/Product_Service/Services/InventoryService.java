@@ -174,7 +174,7 @@ public class InventoryService {
     // ====== UPDATE OPERATIONS ======
 
     @Transactional
-    public Optional<Inventory> updateInventory(UUID productId, Inventory updatedInventory) {
+    public Optional<Inventory> updateInventory(UUID productId, InventoryUpdateRequest updatedInventory) {
         return inventoryRepository.findById(productId)
                 .map(existingInventory -> {
                     Integer previousQuantity = existingInventory.getQuantity();
