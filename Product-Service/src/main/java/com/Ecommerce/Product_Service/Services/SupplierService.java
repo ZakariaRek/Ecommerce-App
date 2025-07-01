@@ -5,16 +5,13 @@ import com.Ecommerce.Product_Service.Entities.Supplier;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import com.Ecommerce.Product_Service.Repositories.SupplierRepository;
 import com.Ecommerce.Product_Service.Utlis.ContractDetailsHelper;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,18 +23,19 @@ public class SupplierService {
     @Autowired
     private ProductRepository productRepository;
 
+    @Transactional(readOnly = true)
     public List<Supplier> findAllSuppliers() {
         return supplierRepository.findAll();
     }
-
+    @Transactional(readOnly = true)
     public Optional<Supplier> findSupplierById(UUID id) {
         return supplierRepository.findById(id);
     }
-
+    @Transactional(readOnly = true)
     public List<Supplier> findSuppliersByName(String name) {
         return supplierRepository.findByNameContainingIgnoreCase(name);
     }
-
+    @Transactional(readOnly = true)
     public List<Supplier> findSuppliersByMinimumRating(BigDecimal minRating) {
         return supplierRepository.findByRatingGreaterThanEqual(minRating);
     }
@@ -51,7 +49,62 @@ public class SupplierService {
         // Validate contract details if present
         validateContractDetails(supplier.getContractDetails());
 
-        return supplierRepository.save(supplier);
+        // Extract product IDs before saving supplier
+        List<UUID> productIds = new ArrayList<>();
+        if (supplier.getProducts() != null && !supplier.getProducts().isEmpty()) {
+            productIds = supplier.getProducts().stream()
+                    .map(Product::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+
+        // Clear placeholder products to avoid cascade issues
+        supplier.setProducts(new ArrayList<>());
+
+        // Save supplier first
+        Supplier savedSupplier = supplierRepository.save(supplier);
+
+        // Handle product-supplier relationships
+        if (!productIds.isEmpty()) {
+            establishProductSupplierRelationships(savedSupplier, productIds);
+            // Reload supplier with products
+            savedSupplier = supplierRepository.findByIdWithProducts(savedSupplier.getId())
+                    .orElse(savedSupplier);
+        }
+
+        return savedSupplier;
+    }
+
+    private void establishProductSupplierRelationships(Supplier supplier, List<UUID> productIds) {
+        // Fetch actual products from database
+        List<Product> products = productRepository.findAllById(productIds);
+
+        // Validate all products exist
+        if (products.size() != productIds.size()) {
+            List<UUID> foundIds = products.stream().map(Product::getId).collect(Collectors.toList());
+            List<UUID> missingIds = productIds.stream()
+                    .filter(id -> !foundIds.contains(id))
+                    .collect(Collectors.toList());
+            throw new IllegalArgumentException("Products not found: " + missingIds);
+        }
+
+        // Establish many-to-many relationships
+        for (Product product : products) {
+            // Add supplier to product's suppliers list (if not already present)
+            if (!product.getSuppliers().contains(supplier)) {
+                product.getSuppliers().add(supplier);
+            }
+
+            // Add product to supplier's products list (if not already present)
+            if (!supplier.getProducts().contains(product)) {
+                supplier.getProducts().add(product);
+            }
+        }
+
+        // Save products to update the join table
+        productRepository.saveAll(products);
+
+
     }
 
     @Transactional
