@@ -43,6 +43,11 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    // In `ProductService.java`
+    public List<Product> getProductsWithoutInventory() {
+        return productRepository.findByInventoryIsNull();
+    }
+
     public boolean existsById(UUID id) {
         return productRepository.existsById(id);
     }

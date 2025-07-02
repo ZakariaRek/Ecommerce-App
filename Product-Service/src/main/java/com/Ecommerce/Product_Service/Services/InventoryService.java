@@ -58,6 +58,8 @@ public class InventoryService {
         return inventoryRepository.findByLastRestockedBefore(cutoffDate);
     }
 
+
+
     // ====== UTILITY METHODS ======
 
     public boolean inventoryExistsForProduct(UUID productId) {

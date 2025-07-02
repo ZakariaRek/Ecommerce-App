@@ -1,12 +1,15 @@
 package com.Ecommerce.Product_Service.Controllers;
 
 import com.Ecommerce.Product_Service.Entities.Inventory;
+import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Payload.Inventory.InventoryUpdateRequest;
 import com.Ecommerce.Product_Service.Payload.InventoryMapper;
 import com.Ecommerce.Product_Service.Payload.Product.InventoryRequestDTO;
 import com.Ecommerce.Product_Service.Payload.Inventory.InventoryResponseDTO;
 import com.Ecommerce.Product_Service.Payload.Product.InventorySummaryDTO;
+import com.Ecommerce.Product_Service.Payload.Product.ProductResponseDTO;
 import com.Ecommerce.Product_Service.Services.InventoryService;
+import com.Ecommerce.Product_Service.Services.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,7 @@ public class InventoryController {
 
     @Autowired
     private InventoryMapper inventoryMapper;
+
 
     /**
      * Create new inventory record - FIXED VERSION
@@ -122,6 +126,8 @@ public class InventoryController {
         boolean exists = inventoryService.inventoryExistsForProduct(productId);
         return ResponseEntity.ok(Map.of("exists", exists));
     }
+
+
 
     /**
      * Get all inventory records
