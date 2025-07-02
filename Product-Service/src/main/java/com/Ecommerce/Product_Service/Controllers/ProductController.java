@@ -298,6 +298,11 @@ public class ProductController {
         if (dto.getWeight() != null) product.setWeight(dto.getWeight());
         if (dto.getDimensions() != null) product.setDimensions(dto.getDimensions());
         if (dto.getStatus() != null) product.setStatus(dto.getStatus());
+        if (dto.getImages() != null) {
+            product.setImages(dto.getImages().stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        }
     }
     // Mapping methods
 
