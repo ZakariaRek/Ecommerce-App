@@ -40,6 +40,14 @@ public class ProductController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(productDTOs);
     }
+    @GetMapping("/no-inventory")
+    public ResponseEntity<List<ProductResponseDTO>> getProductsWithoutInventory() {
+        List<Product> products = productService.getProductsWithoutInventory();
+        List<ProductResponseDTO> productDTOs = products.stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(productDTOs);
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponseDTO> getProductById(@PathVariable UUID id) {

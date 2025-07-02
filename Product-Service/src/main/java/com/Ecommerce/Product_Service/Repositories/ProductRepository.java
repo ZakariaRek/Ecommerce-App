@@ -26,5 +26,5 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     @Modifying
     @Query("DELETE FROM Product p WHERE p.id IN (SELECT ps.id FROM Product ps JOIN ps.suppliers s WHERE s.id = :supplierId AND ps.id IN :productIds)")
     void removeSupplierFromProducts(@Param("supplierId") UUID supplierId, @Param("productIds") List<UUID> productIds);
-
+    List<Product> findByInventoryIsNull();
 }
