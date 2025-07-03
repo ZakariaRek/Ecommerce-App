@@ -3,7 +3,20 @@ spring:
     name: eureka-server
 server:
   port: 8761
+# In your Eureka Server application.yml
 eureka:
+  server:
+    enableSelfPreservation: false        # Disable self-preservation for faster eviction
+    renewalPercentThreshold: 0.49        # Lower threshold
+    renewalThresholdUpdateIntervalMs: 10000  # Update every 10s
+    evictionIntervalTimerInMs: 5000      # Evict dead instances every 5s (default: 60s)
+    responseCacheUpdateIntervalMs: 3000  # Update response cache every 3s (default: 30s)
+    responseCacheAutoExpirationInSeconds: 10  # Cache expires every 10s (default: 180s)
+    expectedClientRenewalIntervalSeconds: 5   # Expect renewals every 5s
+
+  instance:
+    leaseRenewalIntervalInSeconds: 5
+    leaseExpirationDurationInSeconds: 15
   client:
     register-with-eureka: false
     fetch-registry: false

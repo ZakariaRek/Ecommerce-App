@@ -9,6 +9,7 @@ import com.Ecommerce.User_Service.Payload.Response.MessageResponse;
 import com.Ecommerce.User_Service.Repositories.RoleRepository;
 import com.Ecommerce.User_Service.Services.RoleService;
 import com.Ecommerce.User_Service.Services.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ import java.util.Set;
 
 //@CrossOrigin(origins = "*", maxAge =
 @RequestMapping("/users")
+@Tag(name = "User Management", description = "User operations")
 public class UserController {
 
     @Autowired

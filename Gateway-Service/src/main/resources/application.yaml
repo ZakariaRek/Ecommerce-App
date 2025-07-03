@@ -1,6 +1,6 @@
 server:
   port: 8099
- # add auth
+
 spring:
   config:
     import: configserver:http://localhost:8888
@@ -13,7 +13,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-#      password: # Leave empty if no password
       timeout: 2000ms
       database: 0
       lettuce:
@@ -28,11 +27,11 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowed-origins: ${cors.configuration.allowed-origins}
-            allowed-methods: ${cors.configuration.allowed-methods}
-            allowed-headers: ${cors.configuration.allowed-headers}
-            allow-credentials: ${cors.configuration.allow-credentials}
-            max-age: ${cors.configuration.max-age}
+            allowed-origins: ${cors.configuration.allowed-origins:http://localhost:3000,http://localhost:8080}
+            allowed-methods: ${cors.configuration.allowed-methods:GET,POST,PUT,DELETE,OPTIONS,PATCH}
+            allowed-headers: ${cors.configuration.allowed-headers:*}
+            allow-credentials: ${cors.configuration.allow-credentials:true}
+            max-age: ${cors.configuration.max-age:3600}
 
       # Built-in Redis Rate Limiter (Alternative option)
       redis-rate-limiter:
@@ -40,70 +39,13 @@ spring:
         burst-capacity: 20    # Maximum tokens in bucket
         requested-tokens: 1   # Tokens requested per request
 
-
-#      globalcors:
-#        corsConfigurations:
-#          '[/**]':
-#            allowedOriginPatterns: "*"
-#            allowedMethods:
-#              - GET
-#              - POST
-#              - PUT
-#              - DELETE
-#              - OPTIONS
-#              - PATCH
-#            allowedHeaders: "*"
-#            allowCredentials: true
-#            maxAge: 3600
-
-
-      # Circuit Breaker Configuration
-      circuitbreaker:
-        resilience4j:
-          instances:
-            auth-cb:
-              slidingWindowSize: 10
-              minimumNumberOfCalls: 5
-              failureRateThreshold: 50
-              waitDurationInOpenState: 30s
-            user-mgmt-cb:
-              slidingWindowSize: 10
-              minimumNumberOfCalls: 5
-              failureRateThreshold: 50
-              waitDurationInOpenState: 30s
-            product-read-cb:
-              slidingWindowSize: 20
-              minimumNumberOfCalls: 10
-              failureRateThreshold: 60
-              waitDurationInOpenState: 30s
-            product-write-cb:
-              slidingWindowSize: 10
-              minimumNumberOfCalls: 5
-              failureRateThreshold: 40
-              waitDurationInOpenState: 30s
-            order-cb:
-              slidingWindowSize: 15
-              minimumNumberOfCalls: 7
-              failureRateThreshold: 50
-              waitDurationInOpenState: 30s
-            payment-cb:
-              slidingWindowSize: 5
-              minimumNumberOfCalls: 3
-              failureRateThreshold: 30
-              waitDurationInOpenState: 60s
-            cart-cb:
-              slidingWindowSize: 15
-              minimumNumberOfCalls: 8
-              failureRateThreshold: 55
-              waitDurationInOpenState: 30s
-
       # Discovery Configuration
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
 
-# JWT Configuration (same secret as User Service)
+# JWT Configuration
 gateway1:
   jwt:
     secret: "c03a546beee68b92784e681b537540349c386d02b6dbf9917cf438e47e5c1ee93fdebc55652af00cb3ebc6bff17dc3bedaa33ea6cfdd1959b114ede448c4ac87853021cc3c32f1ef6d5951d0c6b1398bc01c563c7638a0000e6b4064c5733c5552aa232aa8547be8b4b1f8dddacac8256f319acd6832ff5ae9365358e20624fc99dab8489d33e582cf621444e9d944442559707a1f92d556862bb53ce12deb3ec17d3a8bc3c7159b672e4f02189af368a8e71d8547a5b71518de7a1d9a4997d20b4f646fae73e73c26666799b21cdec5544b74319756bb0a27d4e124ec5f13bf8f338ce3ba5ad8b3af1a8aae211bef3eb6ca4f8a24e6b80662c94530e168b0dc"
@@ -159,8 +101,6 @@ rate-limiting:
       refill-interval-seconds: 30
       description: "File upload operations"
 
-
-
 # Eureka Configuration
 eureka:
   instance:
@@ -170,6 +110,11 @@ eureka:
     metadataMap:
       instanceId: ${spring.application.name}:${server.port}
   client:
+    registryFetchIntervalSeconds: 5
+    instanceInfoReplicationIntervalSeconds: 5
+    initialInstanceInfoReplicationIntervalSeconds: 5
+    eurekaServiceUrlPollIntervalSeconds: 5
+    cacheRefreshExecutorThreadPoolSize: 2
     registerWithEureka: true
     fetchRegistry: true
     serviceUrl:
@@ -183,30 +128,53 @@ logging:
     com.Ecommerce.Gateway_Service: DEBUG
     org.springframework.data.redis: DEBUG
     org.springframework.web.cors: DEBUG
+    io.github.resilience4j: DEBUG
 
-
-# Management and Monitoring
-
-
+# Management and Monitoring - Enhanced for Circuit Breakers
 management:
+  security:
+    enabled: false
+  health:
+    circuitbreakers:
+      enabled: true
+    redis:
+      enabled: true
+    diskspace:
+      enabled: true
+  endpoint:
+    health:
+      show-details: "ALWAYS"
+      show-components: "ALWAYS"
+    circuitbreakers:
+      enabled: true
+    metrics:
+      enabled: true
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,gateway,redis
-  endpoint:
-    health:
-      show-details: always
-    gateway:
-      enabled: true
-  prometheus:
-    metrics:
-      export:
+        include: "*"
+      cors:
+        allowed-origins: "*"
+        allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+  metrics:
+    export:
+      simple:
         enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
 
 # Service Discovery Timeout Configuration
 ribbon:
-  ReadTimeout: 60000
-  ConnectTimeout: 60000
+  ServerListRefreshInterval: 5000
+  ReadTimeout: 5000
+  ConnectTimeout: 3000
+  MaxAutoRetries: 1
+  MaxAutoRetriesNextServer: 2
 
 # Custom Security Configuration
 gateway:
@@ -219,16 +187,107 @@ gateway:
       - "/v3/api-docs/**"
       - "/actuator/**"
       - "/health"
+      - "/api/gateway/**"
+      - "/*/swagger-ui/**"
+      - "/*/v3/api-docs/**"
+      - "/swagger-resources/**"
+      - "/docs"
+      - "/swagger-docs"
+      - "/swagger-ui.html"
+      - "/webjars/**"
     admin-only-endpoints:
       - "/api/users/api/users/**"
       - "/api/test/admin"
+      - "/api/gateway/circuit-breakers/*/reset"
+      - "/api/gateway/rate-limiting/reset/**"
     moderator-endpoints:
       - "/api/test/mod"
 
+# Enhanced SpringDoc Configuration for WebFlux
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+    groups:
+      enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    config-url: /v3/api-docs/swagger-config
+    disable-swagger-default-url: true
+    display-request-duration: true
+    show-extensions: true
+    show-common-extensions: true
+    default-models-expand-depth: 1
+    default-model-expand-depth: 1
+    # Only include Gateway Management initially - add other services when they're ready
+    urls:
+      - name: Gateway Management
+        url: /v3/api-docs/gateway
+        display-name: Gateway Management & Circuit Breakers
+    # Uncomment services below as they become available with Swagger documentation:
+    #   - name: User Service
+    #     url: /user-service/v3/api-docs
+    #     display-name: User Management Service
+    #   - name: Product Service
+    #     url: /product-service/v3/api-docs
+    #     display-name: Product Catalog Service
+    #   - name: Order Service
+    #     url: /order-service/v3/api-docs
+    #     display-name: Order Management Service
+    #   - name: Payment Service
+    #     url: /payment-service/v3/api-docs
+    #     display-name: Payment Processing Service
+    #   - name: Cart Service
+    #     url: /cart-service/v3/api-docs
+    #     display-name: Shopping Cart Service
+    #   - name: Loyalty Service
+    #     url: /loyalty-service/v3/api-docs
+    #     display-name: Loyalty Program Service
+    #   - name: Notification Service
+    #     url: /notification-service/v3/api-docs
+    #     display-name: Notification Service
+    #   - name: Shipping Service
+    #     url: /shipping-service/v3/api-docs
+    #     display-name: Shipping Service
+    oauth:
+      client-id: gateway-client
+      client-secret: gateway-secret
+    group-configs:
+      - group: gateway
+        display-name: Gateway Management & Circuit Breakers
+        paths-to-match: /api/gateway/**
+      # Uncomment group configs below as services become available:
+      - group: user-service
+        display-name: User Service
+        paths-to-match: /api/users/**
+      - group: product-service
+        display-name: Product Service
+        paths-to-match: /api/products/**
+      # - group: order-service
+      #   display-name: Order Service
+      #   paths-to-match: /api/orders/**
+      # - group: payment-service
+      #   display-name: Payment Service
+      #   paths-to-match: /api/payments/**
+      # - group: cart-service
+      #   display-name: Cart Service
+      #   paths-to-match: /api/cart/**
+      # - group: loyalty-service
+      #   display-name: Loyalty Service
+      #   paths-to-match: /api/loyalty/**
+      # - group: notification-service
+      #   display-name: Notification Service
+      #   paths-to-match: /api/notifications/**
+      # - group: shipping-service
+      #   display-name: Shipping Service
+      #   paths-to-match: /api/shipping/**
 
+  # WebFlux specific configuration
+  webjars:
+    prefix: /webjars
 
-
-# Resilience4j Configuration
+# Enhanced Resilience4j Configuration
 resilience4j:
   circuitbreaker:
     configs:
@@ -239,16 +298,129 @@ resilience4j:
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
-
+        registerHealthIndicator: true
+        recordHealthIndicator: true
+        writableStackTraceEnabled: true
+        eventConsumerBufferSize: 100
+    instances:
+      auth-cb:
+        base-config: default
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      user-test-cb:
+        base-config: default
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      user-mgmt-cb:
+        base-config: default
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      product-read-cb:
+        base-config: default
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+      product-write-cb:
+        base-config: default
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 40
+        waitDurationInOpenState: 30s
+      order-cb:
+        base-config: default
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 7
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      payment-cb:
+        base-config: default
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 30
+        waitDurationInOpenState: 60s
+      cart-cb:
+        base-config: default
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 8
+        failureRateThreshold: 55
+        waitDurationInOpenState: 30s
+      loyalty-cb:
+        base-config: default
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 7
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      notification-cb:
+        base-config: default
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 7
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      shipping-cb:
+        base-config: default
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 7
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
 
   timelimiter:
     configs:
       default:
         timeoutDuration: 10s
+        cancelRunningFuture: true
     instances:
       auth-cb:
         base-config: default
+        timeoutDuration: 5s
       user-test-cb:
         base-config: default
       user-mgmt-cb:
         base-config: default
+      product-read-cb:
+        base-config: default
+        timeoutDuration: 15s
+      product-write-cb:
+        base-config: default
+      order-cb:
+        base-config: default
+        timeoutDuration: 20s
+      payment-cb:
+        base-config: default
+        timeoutDuration: 30s
+      cart-cb:
+        base-config: default
+      loyalty-cb:
+        base-config: default
+      notification-cb:
+        base-config: default
+      shipping-cb:
+        base-config: default
+
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+    instances:
+      auth-cb:
+        base-config: default
+        maxAttempts: 2
+      payment-cb:
+        base-config: default
+        maxAttempts: 2
+        waitDuration: 2s
+
+# Circuit Breaker Event Monitoring Configuration
+circuit-breaker:
+  events:
+    enabled: true
+    buffer-size: 100
