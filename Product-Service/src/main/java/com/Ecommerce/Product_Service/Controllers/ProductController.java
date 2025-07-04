@@ -7,6 +7,7 @@ import com.Ecommerce.Product_Service.Payload.Product.ProductRequestDTO;
 import com.Ecommerce.Product_Service.Payload.Product.ProductResponseAllDto;
 import com.Ecommerce.Product_Service.Payload.Product.ProductResponseDTO;
 import com.Ecommerce.Product_Service.Payload.Review.ReviewResponseDtoFroPro;
+import com.Ecommerce.Product_Service.Services.CategoryService;
 import com.Ecommerce.Product_Service.Services.FileStorageService;
 import com.Ecommerce.Product_Service.Services.ProductService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +35,10 @@ public class ProductController {
     private FileStorageService fileStorageService;
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private  CategoryService categoryService; // Add this
+
 
     @GetMapping
     public ResponseEntity<List<ProductResponseDTO>> getAllProducts() {
@@ -85,13 +90,13 @@ public class ProductController {
     }
     @PostMapping(value = "/with-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> createProductWithImages(
-            @RequestPart("product") ProductRequestDTO productDTO,  // ✅ Direct DTO - much cleaner!
+            @RequestPart("product") ProductRequestDTO productDTO,
             @RequestParam(value = "images", required = false) MultipartFile[] images) {
 
         log.info("Creating product with images: {}", productDTO.getName());
 
         try {
-            // ✅ No manual JSON parsing needed - Spring handles it automatically!
+            // ✅ Create product entity with categories
             Product product = mapToEntity(productDTO);
 
             // Handle image uploads if provided
@@ -99,7 +104,6 @@ public class ProductController {
             if (images != null && images.length > 0) {
                 log.info("Processing {} images", images.length);
 
-                // Validate and upload images
                 for (MultipartFile image : images) {
                     if (!image.isEmpty()) {
                         validateImageFile(image);
@@ -113,16 +117,21 @@ public class ProductController {
                 product.setImages(imageUrls);
             }
 
-            // Save product
+            // Save product (this will also save the category relationships)
             Product savedProduct = productService.saveProduct(product);
-            log.info("Product created successfully with ID: {}", savedProduct.getId());
+            log.info("Product created successfully with ID: {} and {} categories",
+                    savedProduct.getId(),
+                    savedProduct.getCategories() != null ? savedProduct.getCategories().size() : 0);
 
             // Build response
             Map<String, Object> response = new HashMap<>();
             response.put("product", mapToDto(savedProduct));
             response.put("imagesUploaded", imageUrls.size());
             response.put("imageUrls", imageUrls);
-            response.put("message", String.format("Product created successfully with %d images", imageUrls.size()));
+            response.put("categoriesAssigned", savedProduct.getCategories() != null ? savedProduct.getCategories().size() : 0);
+            response.put("message", String.format("Product created successfully with %d images and %d categories",
+                    imageUrls.size(),
+                    savedProduct.getCategories() != null ? savedProduct.getCategories().size() : 0));
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
@@ -358,7 +367,60 @@ public class ProductController {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList()));
         }
+
+        // ✅ Handle Category Assignment - FIXED VERSION
+        if (dto.getCategoryIds() != null && !dto.getCategoryIds().isEmpty()) {
+            try {
+                log.info("Assigning {} categories to product", dto.getCategoryIds().size());
+
+                // Use the correct method - either categoryService.findByIds or categoryRepository.findAllById
+                List<Category> categories = categoryService.findByIds(dto.getCategoryIds());
+                // OR directly use: categoryRepository.findAllById(dto.getCategoryIds());
+
+                // Validate that all requested categories were found
+                if (categories.size() != dto.getCategoryIds().size()) {
+                    Set<UUID> foundIds = categories.stream()
+                            .map(Category::getId)
+                            .collect(Collectors.toSet());
+
+                    List<UUID> missingIds = dto.getCategoryIds().stream()
+                            .filter(id -> !foundIds.contains(id))
+                            .collect(Collectors.toList());
+
+                    log.warn("Some categories not found: {}", missingIds);
+                    // You can either throw an exception or continue with found categories
+                    // throw new RuntimeException("Categories not found: " + missingIds);
+                }
+
+                product.setCategories(categories);
+                log.info("Successfully assigned {} categories to product", categories.size());
+
+            } catch (Exception e) {
+                log.error("Error assigning categories to product", e);
+                throw new RuntimeException("Failed to assign categories: " + e.getMessage());
+            }
+        }
+
+        // ✅ Handle Supplier Assignment (if you have suppliers)
+        if (dto.getSupplierIds() != null && !dto.getSupplierIds().isEmpty()) {
+            try {
+                log.info("Assigning {} suppliers to product", dto.getSupplierIds().size());
+
+                // Assuming you have a SupplierService - adjust as needed
+                // List<Supplier> suppliers = supplierService.findAllById(dto.getSupplierIds());
+                // product.setSuppliers(suppliers);
+
+                log.info("Supplier assignment would go here - implement based on your Supplier entity");
+
+            } catch (Exception e) {
+                log.error("Error assigning suppliers to product", e);
+                throw new RuntimeException("Failed to assign suppliers: " + e.getMessage());
+            }
+        }
     }
+
+    // 3. You might need to add this method to your CategoryService
+    // If it doesn't exist, add it to CategoryService interface and implementation
 
     private CategoryResponseDtoForPro toCategoryResponseDto(Category category) {
         CategoryResponseDtoForPro dto = new CategoryResponseDtoForPro();

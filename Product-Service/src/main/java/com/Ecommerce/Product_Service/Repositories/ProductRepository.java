@@ -15,6 +15,7 @@ import java.util.UUID;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findByStatus(ProductStatus status);
+
     List<Product> findByPriceBetween(BigDecimal min, BigDecimal max);
     List<Product> findByNameContainingIgnoreCase(String name);
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.suppliers WHERE p.id IN :productIds")
