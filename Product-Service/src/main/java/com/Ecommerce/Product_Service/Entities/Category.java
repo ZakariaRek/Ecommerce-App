@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Entities;
 
 import com.Ecommerce.Product_Service.Listener.CategoryEntityListener;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -30,7 +31,6 @@ public class Category {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
-
     @ManyToMany(mappedBy = "categories")
     private List<Product> products = new ArrayList<>();
 

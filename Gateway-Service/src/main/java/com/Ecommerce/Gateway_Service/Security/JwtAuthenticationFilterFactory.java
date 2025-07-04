@@ -91,11 +91,51 @@ public class JwtAuthenticationFilterFactory extends AbstractGatewayFilterFactory
     private boolean isPublicEndpoint(String path) {
         return path.contains("/auth/signin") ||
                 path.contains("/auth/signup") ||
+                path.contains("/auth/signup") ||
+
                 path.contains("/api/test/all") ||
                 path.contains("/swagger") ||
                 path.contains("/api-docs") ||
                 path.contains("/health") ||
-                path.contains("/actuator");
+                path.contains("/actuator")
+
+//                ;
+                || isPublicProductEndpoint(path);
+    }
+
+    private boolean isPublicProductEndpoint(String path) {
+        // Allow public access to product read operations
+        if (path.startsWith("/api/products")) {
+            // Allow GET requests for products (viewing products)
+            return true; // Note: We'll handle method filtering in the gateway routes
+        }
+
+        // Allow public access to product categories
+        if (path.startsWith("/api/categories")) {
+            return true; // Categories are usually public for browsing
+        }
+
+        // Allow public access to product images
+        if (path.startsWith("/api/images") || path.contains("/images/")) {
+            return true;
+        }
+
+        // Allow public access to product reviews (read-only)
+        if (path.startsWith("/api/reviews")) {
+            return true;
+        }
+
+        // Allow public access to suppliers (read-only)
+        if (path.startsWith("/api/suppliers")) {
+            return true;
+        }
+
+        // Allow public access to discounts (read-only)
+        if (path.startsWith("/api/discounts")) {
+            return true;
+        }
+
+        return false;
     }
 
     private boolean hasRequiredRole(String path, List<String> userRoles) {
@@ -144,6 +184,7 @@ public class JwtAuthenticationFilterFactory extends AbstractGatewayFilterFactory
         String body = String.format("{\"error\":\"Forbidden\",\"message\":\"%s\"}", message);
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body.getBytes())));
     }
+
 
     public static class Config {
         // Configuration properties if needed

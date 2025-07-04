@@ -1,9 +1,12 @@
 package com.Ecommerce.Product_Service.Controllers;
 
+import com.Ecommerce.Product_Service.Entities.*;
+import com.Ecommerce.Product_Service.Payload.Categorie.CategoryResponseDtoForPro;
+import com.Ecommerce.Product_Service.Payload.Discont.DiscountResponseDtoForPro;
 import com.Ecommerce.Product_Service.Payload.Product.ProductRequestDTO;
+import com.Ecommerce.Product_Service.Payload.Product.ProductResponseAllDto;
 import com.Ecommerce.Product_Service.Payload.Product.ProductResponseDTO;
-import com.Ecommerce.Product_Service.Entities.Product;
-import com.Ecommerce.Product_Service.Entities.ProductStatus;
+import com.Ecommerce.Product_Service.Payload.Review.ReviewResponseDtoFroPro;
 import com.Ecommerce.Product_Service.Services.FileStorageService;
 import com.Ecommerce.Product_Service.Services.ProductService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +40,14 @@ public class ProductController {
         List<Product> products = productService.findAllProducts();
         List<ProductResponseDTO> productDTOs = products.stream()
                 .map(this::mapToDto)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(productDTOs);
+    }
+    @GetMapping("/all")
+    public ResponseEntity<List<ProductResponseAllDto>> getAllProductsForFront() {
+        List<Product> products = productService.findAllProducts();
+        List<ProductResponseAllDto> productDTOs = products.stream()
+                .map(this::mapToDto1)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(productDTOs);
     }
@@ -290,6 +301,42 @@ public class ProductController {
         dto.setUpdatedAt(product.getUpdatedAt());
         return dto;
     }
+    private ProductResponseAllDto mapToDto1(Product product) {
+        ProductResponseAllDto dto = new ProductResponseAllDto();
+        dto.setId(product.getId());
+        dto.setName(product.getName());
+        dto.setDescription(product.getDescription());
+        dto.setPrice(product.getPrice());
+        dto.setStock(product.getStock());
+        dto.setSku(product.getSku());
+        dto.setWeight(product.getWeight());
+        dto.setDimensions(product.getDimensions());
+        dto.setImages(product.getImages());
+        if (product.getCategories() != null) {
+            dto.setCategories(product.getCategories().stream()
+                    .map(this::toCategoryResponseDto)
+                    .collect(Collectors.toList()));
+        }
+
+        // Map discounts without products
+        if (product.getDiscounts() != null) {
+            dto.setDiscounts(product.getDiscounts().stream()
+                    .map(this::toDiscountResponseDto)
+                    .collect(Collectors.toList()));
+        }
+
+        // Map reviews without products
+        if (product.getReviews() != null) {
+            dto.setReviews(product.getReviews().stream()
+                    .map(this::toReviewResponseDto)
+                    .collect(Collectors.toList()));
+        }
+        dto.setImages(product.getImages());
+        dto.setStatus(product.getStatus());
+        dto.setCreatedAt(product.getCreatedAt());
+        dto.setUpdatedAt(product.getUpdatedAt());
+        return dto;
+    }
 
     private Product mapToEntity(ProductRequestDTO dto) {
         Product product = new Product();
@@ -311,6 +358,42 @@ public class ProductController {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList()));
         }
+    }
+
+    private CategoryResponseDtoForPro toCategoryResponseDto(Category category) {
+        CategoryResponseDtoForPro dto = new CategoryResponseDtoForPro();
+        dto.setId(category.getId());
+        dto.setName(category.getName());
+        dto.setParentId(category.getParentId());
+        dto.setDescription(category.getDescription());
+        dto.setImageUrl(category.getImageUrl());
+        dto.setLevel(category.getLevel());
+        dto.setCreatedAt(category.getCreatedAt());
+        return dto;
+    }
+
+    private DiscountResponseDtoForPro toDiscountResponseDto(Discount discount) {
+        DiscountResponseDtoForPro dto = new DiscountResponseDtoForPro();
+        dto.setId(discount.getId());
+        dto.setDiscountType(discount.getDiscountType());
+        dto.setDiscountValue(discount.getDiscountValue());
+        dto.setStartDate(discount.getStartDate());
+        dto.setEndDate(discount.getEndDate());
+        dto.setMinPurchaseAmount(discount.getMinPurchaseAmount());
+        dto.setMaxDiscountAmount(discount.getMaxDiscountAmount());
+        return dto;
+    }
+
+    private ReviewResponseDtoFroPro toReviewResponseDto(Review review) {
+        ReviewResponseDtoFroPro dto = new ReviewResponseDtoFroPro();
+        dto.setId(review.getId());
+        dto.setUserId(review.getUserId());
+        dto.setRating(review.getRating());
+        dto.setComment(review.getComment());
+        dto.setVerified(review.getVerified());
+        dto.setCreatedAt(review.getCreatedAt());
+        dto.setUpdatedAt(review.getUpdatedAt());
+        return dto;
     }
     // Mapping methods
 
