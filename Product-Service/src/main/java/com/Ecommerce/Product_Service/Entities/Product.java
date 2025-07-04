@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Entities;
 
 import com.Ecommerce.Product_Service.Listener.ProductEntityListener;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;

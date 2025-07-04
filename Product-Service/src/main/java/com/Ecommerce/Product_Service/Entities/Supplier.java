@@ -2,6 +2,7 @@ package com.Ecommerce.Product_Service.Entities;
 
 import com.Ecommerce.Product_Service.Config.JsonConverter;
 import com.Ecommerce.Product_Service.Listener.SupplierEntityListener;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -35,6 +36,7 @@ public class Supplier {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
+    @JsonIgnore
     @ManyToMany(mappedBy = "suppliers")
     private List<Product> products = new ArrayList<>();
 

@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Entities;
 
 import com.Ecommerce.Product_Service.Listener.ReviewEntityListener;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -19,7 +20,7 @@ public class Review {
     private UUID id;
 
     private UUID userId;
-
+    @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "product_id")
     private Product product;
