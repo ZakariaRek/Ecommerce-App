@@ -8,8 +8,15 @@ spring:
     username: postgres
 #    password: yahyasd56
     password: zakaria
-
     driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+      enabled: true
+    codec:
+      max-in-memory-size: 10MB
   jpa:
     hibernate:
       ddl-auto: update  # Change to 'none' or 'validate' based on your use case
@@ -43,7 +50,10 @@ server:
   port: 8082
   servlet:
     context-path: /api/products
-
+  tomcat:
+    max-swallow-size: 10MB
+    max-http-form-post-size: 10MB
+  max-http-request-header-size: 20KB
 file:
   upload-dir: ./uploads/images
   max-size: 10485760  # 10MB in bytes

@@ -24,6 +24,14 @@ public class CategoryService {
 
     // ====== BASIC CRUD OPERATIONS ======
 
+
+    public Optional<Category> findById(UUID id) {
+        return categoryRepository.findById(id);
+    }
+    public List<Category> findByIds(List<UUID> ids) {
+        return categoryRepository.findAllById(ids); // Use the built-in JpaRepository method
+    }
+
     public List<Category> findAllCategories() {
         return categoryRepository.findAll();
     }
