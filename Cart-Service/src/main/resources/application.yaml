@@ -72,6 +72,19 @@ server:
   servlet:
      context-path: /api/carts
 
+eureka:
+  instance:
+    preferIpAddress: true
+    instanceId: ${spring.application.name}:${server.port}
+    hostname: localhost
+    metadataMap:
+      instanceId: ${spring.application.name}:${server.port}
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+# ELK configuration - include in all services
 redis:
 #  timeout: 2000
   maximumActiveConnectionCount: 128
