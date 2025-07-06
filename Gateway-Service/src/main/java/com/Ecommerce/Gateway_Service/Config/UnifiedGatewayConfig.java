@@ -106,12 +106,20 @@ public class UnifiedGatewayConfig {
                                 .circuitBreaker(config -> config.setName("product-write-cb")))
                         .uri("lb://product-service"))
 
-                .route("product-service-front", r -> r
-                        .path("/api/products/products/with-images**")
+                .route("product-service-read", r -> r
+                        .path("/api/products/**")
+                        .and().method(HttpMethod.GET)
                         .filters(f -> f
-                                .filter(customRateLimitFilterFactory.apply(createConfig(5, 60, CustomRateLimitFilterFactory.KeyType.IP)))
-                                .circuitBreaker(config -> config.setName("auth-cb")))
-                        .uri("lb://user-service"))
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(200, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("product-read-cb")))
+                        .uri("lb://product-service"))
+//                .route("product-service-front", r -> r
+//                        .path("/api/products/products/with-images**")
+//                        .filters(f -> f
+//                                .filter(customRateLimitFilterFactory.apply(createConfig(5, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+//                                .circuitBreaker(config -> config.setName("auth-cb")))
+//                        .uri("lb://user-service"))
 
                 // Product Service Swagger
                 .route("product-service-swagger-ui", r -> r

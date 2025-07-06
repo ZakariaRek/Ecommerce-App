@@ -99,14 +99,14 @@ public class JwtAuthenticationFilterFactory extends AbstractGatewayFilterFactory
                 path.contains("/health") ||
                 path.contains("/actuator")
 
-//                ;
-                || isPublicProductEndpoint(path);
+                ;
+//                || isPublicProductEndpoint(path);
     }
 
     private boolean isPublicProductEndpoint(String path) {
         // Allow public access to product read operations
         if (path.startsWith("/api/products")) {
-            // Allow GET requests for products (viewing products)
+            // Allow GET requests for products (viewinzzzg products)
             return true; // Note: We'll handle method filtering in the gateway routes
         }
 
