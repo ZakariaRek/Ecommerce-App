@@ -24,6 +24,7 @@ public class ShoppingCart {
     @Id
     private UUID id;
     private UUID userId;
+    @Builder.Default
     private List<CartItem> items = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -71,6 +72,9 @@ public class ShoppingCart {
     }
 
     public BigDecimal calculateTotal() {
+        if (items == null || items.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
         return items.stream()
                 .map(CartItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

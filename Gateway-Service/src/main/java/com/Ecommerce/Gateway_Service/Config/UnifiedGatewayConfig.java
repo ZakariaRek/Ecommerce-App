@@ -268,22 +268,22 @@ public class UnifiedGatewayConfig {
 
                 // Cart service - High limits for frequent operations
                 .route("cart-service", r -> r
-                        .path("/api/cart/**")
+                        .path("/api/carts/**")
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(50, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("cart-cb")))
-                        .uri("lb://CART-SERVICE"))
+                        .uri("lb://cart-service"))
 
                 .route("cart-service-swagger-ui", r -> r
                         .path("/cart-service/swagger-ui/**")
                         .filters(f -> f.rewritePath("/cart-service/swagger-ui/(?<segment>.*)", "/swagger-ui/${segment}"))
-                        .uri("lb://CART-SERVICE"))
+                        .uri("lb://cart-service"))
 
                 .route("cart-service-api-docs", r -> r
                         .path("/cart-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/cart-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
-                        .uri("lb://CART-SERVICE"))
+                        .uri("lb://cart-service"))
 
                 // Loyalty Service Routes
                 .route("loyalty-service-api", r -> r
