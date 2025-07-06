@@ -86,32 +86,136 @@ public class UnifiedGatewayConfig {
                         .filters(f -> f.rewritePath("/user-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
                         .uri("lb://user-service"))
 
-                // Product service - Higher limits for read operations
-                .route("product-service-read", r -> r
+                // ===========================================
+                // PUBLIC PRODUCT ENDPOINTS (NO AUTH REQUIRED)
+                // ===========================================
+
+                // Public product read endpoints - Higher limits, IP-bqased rate limiting
+                .route("product-service-public-read", r -> r
                         .path("/api/products/**")
                         .and().method(HttpMethod.GET)
                         .filters(f -> f
-                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
-                                .filter(customRateLimitFilterFactory.apply(createConfig(200, 60, CustomRateLimitFilterFactory.KeyType.USER)))
-                                .circuitBreaker(config -> config.setName("product-read-cb")))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(300, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("product-public-read-cb")))
                         .uri("lb://product-service"))
 
-                // Product service - Lower limits for write operations
-                .route("product-service-write", r -> r
+                // Public categories endpoints
+                .route("categories-public", r -> r
+                        .path("/api/categories/**")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(200, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("categories-public-cb")))
+                        .uri("lb://product-service"))
+
+                // Public images endpoints
+                .route("images-public", r -> r
+                        .path("/api/images/**")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(500, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("images-public-cb")))
+                        .uri("lb://product-service"))
+
+                // Public reviews endpoints (read-only)
+                .route("reviews-public", r -> r
+                        .path("/api/reviews/**")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(150, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("reviews-public-cb")))
+                        .uri("lb://product-service"))
+
+                // Public suppliers endpoints (read-only)
+                .route("suppliers-public", r -> r
+                        .path("/api/suppliers/**")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("suppliers-public-cb")))
+                        .uri("lb://product-service"))
+
+                // Public discounts endpoints (read-only)
+                .route("discounts-public", r -> r
+                        .path("/api/discounts/**")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(150, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("discounts-public-cb")))
+                        .uri("lb://product-service"))
+
+                // ===========================================
+                // PRIVATE PRODUCT ENDPOINTS (AUTH REQUIRED)
+                // ===========================================
+
+                // Private product write endpoints - Requires authentication
+                .route("product-service-private-write", r -> r
                         .path("/api/products/**")
                         .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
                         .filters(f -> f
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(50, 60, CustomRateLimitFilterFactory.KeyType.USER)))
-                                .circuitBreaker(config -> config.setName("product-write-cb")))
+                                .circuitBreaker(config -> config.setName("product-private-write-cb")))
                         .uri("lb://product-service"))
 
-                .route("product-service-front", r -> r
-                        .path("/api/products/products/with-images**")
+                // Private categories write endpoints
+                .route("categories-private-write", r -> r
+                        .path("/api/categories/**")
+                        .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
                         .filters(f -> f
-                                .filter(customRateLimitFilterFactory.apply(createConfig(5, 60, CustomRateLimitFilterFactory.KeyType.IP)))
-                                .circuitBreaker(config -> config.setName("auth-cb")))
-                        .uri("lb://user-service"))
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(30, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("categories-private-write-cb")))
+                        .uri("lb://product-service"))
+
+                // Private images write endpoints
+                .route("images-private-write", r -> r
+                        .path("/api/images/**")
+                        .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(20, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("images-private-write-cb")))
+                        .uri("lb://product-service"))
+
+                // Private reviews write endpoints
+                .route("reviews-private-write", r -> r
+                        .path("/api/reviews/**")
+                        .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(40, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("reviews-private-write-cb")))
+                        .uri("lb://product-service"))
+
+                // Private suppliers write endpoints
+                .route("suppliers-private-write", r -> r
+                        .path("/api/suppliers/**")
+                        .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(25, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("suppliers-private-write-cb")))
+                        .uri("lb://product-service"))
+
+                // Private discounts write endpoints
+                .route("discounts-private-write", r -> r
+                        .path("/api/discounts/**")
+                        .and().method(HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(30, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("discounts-private-write-cb")))
+                        .uri("lb://product-service"))
+
+                // Private inventory endpoints - All require authentication
+                .route("inventory-private", r -> r
+                        .path("/api/inventory/**")
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(40, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("inventory-private-cb")))
+                        .uri("lb://product-service"))
 
                 // Product Service Swagger
                 .route("product-service-swagger-ui", r -> r
