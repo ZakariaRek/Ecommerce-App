@@ -97,46 +97,58 @@ public class JwtAuthenticationFilterFactory extends AbstractGatewayFilterFactory
                 path.contains("/swagger") ||
                 path.contains("/api-docs") ||
                 path.contains("/health") ||
-                path.contains("/actuator")
+                path.contains("/actuator");
 
-                ;
-//                || isPublicProductEndpoint(path);
+//                ;
+               // || isPublicProductEndpoint(path);
     }
 
-    private boolean isPublicProductEndpoint(String path) {
-        // Allow public access to product read operations
-        if (path.startsWith("/api/products")) {
-            // Allow GET requests for products (viewinzzzg products)
-            return true; // Note: We'll handle method filtering in the gateway routes
-        }
-
-        // Allow public access to product categories
-        if (path.startsWith("/api/categories")) {
-            return true; // Categories are usually public for browsing
-        }
-
-        // Allow public access to product images
-        if (path.startsWith("/api/images") || path.contains("/images/")) {
-            return true;
-        }
-
-        // Allow public access to product reviews (read-only)
-        if (path.startsWith("/api/reviews")) {
-            return true;
-        }
-
-        // Allow public access to suppliers (read-only)
-        if (path.startsWith("/api/suppliers")) {
-            return true;
-        }
-
-        // Allow public access to discounts (read-only)
-        if (path.startsWith("/api/discounts")) {
-            return true;
-        }
-
-        return false;
-    }
+//    private boolean isPublicProductEndpoint(String path) {
+//        // Allow public access to product read operations
+//        if (path.startsWith("/api/products")) {
+//            // Allow GET requests for products (viewing products)
+//            return true; // Note: We'll handle method filtering in the gateway routes
+//        }
+//
+//        // Allow public access to product categories
+//        if (path.startsWith("/api/categories")) {
+//            return true; // Categories are usually public for browsing
+//        }
+//    }
+//    private boolean isPublicProductEndpoint(String path) {
+//        // Allow public access to product read operations
+//        if (path.startsWith("/api/products")) {
+//            // Allow GET requests for products (viewing products)
+//            return true; // Note: We'll handle method filtering in the gateway routes
+//        }
+//
+//        // Allow public access to product categories
+//        if (path.startsWith("/api/categories")) {
+//            return true; // Categories are usually public for browsing
+//        }
+//
+//        // Allow public access to product images
+//        if (path.startsWith("/api/images") || path.contains("/images/")) {
+//            return true;
+//        }
+//
+//        // Allow public access to product reviews (read-only)
+//        if (path.startsWith("/api/reviews")) {
+//            return true;
+//        }
+//
+//        // Allow public access to suppliers (read-only)
+//        if (path.startsWith("/api/suppliers")) {
+//            return true;
+//        }
+//
+//        // Allow public access to discounts (read-only)
+//        if (path.startsWith("/api/discounts")) {
+//            return true;
+//        }
+//
+//        return false;
+//    }
 
     private boolean hasRequiredRole(String path, List<String> userRoles) {
         if (userRoles == null || userRoles.isEmpty()) {
