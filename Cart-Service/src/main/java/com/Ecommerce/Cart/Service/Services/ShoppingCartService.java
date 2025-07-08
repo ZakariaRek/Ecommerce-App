@@ -4,6 +4,8 @@ import com.Ecommerce.Cart.Service.Exception.ResourceNotFoundException;
 import com.Ecommerce.Cart.Service.Models.CartItem;
 import com.Ecommerce.Cart.Service.Models.ShoppingCart;
 import com.Ecommerce.Cart.Service.Payload.Request.AddItemRequest;
+import com.Ecommerce.Cart.Service.Payload.Request.BulkUpdateItem;
+import com.Ecommerce.Cart.Service.Payload.Request.BulkUpdateRequest;
 import com.Ecommerce.Cart.Service.Repositories.ShoppingCartRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +13,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -136,5 +139,43 @@ public class ShoppingCartService {
     public void cleanupExpiredCarts() {
         List<ShoppingCart> expiredCarts = cartRepository.findByExpiresAtBefore(LocalDateTime.now());
         cartRepository.deleteAll(expiredCarts);
+    }
+
+
+    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
+    @Transactional
+    public ShoppingCart bulkUpdateCart(UUID userId, BulkUpdateRequest request) {
+        ShoppingCart cart = getOrCreateCart(userId);
+
+        for (BulkUpdateItem updateItem : request.getItems()) {
+            switch (updateItem.getOperation()) {
+                case ADD:
+                    addItemToExistingCart(cart, updateItem);
+                    break;
+                case UPDATE:
+                    updateItemInCart(cart, updateItem);
+                    break;
+                case REMOVE:
+                    cart.removeItem(updateItem.getProductId());
+                    break;
+            }
+        }
+
+        return cartRepository.save(cart);
+    }
+
+    private void addItemToExistingCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+        CartItem item = CartItem.builder()
+                .id(UUID.randomUUID())
+                .productId(updateItem.getProductId())
+                .quantity(updateItem.getQuantity())
+                .price(updateItem.getPrice())
+                .addedAt(LocalDateTime.now())
+                .build();
+        cart.addItem(item);
+    }
+
+    private void updateItemInCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+        cart.updateQuantity(updateItem.getProductId(), updateItem.getQuantity());
     }
 }
