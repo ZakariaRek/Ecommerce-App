@@ -49,129 +49,114 @@ public class ShoppingCartController {
     @GetMapping("/{userId}")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> getCart(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId) {
-        ShoppingCart cart = cartService.getOrCreateCart(userId);
-        ShoppingCartResponse response = mapToCartResponse(cart);
-        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
+            @PathVariable String userId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            ShoppingCart cart = cartService.getOrCreateCart(parsedUserId);
+            ShoppingCartResponse response = mapToCartResponse(cart);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        }
     }
 
-    @Operation(
-            summary = "Add item to cart",
-            description = "Adds a new item to the user's shopping cart or updates quantity if already exists"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "201",
-                    description = "Item successfully added to cart",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ShoppingCartResponse.class))
-            ),
-            @ApiResponse(responseCode = "400", description = "Invalid request data"),
-            @ApiResponse(responseCode = "500", description = "Server error")
-    })
+    private UUID parseUUID(String uuidString) {
+        // Remove any existing hyphens
+        String cleanUuid = uuidString.replaceAll("-", "");
+
+        // Handle MongoDB ObjectId (24 characters) by padding to UUID format
+        if (cleanUuid.length() == 24 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Pad with zeros to make it 32 characters
+            cleanUuid = cleanUuid + "00000000";
+        }
+
+        // Check if it's exactly 32 hex characters
+        if (cleanUuid.length() == 32 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Insert hyphens at correct positions: 8-4-4-4-12
+            String formattedUuid = cleanUuid.substring(0, 8) + "-" +
+                    cleanUuid.substring(8, 12) + "-" +
+                    cleanUuid.substring(12, 16) + "-" +
+                    cleanUuid.substring(16, 20) + "-" +
+                    cleanUuid.substring(20, 32);
+            return UUID.fromString(formattedUuid);
+        }
+
+        // Try parsing as-is (in case it's already properly formatted)
+        return UUID.fromString(uuidString);
+    }
+
     @PostMapping("/{userId}/items")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> addItemToCart(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Item details", required = true)
             @Valid @RequestBody AddItemRequest request) {
-        cartService.addItemToCart(userId, request.getProductId(), request.getQuantity(), request.getPrice());
-        ShoppingCart updatedCart = cartService.getOrCreateCart(userId);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item added to cart", mapToCartResponse(updatedCart)));
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            cartService.addItemToCart(parsedUserId, request.getProductId(), request.getQuantity(), request.getPrice());
+            ShoppingCart updatedCart = cartService.getOrCreateCart(parsedUserId);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item added to cart", mapToCartResponse(updatedCart)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        }
     }
 
-    @Operation(
-            summary = "Remove item from cart",
-            description = "Removes an item from the shopping cart based on product ID"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Item successfully removed from cart",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ShoppingCartResponse.class))
-            ),
-            @ApiResponse(responseCode = "404", description = "Item not found in cart"),
-            @ApiResponse(responseCode = "500", description = "Server error")
-    })
     @DeleteMapping("/{userId}/items/{productId}")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> removeItemFromCart(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Product ID to remove", required = true, example = "123e4567-e89b-12d3-a456-426614174001")
-            @PathVariable UUID productId) {
-        cartService.removeItemFromCart(userId, productId);
-        ShoppingCart updatedCart = cartService.getOrCreateCart(userId);
-        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item removed from cart", mapToCartResponse(updatedCart)));
+            @PathVariable String productId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            UUID parsedProductId = parseUUID(productId);
+            cartService.removeItemFromCart(parsedUserId, parsedProductId);
+            ShoppingCart updatedCart = cartService.getOrCreateCart(parsedUserId);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item removed from cart", mapToCartResponse(updatedCart)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format"));
+        }
     }
 
-    @Operation(
-            summary = "Update item quantity",
-            description = "Updates the quantity of a specific item in the shopping cart"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Item quantity successfully updated",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ShoppingCartResponse.class))
-            ),
-            @ApiResponse(responseCode = "400", description = "Invalid quantity (must be at least 1)"),
-            @ApiResponse(responseCode = "404", description = "Item not found in cart"),
-            @ApiResponse(responseCode = "500", description = "Server error")
-    })
     @PutMapping("/{userId}/items/{productId}")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> updateItemQuantity(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Product ID to update", required = true, example = "123e4567-e89b-12d3-a456-426614174001")
-            @PathVariable UUID productId,
+            @PathVariable String productId,
             @Parameter(description = "New quantity details", required = true)
             @Valid @RequestBody UpdateQuantityRequest request) {
-        cartService.updateItemQuantity(userId, productId, request.getQuantity());
-        ShoppingCart updatedCart = cartService.getOrCreateCart(userId);
-        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item quantity updated", mapToCartResponse(updatedCart)));
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            UUID parsedProductId = parseUUID(productId);
+            cartService.updateItemQuantity(parsedUserId, parsedProductId, request.getQuantity());
+            ShoppingCart updatedCart = cartService.getOrCreateCart(parsedUserId);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item quantity updated", mapToCartResponse(updatedCart)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format"));
+        }
     }
 
-    @Operation(
-            summary = "Get cart total",
-            description = "Calculates and returns the total price of all items in the shopping cart"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Total calculated successfully",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = CartTotalResponse.class))
-            ),
-            @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "500", description = "Server error")
-    })
     @GetMapping("/{userId}/total")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<CartTotalResponse>> getCartTotal(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId) {
-        CartTotalResponse response = CartTotalResponse.builder()
-                .total(cartService.calculateCartTotal(userId))
-                .build();
-        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
+            @PathVariable String userId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            CartTotalResponse response = CartTotalResponse.builder()
+                    .total(cartService.calculateCartTotal(parsedUserId))
+                    .build();
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        }
     }
-
-    @Operation(
-            summary = "Checkout cart",
-            description = "Process the checkout for the user's shopping cart"
-    )
-    @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Checkout completed successfully",
-                    content = @Content(mediaType = "application/json")
-            ),
-            @ApiResponse(responseCode = "400", description = "Invalid cart state"),
-            @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "500", description = "Server error")
-    })
     @PostMapping("/{userId}/checkout")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Void>> checkout(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
@@ -287,7 +272,7 @@ public class ShoppingCartController {
         return ShoppingCartResponse.builder()
                 .id(cart.getId())
                 .userId(cart.getUserId())
-                .items(cart.getItems().stream()
+                .items(cart.getItems() != null ? cart.getItems().stream()
                         .map(item -> CartItemResponse.builder()
                                 .id(item.getId())
                                 .productId(item.getProductId())
@@ -296,14 +281,13 @@ public class ShoppingCartController {
                                 .subtotal(item.getSubtotal())
                                 .addedAt(item.getAddedAt())
                                 .build())
-                        .collect(Collectors.toList()))
+                        .collect(Collectors.toList()) : List.of())
                 .total(cart.calculateTotal())
                 .createdAt(cart.getCreatedAt())
                 .updatedAt(cart.getUpdatedAt())
                 .expiresAt(cart.getExpiresAt())
                 .build();
     }
-
     private SavedItemResponse mapToSavedItemResponse(SavedForLater savedItem) {
         return SavedItemResponse.builder()
                 .id(savedItem.getId())

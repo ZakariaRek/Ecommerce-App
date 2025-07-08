@@ -271,9 +271,9 @@ springdoc:
       # - group: payment-service
       #   display-name: Payment Service
       #   paths-to-match: /api/payments/**
-      # - group: cart-service
-      #   display-name: Cart Service
-      #   paths-to-match: /api/cart/**
+      - group: cart-service
+        display-name: Cart Service
+        paths-to-match: /api/cart/**
       # - group: loyalty-service
       #   display-name: Loyalty Service
       #   paths-to-match: /api/loyalty/**

@@ -100,7 +100,8 @@ public class JwtUtils {
 
     return Jwts.builder()
             .setSubject(userPrincipal.getUsername())
-            .claim("roles", roles)  // Add roles to the JWT
+            .claim("roles", roles)
+            .claim("id", userPrincipal.getId())// Add roles to the JWT
             .setIssuedAt(new Date())
             .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
             .signWith(key(), SignatureAlgorithm.HS256)
