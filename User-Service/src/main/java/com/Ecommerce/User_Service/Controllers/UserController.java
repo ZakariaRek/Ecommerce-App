@@ -45,14 +45,14 @@ public class UserController {
         return new ResponseEntity<>(users, HttpStatus.OK);
     }
 
-    @PreAuthorize("ROLE_ADMIN")
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(@PathVariable String id) {
         return userService.getUserById(id)
                 .map(user -> new ResponseEntity<>(user, HttpStatus.OK))
                 .orElse(new ResponseEntity(new MessageResponse("User not found"),HttpStatus.NOT_FOUND));
     }
-    @PreAuthorize("ROLE_ADMIN")
+
 
     @GetMapping("/username/{username}")
     public ResponseEntity<?> getUserByUsername(@PathVariable String username) {
@@ -60,7 +60,7 @@ public class UserController {
                 .map(user -> new ResponseEntity<>(user, HttpStatus.OK))
                 .orElse(new ResponseEntity(new MessageResponse("User not found"),HttpStatus.NOT_FOUND));
     }
-    @PreAuthorize("ROLE_ADMIN")
+
 
     @GetMapping("/email/{email}")
     public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
@@ -68,7 +68,7 @@ public class UserController {
                 .map(user -> new ResponseEntity<>(user, HttpStatus.OK))
                 .orElse(new ResponseEntity(new MessageResponse("User not found"),HttpStatus.NOT_FOUND));
     }
-    @PreAuthorize("ROLE_ADMIN")
+
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateUser(@PathVariable String id, @Valid @RequestBody UpdateUserRequest request) {
@@ -79,9 +79,9 @@ public class UserController {
                     existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
                     System.out.println(request.getRoles());
                     Set<Role> roles = new HashSet<>();
-                    for (String roleStr : request.getRoles()) {
+                    for (Role roleStr : request.getRoles()) {
                         try {
-                            ERole eRole = ERole.valueOf(roleStr); // Convert String to ERole
+                            ERole eRole = roleStr.getName(); // Convert String to ERole
                             Role role = roleRepository.findByName(eRole)
                                     .orElseThrow(() -> new RuntimeException("Error: Role not found - " + roleStr));
                             roles.add(role);
@@ -100,7 +100,7 @@ public class UserController {
                         .status(HttpStatus.NOT_FOUND)
                         .body(new MessageResponse("User not found")));
     }
-    @PreAuthorize("ROLE_ADMIN")
+
 
     @PatchMapping("/{id}/status/{status}")
     public ResponseEntity<?> updateUserStatus(@PathVariable String id, @PathVariable String status) {
@@ -125,8 +125,8 @@ public class UserController {
                     .body(new MessageResponse("Invalid status value"));
         }
     }
-    @PreAuthorize("ROLE_ADMIN")
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable String id) {
         return userService.getUserById(id)

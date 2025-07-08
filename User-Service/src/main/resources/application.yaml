@@ -24,11 +24,32 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: your-actual-client-id
+            client-secret: your-actual-client-secret
+            scope:
+              - email
+              - profile
+            redirect-uri: "{baseUrl}/oauth2/callback/{registrationId}"
+            authorization-grant-type: authorization_code
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://www.googleapis.com/oauth2/v4/token
+            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+            user-name-attribute: sub
+app:
+  oauth2:
+    # Whitelisted redirect URIs for OAuth2 (comma-separated)
+    authorizedRedirectUris: ${OAUTH2_REDIRECT_URIS:http://localhost:3000/oauth2/redirect,http://localhost:8080/oauth2/redirect}
 server:
   port: 8081
   servlet:
-      context-path: /api/users
+    context-path: /api/users
 
 User-service:
   app:
