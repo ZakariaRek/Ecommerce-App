@@ -263,7 +263,8 @@ public class UnifiedGatewayConfig {
 
                 .route("payment-service-api-docs", r -> r
                         .path("/payment-service/v3/api-docs/**")
-                        .filters(f -> f.rewritePath("/payment-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
+                        .filters(
+                                f -> f.rewritePath("/payment-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
                         .uri("lb://PAYMENT-SERVICE"))
 
                 // Cart service - High limits for frequent operations
