@@ -2,11 +2,9 @@ package com.Ecommerce.Cart.Service.Controllers;
 
 import com.Ecommerce.Cart.Service.Models.SavedForLater;
 import com.Ecommerce.Cart.Service.Models.ShoppingCart;
-import com.Ecommerce.Cart.Service.Payload.Request.AddItemRequest;
-import com.Ecommerce.Cart.Service.Payload.Request.MoveToCartRequest;
-import com.Ecommerce.Cart.Service.Payload.Request.SaveForLaterRequest;
-import com.Ecommerce.Cart.Service.Payload.Request.UpdateQuantityRequest;
+import com.Ecommerce.Cart.Service.Payload.Request.*;
 import com.Ecommerce.Cart.Service.Payload.Response.*;
+import com.Ecommerce.Cart.Service.Services.CartSyncService;
 import com.Ecommerce.Cart.Service.Services.SavedForLaterService;
 import com.Ecommerce.Cart.Service.Services.ShoppingCartService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +30,7 @@ import java.util.stream.Collectors;
 public class ShoppingCartController {
     private final ShoppingCartService cartService;
     private final SavedForLaterService savedForLaterService;
+    private final CartSyncService cartSyncService;
 
     @Operation(
             summary = "Get cart by user ID",
@@ -295,4 +294,89 @@ public class ShoppingCartController {
                 .savedAt(savedItem.getSavedAt())
                 .build();
     }
+
+
+@PostMapping("/{userId}/sync")
+@Operation(summary = "Sync localStorage cart with server",
+        description = "Merges guest cart from localStorage with server cart on login")
+public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> syncCart(
+        @Parameter(description = "User ID", required = true)
+        @PathVariable String userId,
+        @Valid @RequestBody CartSyncRequest syncRequest) {
+    try {
+        UUID parsedUserId = parseUUID(userId);
+
+        // Get or create server cart
+        ShoppingCart serverCart = cartService.getOrCreateCart(parsedUserId);
+
+        // Merge with localStorage cart
+        ShoppingCart mergedCart = cartSyncService.mergeWithLocalStorage(
+                serverCart, syncRequest);
+
+        ShoppingCartResponse response = mapToCartResponse(mergedCart);
+        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(
+                "Cart synchronized successfully", response));
+
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.badRequest()
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Sync failed: " + e.getMessage()));
+    }
+}
+
+@PostMapping("/guest/validate")
+@Operation(summary = "Validate guest cart",
+        description = "Validates localStorage cart items for price/availability changes")
+public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<CartValidationResponse>> validateGuestCart(
+        @Valid @RequestBody GuestCartRequest guestCart) {
+    try {
+        CartValidationResponse validation = cartSyncService.validateGuestCart(guestCart);
+        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(validation));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Validation failed: " + e.getMessage()));
+    }
+}
+
+@PutMapping("/{userId}/bulk-update")
+@Operation(summary = "Bulk update cart items")
+public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> bulkUpdateCart(
+        @PathVariable String userId,
+        @Valid @RequestBody BulkUpdateRequest request) {
+    try {
+        UUID parsedUserId = parseUUID(userId);
+        ShoppingCart updatedCart = cartService.bulkUpdateCart(parsedUserId, request);
+        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(
+                "Cart updated successfully", mapToCartResponse(updatedCart)));
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.badRequest()
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Bulk update failed: " + e.getMessage()));
+    }
+}
+
+@GetMapping("/guest/session/{sessionId}")
+@Operation(summary = "Get guest cart by session ID")
+public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> getGuestCart(
+        @PathVariable String sessionId) {
+    try {
+        // For demo purposes - in real implementation, you might store guest carts temporarily
+        // or just return validation info
+        return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(
+                "Guest cart session: " + sessionId, null));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Failed to get guest cart: " + e.getMessage()));
+    }
+}
+
+
+
+
+
+
 }
