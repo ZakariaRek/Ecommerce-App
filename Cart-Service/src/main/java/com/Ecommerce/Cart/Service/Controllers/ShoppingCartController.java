@@ -50,7 +50,7 @@ public class ShoppingCartController {
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
             @PathVariable String userId) {
         try {
-            UUID parsedUserId = parseUUID(userId);
+                UUID parsedUserId = parseUUID(userId);
             ShoppingCart cart = cartService.getOrCreateCart(parsedUserId);
             ShoppingCartResponse response = mapToCartResponse(cart);
             return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
@@ -311,7 +311,7 @@ public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Sh
 
         // Merge with localStorage cart
         ShoppingCart mergedCart = cartSyncService.mergeWithLocalStorage(
-                serverCart, syncRequest);
+                serverCart, syncRequest ,parsedUserId);
 
         ShoppingCartResponse response = mapToCartResponse(mergedCart);
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(

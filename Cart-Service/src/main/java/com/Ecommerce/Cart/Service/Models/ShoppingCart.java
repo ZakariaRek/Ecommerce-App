@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.DocumentReference;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -25,7 +27,10 @@ public class ShoppingCart {
     private UUID id;
     private UUID userId;
     @Builder.Default
+//    @Field("items")
+//    @DocumentReference(lazy = false)
     private List<CartItem> items = new ArrayList<>();
+//    private List<CartItem> items = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;

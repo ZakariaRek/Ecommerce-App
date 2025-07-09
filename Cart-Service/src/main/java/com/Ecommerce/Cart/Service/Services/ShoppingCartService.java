@@ -32,8 +32,9 @@ public class ShoppingCartService {
      * Cache the result with key 'shoppingCarts::userId'
      */
     @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
+
     public ShoppingCart getOrCreateCart(UUID userId) {
-        return cartRepository.findByUserId(userId)
+                ShoppingCart  d=  cartRepository.findByUserId(userId)
                 .orElseGet(() -> {
                     ShoppingCart newCart = ShoppingCart.builder()
                             .id(UUID.randomUUID())
@@ -44,6 +45,13 @@ public class ShoppingCartService {
                             .build();
                     return cartRepository.save(newCart);
                 });
+        System.out.println(d);
+
+
+        if(d.getItems() == null) {
+            System.out.println("Items list is null, initializing to empty list.");
+        }
+        return d;
     }
 
     @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
@@ -163,8 +171,9 @@ public class ShoppingCartService {
 
         return cartRepository.save(cart);
     }
-
-    private void addItemToExistingCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+//    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
+    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
+    public void addItemToExistingCart(ShoppingCart cart, BulkUpdateItem updateItem) {
         CartItem item = CartItem.builder()
                 .id(UUID.randomUUID())
                 .productId(updateItem.getProductId())
@@ -173,9 +182,11 @@ public class ShoppingCartService {
                 .addedAt(LocalDateTime.now())
                 .build();
         cart.addItem(item);
-    }
+        ShoppingCart updatedCart = cartRepository.save(cart);
 
-    private void updateItemInCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+    }
+    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
+    public void updateItemInCart(ShoppingCart cart, BulkUpdateItem updateItem) {
         cart.updateQuantity(updateItem.getProductId(), updateItem.getQuantity());
     }
 }
