@@ -28,7 +28,6 @@ public class ProductService {
     public List<Product> findAllProducts() {
         return productRepository.findAll();
     }
-
     public Optional<Product> findProductById(UUID id) {
         return productRepository.findById(id);
     }

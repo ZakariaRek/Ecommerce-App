@@ -9,6 +9,9 @@ import com.Ecommerce.Cart.Service.Payload.Response.CartValidationResponse;
 import com.Ecommerce.Cart.Service.Repositories.ShoppingCartRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +29,15 @@ public class CartSyncService {
 
     private final ShoppingCartRepository cartRepository;
     private final CartItemService cartItemService;
-    // Add ProductService injection for price validation
 
+    @Autowired
+    private ShoppingCartService shoppingCartService;
+
+    // Add ProductService injection for price validation
+    @CachePut(value = "shoppingCarts", key = "#serverCart.userId.toString()")
     @Transactional
     public ShoppingCart mergeWithLocalStorage(ShoppingCart serverCart,
-                                              CartSyncRequest syncRequest) {
+                                              CartSyncRequest syncRequest , UUID userId) {
         log.info("Merging localStorage cart with server cart for user: {}", serverCart.getUserId());
 
         List<LocalStorageItem> validItems = validateLocalStorageItems(syncRequest.getItems());
@@ -46,12 +53,13 @@ public class CartSyncService {
         }
 
         ShoppingCart savedCart = cartRepository.save(serverCart);
+//        ShoppingCart savedCart = shoppingCartService.bulkUpdateCart(parsedUserId,serverCart);
         log.info("Successfully merged cart for user: {}, final item count: {}",
                 serverCart.getUserId(), savedCart.getItems().size());
 
         return savedCart;
     }
-
+    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
     public CartValidationResponse validateGuestCart(GuestCartRequest guestCart) {
         List<CartValidationItem> validationResults = new ArrayList<>();
         BigDecimal totalPriceChange = BigDecimal.ZERO;
@@ -73,8 +81,8 @@ public class CartSyncService {
                 .hasChanges(validationResults.stream().anyMatch(CartValidationItem::hasChanges))
                 .build();
     }
-
-    private void handleItemConflict(CartItem serverItem, LocalStorageItem localItem,
+//    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
+    public void handleItemConflict(CartItem serverItem, LocalStorageItem localItem,
                                     ConflictResolutionStrategy strategy) {
         switch (strategy) {
             case SUM_QUANTITIES:
@@ -105,15 +113,16 @@ public class CartSyncService {
                 serverItem.updateQuantity(serverItem.getQuantity() + localItem.getQuantity());
         }
     }
+    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
 
-    private CartItem findExistingItemInCart(ShoppingCart cart, UUID productId) {
+    public CartItem findExistingItemInCart(ShoppingCart cart, UUID productId) {
         return cart.getItems().stream()
                 .filter(item -> item.getProductId().equals(productId))
                 .findFirst()
                 .orElse(null);
     }
-
-    private void addLocalItemToServerCart(ShoppingCart serverCart, LocalStorageItem localItem) {
+    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
+    public void addLocalItemToServerCart(ShoppingCart serverCart, LocalStorageItem localItem) {
         // Validate product and price - you'll need to implement this
         // ProductValidationResult validation = productService.validateProduct(
         //     localItem.getProductId(), localItem.getPrice());
