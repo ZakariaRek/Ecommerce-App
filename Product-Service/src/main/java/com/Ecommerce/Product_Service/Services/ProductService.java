@@ -2,8 +2,10 @@ package com.Ecommerce.Product_Service.Services;
 
 import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
+import com.Ecommerce.Product_Service.Payload.Product.ProductBatchResponseDTO;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -11,8 +13,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import com.Ecommerce.Product_Service.Services.Kakfa.ProductEventService;
+import java.util.stream.Collectors;
 
+import com.Ecommerce.Product_Service.Services.Kakfa.ProductEventService;
+@Slf4j
 @Service
 public class ProductService {
 
@@ -140,4 +144,61 @@ public class ProductService {
                     return productRepository.save(existingProduct);
                 });
     }
+
+
+//                      -------------------BFF --------------------------
+
+
+
+    @Transactional()
+    public List<ProductBatchResponseDTO> getBatchProductInfo(List<UUID> productIds) {
+        log.info("Fetching batch product info for {} products", productIds.size());
+
+        List<Product> products = productRepository.findAllById(productIds);
+
+        return products.stream()
+                .map(this::mapToProductBatchResponse)
+                .collect(Collectors.toList());
+    }
+
+    private ProductBatchResponseDTO mapToProductBatchResponse(Product product) {
+        return ProductBatchResponseDTO.builder()
+                .id(product.getId())
+                .name(product.getName())
+                .price(product.getPrice())
+                .imagePath(getFirstImagePath(product))
+                .inStock(isProductInStock(product))
+                .availableQuantity(getAvailableQuantity(product))
+                .status(product.getStatus())
+                .build();
+    }
+
+    private String getFirstImagePath(Product product) {
+        if (product.getImages() != null && !product.getImages().isEmpty()) {
+            return product.getImages().get(0);
+        }
+        return "/api/products/images/default-product.png"; // Default image path
+    }
+
+    private Boolean isProductInStock(Product product) {
+        if (product.getStatus() == ProductStatus.OUT_OF_STOCK ||
+                product.getStatus() == ProductStatus.DISCONTINUED) {
+            return false;
+        }
+
+        if (product.getInventory() != null) {
+            return product.getInventory().getQuantity() != null &&
+                    product.getInventory().getQuantity() > 0;
+        }
+
+        return product.getStock() != null && product.getStock() > 0;
+    }
+
+    private Integer getAvailableQuantity(Product product) {
+        if (product.getInventory() != null && product.getInventory().getQuantity() != null) {
+            return product.getInventory().getQuantity();
+        }
+        return product.getStock() != null ? product.getStock() : 0;
+    }
+
 }
