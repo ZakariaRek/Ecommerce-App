@@ -342,6 +342,21 @@ public class UnifiedGatewayConfig {
                         .path("/shipping-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/shipping-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
                         .uri("lb://SHIPPING-SERVICE"))
+                .route("cart-bff-enriched", r -> r
+                        .path("/api/cart/*/enriched")
+                        .filters(f -> f
+                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+                                .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+                                .circuitBreaker(config -> config.setName("cart-bff-cb")))
+                        .uri("forward:/"))
+//                .route("cart-bff-enriched", r -> r
+//                        .path("/api/cart/*/enriched")
+//                        .filters(f -> f
+//                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+//                                .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+//                                .circuitBreaker(config -> config.setName("cart-bff-cb")))
+//                        .uri("forward:/"))
+
 
                 .build();
     }

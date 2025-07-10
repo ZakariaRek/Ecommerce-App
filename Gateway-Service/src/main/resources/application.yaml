@@ -4,6 +4,9 @@ server:
 spring:
   config:
     import: configserver:http://localhost:8888
+  webflux:
+    codecs:
+      max-in-memory-size: 10MB
 
   application:
     name: gateway-service
@@ -204,6 +207,13 @@ gateway:
     moderator-endpoints:
       - "/api/test/mod"
 
+
+#    Add these service URLs to your Gateway application.yaml
+services:
+  cart-service:
+    url: http://cart-service
+  product-service:
+    url: http://product-service
 # Enhanced SpringDoc Configuration for WebFlux
 springdoc:
   api-docs:
@@ -370,6 +380,12 @@ resilience4j:
         minimumNumberOfCalls: 7
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
+      cart-bff-cb:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
 
   timelimiter:
     configs:
@@ -380,6 +396,8 @@ resilience4j:
       auth-cb:
         base-config: default
         timeoutDuration: 5s
+      cart-bff-cb:
+        timeoutDuration: 10s
       user-test-cb:
         base-config: default
       user-mgmt-cb:
@@ -425,3 +443,10 @@ circuit-breaker:
   events:
     enabled: true
     buffer-size: 100
+
+
+webclient:
+  timeout:
+    connection: 5000
+    read: 10000
+    write: 10000
