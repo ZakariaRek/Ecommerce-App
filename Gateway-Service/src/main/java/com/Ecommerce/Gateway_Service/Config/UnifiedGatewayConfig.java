@@ -1,5 +1,6 @@
 package com.Ecommerce.Gateway_Service.Config;
 
+import ch.qos.logback.classic.Logger;
 import com.Ecommerce.Gateway_Service.Security.CustomRateLimitFilterFactory;
 import com.Ecommerce.Gateway_Service.Security.JwtAuthenticationFilterFactory;
 import com.Ecommerce.Gateway_Service.Security.TokenBucketRateLimitFilterFactory;
@@ -8,8 +9,10 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import lombok.extern.slf4j.Slf4j;
 
 @Configuration
+@Slf4j // This properly initializes the logger
 public class UnifiedGatewayConfig {
 
     private final JwtAuthenticationFilterFactory jwtAuthenticationFilterFactory;
@@ -48,6 +51,7 @@ public class UnifiedGatewayConfig {
                         .path("/docs")
                         .filters(f -> f.redirect(302, "/swagger-ui.html"))
                         .uri("forward:/"))
+
 
                 // Authentication endpoints - More restrictive rate limiting
                 .route("user-service-auth", r -> r
@@ -342,13 +346,7 @@ public class UnifiedGatewayConfig {
                         .path("/shipping-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/shipping-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
                         .uri("lb://SHIPPING-SERVICE"))
-                .route("cart-bff-enriched", r -> r
-                        .path("/api/cart/*/enriched")
-                        .filters(f -> f
-                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
-                                .filter(customRateLimitFilterFactory.apply(createConfig(100, 60, CustomRateLimitFilterFactory.KeyType.USER)))
-                                .circuitBreaker(config -> config.setName("cart-bff-cb")))
-                        .uri("forward:/"))
+
 //                .route("cart-bff-enriched", r -> r
 //                        .path("/api/cart/*/enriched")
 //                        .filters(f -> f
