@@ -9,16 +9,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/oauth2")
 @CrossOrigin(origins = "*", maxAge = 3600)
 public class OAuth2Controller {
 
-    @GetMapping("/oauth2/google")
+    @GetMapping("/google")
     public void redirectToGoogle(HttpServletResponse response) throws IOException {
         response.sendRedirect("/oauth2/authorize/google");
     }
 
-    @GetMapping("/oauth2/providers")
+    @GetMapping("/providers")
     public ResponseEntity<?> getAvailableProviders() {
         Map<String, Object> providers = new HashMap<>();
         providers.put("google", Map.of(
