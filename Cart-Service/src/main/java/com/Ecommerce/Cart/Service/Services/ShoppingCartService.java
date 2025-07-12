@@ -60,6 +60,10 @@ public class ShoppingCartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
     }
 
+
+
+
+
     /**
      * Add item to cart, update the cache, and publish event to Kafka
      */

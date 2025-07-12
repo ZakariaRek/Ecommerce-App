@@ -16,6 +16,7 @@ public class GatewayCorsConfig {
     private List<String> allowedOrigins;
     private List<String> allowedMethods;
     private List<String> allowedHeaders;
+    private List<String> exposedHeaders;  // ✅ Added this
     private boolean allowCredentials;
     private long maxAge;
 
@@ -31,6 +32,9 @@ public class GatewayCorsConfig {
         }
         if (allowedHeaders != null) {
             allowedHeaders.forEach(corsConfig::addAllowedHeader);
+        }
+        if (exposedHeaders != null) {  // ✅ Added this
+            exposedHeaders.forEach(corsConfig::addExposedHeader);
         }
 
         corsConfig.setAllowCredentials(allowCredentials);
@@ -65,6 +69,15 @@ public class GatewayCorsConfig {
 
     public void setAllowedHeaders(List<String> allowedHeaders) {
         this.allowedHeaders = allowedHeaders;
+    }
+
+    // ✅ Added getter/setter for exposedHeaders
+    public List<String> getExposedHeaders() {
+        return exposedHeaders;
+    }
+
+    public void setExposedHeaders(List<String> exposedHeaders) {
+        this.exposedHeaders = exposedHeaders;
     }
 
     public boolean isAllowCredentials() {
