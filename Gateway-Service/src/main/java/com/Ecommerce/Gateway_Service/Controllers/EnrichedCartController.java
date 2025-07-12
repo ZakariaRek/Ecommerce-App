@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "BFF Cart", description = "Backend for Frontend Cart operations with enriched product data")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
 public class EnrichedCartController {
 
     private final CartBffService cartBffService;
@@ -24,6 +26,7 @@ public class EnrichedCartController {
             summary = "Get enriched cart data",
             description = "Returns cart data enriched with product information in a single call"
     )
+
     @GetMapping("/{userId}/enriched")
     public Mono<ResponseEntity<EnrichedShoppingCartResponse.EnrichedCartResponseDTO>> getEnrichedCart(
             @Parameter(description = "User ID", required = true)

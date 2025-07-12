@@ -23,7 +23,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableMethodSecurity
-public class WebSecurityConfig {
+public class  WebSecurityConfig {
 
   @Autowired
   UserDetailsServiceImpl userDetailsService;
@@ -81,22 +81,38 @@ public class WebSecurityConfig {
                             .requestMatchers("/v3/api-docs/**").permitAll()
                             .requestMatchers("/swagger-resources/**").permitAll()
                             .requestMatchers("/webjars/**").permitAll()
-                            // OAuth2 endpoints
+                            .requestMatchers("/api/users/api/auth/**").permitAll()
                             .requestMatchers("/oauth2/**").permitAll()
+                            .requestMatchers("/login/oauth2/**").permitAll()
+
+                            // OAuth2 endpoints
+                            .requestMatchers("/api/users/oauth2/**").permitAll()
                             .requestMatchers("/login/oauth2/**").permitAll()
                             .anyRequest().authenticated()
             )
             // OAuth2 Login configuration
-            .oauth2Login(oauth2 -> oauth2
-                    .authorizationEndpoint(authorization -> authorization
-                            .baseUri("/oauth2/authorize")
-                    )
-                    .redirectionEndpoint(redirection -> redirection
-                            .baseUri("/oauth2/callback/*")
-                    )
-                    .successHandler(oAuth2AuthenticationSuccessHandler)
-                    .failureHandler(oAuth2AuthenticationFailureHandler)
-            );
+//            .oauth2Login(oauth2 -> oauth2
+//                    .authorizationEndpoint(authorization -> authorization
+//                            .baseUri("/oauth2/authorize")
+//
+//                    )
+//                    .redirectionEndpoint(redirection -> redirection
+//                            .baseUri("/oauth2/callback/*")
+//                    )
+//                    .successHandler(oAuth2AuthenticationSuccessHandler)
+//                    .failureHandler(oAuth2AuthenticationFailureHandler)
+//            );
+             .oauth2Login(oauth2 -> oauth2
+            .authorizationEndpoint(authorization -> authorization
+                    .baseUri("/oauth2/authorize")  // This will be at http://localhost:8081/oauth2/authorize
+            )
+            .redirectionEndpoint(redirection -> redirection
+                    .baseUri("/oauth2/callback/*")  // This will be at http://localhost:8081/oauth2/callback/*
+            )
+            .successHandler(oAuth2AuthenticationSuccessHandler)
+            .failureHandler(oAuth2AuthenticationFailureHandler)
+    );
+
 
     http.authenticationProvider(authenticationProvider());
     http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);

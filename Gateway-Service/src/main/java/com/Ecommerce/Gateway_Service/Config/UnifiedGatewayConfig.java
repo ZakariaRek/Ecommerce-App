@@ -48,6 +48,28 @@ public class UnifiedGatewayConfig {
                         .path("/docs")
                         .filters(f -> f.redirect(302, "/swagger-ui.html"))
                         .uri("forward:/"))
+                .route("oauth2-authorize", r -> r
+                        .path("/api/users/oauth2/authorize/**")
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(10, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("oauth2-auth-cb")))
+                        .uri("lb://user-service"))
+
+                // OAuth2 callback endpoints - No authentication required
+                .route("oauth2-callback", r -> r
+                        .path("/api/users/oauth2/callback/**")
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(10, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("oauth2-callback-cb")))
+                        .uri("lb://user-service"))
+
+                // OAuth2 login endpoints - No authentication required
+                .route("oauth2-login", r -> r
+                        .path("/api/users/oauth2/**")
+                        .filters(f -> f
+                                .filter(customRateLimitFilterFactory.apply(createConfig(10, 60, CustomRateLimitFilterFactory.KeyType.IP)))
+                                .circuitBreaker(config -> config.setName("oauth2-login-cb")))
+                        .uri("lb://user-service"))
 
                 // Authentication endpoints - More restrictive rate limiting
                 .route("user-service-auth", r -> r
