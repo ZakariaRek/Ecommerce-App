@@ -4,8 +4,8 @@ server:
 spring:
   config:
     import: configserver:http://localhost:8888
-
-  webflux:
+  kafka:
+    bootstrap-servers: localhost:9092
     codecs:
       max-in-memory-size: 10MB
 
