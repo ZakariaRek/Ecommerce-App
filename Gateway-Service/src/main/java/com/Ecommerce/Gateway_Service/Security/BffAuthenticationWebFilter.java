@@ -3,6 +3,7 @@ package com.Ecommerce.Gateway_Service.Security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
@@ -15,7 +16,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 @Component
-@Order(-100) // High priority to execute before other filters
+@Order(-100)
 public class BffAuthenticationWebFilter implements WebFilter {
 
     @Autowired
@@ -28,6 +29,11 @@ public class BffAuthenticationWebFilter implements WebFilter {
 
         // Only apply to BFF endpoints
         if (!isBffEndpoint(path)) {
+            return chain.filter(exchange);
+        }
+
+        // ✅ SKIP AUTHENTICATION FOR OPTIONS REQUESTS (CORS PREFLIGHT)
+        if (request.getMethod() == HttpMethod.OPTIONS) {
             return chain.filter(exchange);
         }
 

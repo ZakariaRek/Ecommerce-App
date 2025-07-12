@@ -16,6 +16,12 @@ import reactor.core.publisher.Mono;
 @Tag(name = "BFF Cart", description = "Backend for Frontend Cart operations with enriched product data")
 @RequiredArgsConstructor
 @Slf4j
+@CrossOrigin(
+        origins = {"http://localhost:3000", "http://127.0.0.1:3000"},
+        allowedHeaders = "*",
+        allowCredentials = "true",
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS}
+)
 public class EnrichedCartController {
 
     private final CartBffService cartBffService;
