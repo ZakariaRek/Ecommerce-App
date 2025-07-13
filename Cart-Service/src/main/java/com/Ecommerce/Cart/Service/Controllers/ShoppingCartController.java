@@ -164,7 +164,11 @@ public class ShoppingCartController {
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Checkout completed successfully", null));
     }
 
-    // Saved for later endpoints
+
+
+
+
+    //                                Saved for later endpoints
 
     @Operation(
             summary = "Get saved items",
@@ -265,6 +269,13 @@ public class ShoppingCartController {
         savedForLaterService.removeFromSaved(userId, productId);
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item removed from saved items", null));
     }
+
+
+
+
+
+
+
 
     // Helper methods for mapping entities to DTOs
     private ShoppingCartResponse mapToCartResponse(ShoppingCart cart) {
