@@ -13,6 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ProductBatchResponseDTO {
     private String correlationId;
+    private String message;
     private boolean success;
     private List<ProductBatchInfoDTO> products;
     private long timestamp;

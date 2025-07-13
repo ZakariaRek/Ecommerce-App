@@ -1,28 +1,21 @@
 package com.Ecommerce.Gateway_Service.Service;
 
-import com.Ecommerce.Gateway_Service.DTOs.*;
-import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
-import com.Ecommerce.Gateway_Service.Kafka.DTOs.CartRequestDTO;
-import com.Ecommerce.Gateway_Service.Kafka.DTOs.CartResponseDTO;
-import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchRequestEventDTO;
+import com.Ecommerce.Gateway_Service.DTOs.EnrichedCartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.EnrichedShoppingCartResponse;
+import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
 import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchResponseDTO;
-import com.Ecommerce.Gateway_Service.Kafka.KafkaTopics;
+import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,340 +23,352 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AsyncCartBffService {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final AsyncResponseManager responseManager;
+    private final KafkaTemplate<String, Object> gatewayKafkaTemplate;
+    private final AsyncResponseManager asyncResponseManager;
+    private final AsyncProductService asyncProductService;
     private final ObjectMapper objectMapper;
 
-    // ✅ FULLY ASYNC WITH KAFKA
+    /**
+     * ✅ Get enriched cart using async Kafka communication - WITHOUT product enrichment
+     */
     public Mono<EnrichedShoppingCartResponse.EnrichedCartResponseDTO> getEnrichedCart(String userId) {
-        log.info("Starting async enriched cart fetch for user: {}", userId);
-
-        // ✅ Parse and normalize the userId before sending to Cart service
-        String normalizedUserId;
-        try {
-            UUID parsedUserId = parseUUID(userId);
-            normalizedUserId = parsedUserId.toString();
-            log.debug("Normalized user ID '{}' to UUID: {}", userId, normalizedUserId);
-        } catch (Exception e) {
-            log.error("Failed to parse user ID: {}", userId, e);
-            return Mono.just(createEmptyEnrichedCart(userId));
-        }
-
         String correlationId = UUID.randomUUID().toString();
 
-        return getCartFromServiceAsync(normalizedUserId, correlationId) // ✅ Use normalized UUID
+        log.info("Starting async cart request for userId: {} with correlationId: {}", userId, correlationId);
+
+        try {
+            if (userId == null || userId.trim().isEmpty()) {
+                log.error("Invalid userId provided: {}", userId);
+                return Mono.just(createEmptyCartResponse(userId));
+            }
+
+            // Create cart request
+            Map<String, Object> cartRequest = new HashMap<>();
+            cartRequest.put("correlationId", correlationId);
+            cartRequest.put("userId", userId);
+            cartRequest.put("timestamp", System.currentTimeMillis());
+
+            log.info("🔍 SERVICE: Sending cart request to Kafka: {}", cartRequest);
+
+            // Send request to cart service
+            gatewayKafkaTemplate.send("cart.request", correlationId, cartRequest);
+
+            // Wait for response with timeout
+            Duration timeout = Duration.ofSeconds(30);
+
+            return asyncResponseManager.waitForResponse(
+                            correlationId,
+                            timeout,
+                            EnrichedShoppingCartResponse.EnrichedCartResponseDTO.class
+                    )
+                    .doOnSuccess(response -> {
+                        log.info("🔍 SERVICE: Successfully received async cart response for correlationId: {} with {} items",
+                                correlationId, response.getItemCount());
+                        log.info("🔍 SERVICE: Cart response details - id: {}, userId: {}, total: {}, itemCount: {}, totalQuantity: {}",
+                                response.getId(), response.getUserId(), response.getTotal(),
+                                response.getItemCount(), response.getTotalQuantity());
+                    })
+                    .doOnError(error -> {
+                        log.error("Failed to get async cart response for correlationId: {}", correlationId, error);
+                    })
+                    .onErrorReturn(createEmptyCartResponse(userId));
+
+        } catch (Exception e) {
+            log.error("Error initiating async cart request for userId: {}", userId, e);
+            return Mono.just(createEmptyCartResponse(userId));
+        }
+    }
+
+    /**
+     * ✅ Get enriched cart WITH product enrichment - FIXED version
+     */
+    public Mono<EnrichedShoppingCartResponse.EnrichedCartResponseDTO> getEnrichedCartWithProducts(String userId) {
+        log.info("🔍 SERVICE: Starting enriched cart with products for userId: {}", userId);
+
+        return getEnrichedCart(userId)
                 .flatMap(cartResponse -> {
-                    if (cartResponse.getData() == null ||
-                            cartResponse.getData().getItems() == null ||
-                            cartResponse.getData().getItems().isEmpty()) {
+                    log.info("🔍 SERVICE: Received cart response before product enrichment:");
+                    log.info("   - Cart ID: {}", cartResponse.getId());
+                    log.info("   - User ID: {}", cartResponse.getUserId());
+                    log.info("   - Total: {}", cartResponse.getTotal());
+                    log.info("   - Item Count: {}", cartResponse.getItemCount());
+                    log.info("   - Total Quantity: {}", cartResponse.getTotalQuantity());
+                    log.info("   - Created At: {}", cartResponse.getCreatedAt());
+                    log.info("   - Updated At: {}", cartResponse.getUpdatedAt());
+                    log.info("   - Expires At: {}", cartResponse.getExpiresAt());
 
-                        log.info("Empty cart for user: {}", normalizedUserId);
-                        return Mono.just(createEmptyEnrichedCart(normalizedUserId));
+                    if (cartResponse.getItemCount() != null && cartResponse.getItemCount() > 0) {
+                        // Extract product IDs from cart items
+                        List<UUID> productIds = cartResponse.getItems().stream()
+                                .map(EnrichedCartItemDTO::getProductId)
+                                .filter(Objects::nonNull)
+                                .collect(Collectors.toList());
+
+                        if (!productIds.isEmpty()) {
+                            log.info("🔍 SERVICE: Enriching {} cart items with product data", productIds.size());
+                            log.info("🔍 SERVICE: Product IDs to fetch: {}", productIds);
+
+                            // ✅ FIXED: Handle the correct return type from AsyncProductService
+                            return asyncProductService.getProductsBatch(productIds)
+                                    .map(productResponse -> {
+                                        log.info("🔍 SERVICE: Received product response");
+                                        log.info("🔍 SERVICE: Response type: {}", productResponse.getClass().getSimpleName());
+
+                                        // ✅ Your AsyncProductService returns List<EnrichedCartItemDTO>, not ProductBatchResponseDTO
+                                        @SuppressWarnings("unchecked")
+                                        List<EnrichedCartItemDTO> productItems = (List<EnrichedCartItemDTO>) productResponse;
+
+                                        log.info("🔍 SERVICE: Successfully cast to List<EnrichedCartItemDTO> with {} items", productItems.size());
+
+                                        // Log the product details we received
+                                        for (EnrichedCartItemDTO product : productItems) {
+                                            log.info("🔍 SERVICE: Product: id={}, name={}, status={}, inStock={}, availableQuantity={}",
+                                                    product.getProductId(), product.getProductName(),
+                                                    product.getProductStatus(), product.getInStock(), product.getAvailableQuantity());
+                                        }
+
+                                        // ✅ Use the correct merge method for List<EnrichedCartItemDTO>
+                                        return mergeCartWithProductItems(cartResponse, productItems);
+                                    })
+                                    .doOnSuccess(enrichedCart -> {
+                                        log.info("🔍 SERVICE: Successfully enriched cart with product details");
+                                        log.info("🔍 SERVICE: Final enriched cart - id: {}, userId: {}, total: {}, itemCount: {}",
+                                                enrichedCart.getId(), enrichedCart.getUserId(),
+                                                enrichedCart.getTotal(), enrichedCart.getItemCount());
+                                    })
+                                    .onErrorResume(error -> {
+                                        log.error("🔍 SERVICE: Error enriching cart with products", error);
+                                        return Mono.just(cartResponse); // Return cart without enrichment on error
+                                    });
+                        }
                     }
 
-                    List<UUID> productIds = cartResponse.getData().getItems().stream()
-                            .map(CartItemDTO::getProductId)
-                            .collect(Collectors.toList());
-
-                    log.info("Found {} unique products in cart for user: {}", productIds.size(), normalizedUserId);
-
-                    return getProductInfoBatchAsync(productIds)
-                            .map(productInfos -> mergeCartWithProductInfo(cartResponse.getData(), productInfos));
-                })
-                .timeout(Duration.ofSeconds(15))
-                .doOnError(error -> log.error("Error in async enriched cart fetch for user {}: {}", normalizedUserId, error.getMessage()))
-                .onErrorReturn(createEmptyEnrichedCart(normalizedUserId));
+                    log.info("🔍 SERVICE: Cart has no items to enrich, returning basic cart data");
+                    return Mono.just(cartResponse);
+                });
     }
 
     /**
-     * ✅ Add the same parseUUID method as Cart service
+     * ✅ NEW: Merge cart data with product items (for AsyncProductService that returns List<EnrichedCartItemDTO>)
      */
-    private UUID parseUUID(String uuidString) {
-        if (uuidString == null || uuidString.trim().isEmpty()) {
-            throw new IllegalArgumentException("UUID string cannot be null or empty");
-        }
+    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO mergeCartWithProductItems(
+            EnrichedShoppingCartResponse.EnrichedCartResponseDTO cartResponse,
+            List<EnrichedCartItemDTO> productItems) {
 
-        try {
-            // First, try the standard parsing logic
-            return parseUUIDStandard(uuidString);
-        } catch (IllegalArgumentException e) {
-            // If that fails, check if it's Base64 encoded
-            if (isBase64Encoded(uuidString)) {
-                log.debug("Detected Base64 format, converting to deterministic UUID");
-                return generateDeterministicUUID(uuidString);
-            }
-            // If not Base64, rethrow the original exception
-            throw e;
-        }
-    }
+        log.info("🔍 SERVICE: Merging cart with {} cart items and {} product items",
+                cartResponse.getItemCount(), productItems.size());
 
-    /**
-     * ✅ Standard UUID parsing logic (same as Cart service)
-     */
-    private UUID parseUUIDStandard(String uuidString) {
-        // Remove any existing hyphens
-        String cleanUuid = uuidString.replaceAll("-", "");
+        // Create a map of productId -> product details for quick lookup
+        Map<UUID, EnrichedCartItemDTO> productMap = productItems.stream()
+                .collect(Collectors.toMap(
+                        EnrichedCartItemDTO::getProductId,
+                        product -> product,
+                        (existing, replacement) -> existing // Handle duplicates
+                ));
 
-        // Handle MongoDB ObjectId (24 characters) by padding to UUID format
-        if (cleanUuid.length() == 24 && cleanUuid.matches("[0-9a-fA-F]+")) {
-            // Pad with zeros to make it 32 characters
-            cleanUuid = cleanUuid + "00000000";
-        }
+        log.info("🔍 SERVICE: Created product map with {} entries", productMap.size());
 
-        // Check if it's exactly 32 hex characters
-        if (cleanUuid.length() == 32 && cleanUuid.matches("[0-9a-fA-F]+")) {
-            // Insert hyphens at correct positions: 8-4-4-4-12
-            String formattedUuid = cleanUuid.substring(0, 8) + "-" +
-                    cleanUuid.substring(8, 12) + "-" +
-                    cleanUuid.substring(12, 16) + "-" +
-                    cleanUuid.substring(16, 20) + "-" +
-                    cleanUuid.substring(20, 32);
-            return UUID.fromString(formattedUuid);
-        }
+        // Enrich cart items with product details
+        List<EnrichedCartItemDTO> enrichedItems = cartResponse.getItems().stream()
+                .map(cartItem -> {
+                    EnrichedCartItemDTO productDetail = productMap.get(cartItem.getProductId());
 
-        // Try parsing as-is (in case it's already properly formatted)
-        return UUID.fromString(uuidString);
-    }
+                    if (productDetail != null) {
+                        log.debug("🔍 SERVICE: Enriching cart item {} with product details", cartItem.getProductId());
 
-    /**
-     * ✅ Check if string is Base64 encoded
-     */
-    private boolean isBase64Encoded(String str) {
-        try {
-            if (!str.matches("^[A-Za-z0-9+/]*={0,2}$")) {
-                return false;
-            }
-            Base64.getDecoder().decode(str);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-    }
+                        // ✅ Merge ALL cart item data with product details
+                        return EnrichedCartItemDTO.builder()
+                                // ✅ PRESERVE ALL CART-SPECIFIC DATA
+                                .id(cartItem.getId())                           // Cart item ID
+                                .productId(cartItem.getProductId())             // Product ID
+                                .quantity(cartItem.getQuantity())               // Quantity in cart
+                                .price(cartItem.getPrice())                     // Price from cart
+                                .subtotal(cartItem.getSubtotal())               // Subtotal from cart
+                                .addedAt(cartItem.getAddedAt())                 // When added to cart
 
-    /**
-     * ✅ Generate deterministic UUID from any string using SHA-256
-     */
-    private UUID generateDeterministicUUID(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-
-            // Take first 16 bytes for UUID
-            byte[] uuidBytes = new byte[16];
-            System.arraycopy(hash, 0, uuidBytes, 0, 16);
-
-            // Set version (4) and variant bits for UUID v4
-            uuidBytes[6] &= 0x0f;  // Clear version
-            uuidBytes[6] |= 0x40;  // Set version to 4
-            uuidBytes[8] &= 0x3f;  // Clear variant
-            uuidBytes[8] |= 0x80;  // Set to IETF variant
-
-            // Convert to hex string
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : uuidBytes) {
-                hexString.append(String.format("%02x", b));
-            }
-
-            // Format as UUID
-            String hex = hexString.toString();
-            String formattedUuid = hex.substring(0, 8) + "-" +
-                    hex.substring(8, 12) + "-" +
-                    hex.substring(12, 16) + "-" +
-                    hex.substring(16, 20) + "-" +
-                    hex.substring(20, 32);
-
-            return UUID.fromString(formattedUuid);
-
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to generate deterministic UUID for: " + input, e);
-        }
-    }
-
-    // ✅ Rest of your methods remain the same...
-    private Mono<CartServiceResponseDTO> getCartFromServiceAsync(String userId, String correlationId) {
-        CartRequestDTO request = CartRequestDTO.builder()
-                .correlationId(correlationId)
-                .userId(userId) // This is now a normalized UUID string
-                .timestamp(System.currentTimeMillis())
-                .build();
-
-        // Send request to Kafka
-        kafkaTemplate.send(KafkaTopics.CART_REQUEST, correlationId, request);
-        log.debug("Sent cart request for user: {} with correlationId: {}", userId, correlationId);
-
-        // Wait for response
-        return responseManager.waitForResponse(correlationId, Duration.ofSeconds(5), CartResponseDTO.class)
-                .map(cartResponse -> {
-                    if (cartResponse.isSuccess()) {
-                        CartServiceResponseDTO response = new CartServiceResponseDTO();
-                        response.setSuccess(true);
-                        response.setData(cartResponse.getData().getData());
-                        return response;
+                                // ✅ ADD PRODUCT DETAILS FROM PRODUCT SERVICE
+                                .productName(productDetail.getProductName())           // Product name
+                                .productImage(productDetail.getProductImage())        // Product image
+                                .productStatus(productDetail.getProductStatus())      // Product status
+                                .inStock(productDetail.getInStock())                  // Stock status
+                                .availableQuantity(productDetail.getAvailableQuantity()) // Available quantity
+                                .build();
                     } else {
-                        log.warn("Cart service returned error: {}", cartResponse.getMessage());
-                        return createEmptyCartServiceResponse(userId);
+                        // Product details not found, keep cart item as is with fallback product info
+                        log.warn("🔍 SERVICE: Product details not found for productId: {}", cartItem.getProductId());
+                        return EnrichedCartItemDTO.builder()
+                                // ✅ PRESERVE ALL CART DATA
+                                .id(cartItem.getId())
+                                .productId(cartItem.getProductId())
+                                .quantity(cartItem.getQuantity())
+                                .price(cartItem.getPrice())
+                                .subtotal(cartItem.getSubtotal())
+                                .addedAt(cartItem.getAddedAt())
+
+                                // ✅ FALLBACK PRODUCT DATA
+                                .productName("Product not found")
+                                .productImage(null)
+                                .productStatus("UNKNOWN")
+                                .inStock(false)
+                                .availableQuantity(0)
+                                .build();
                     }
                 })
-                .onErrorReturn(createEmptyCartServiceResponse(userId));
-    }
-
-
-    private Mono<List<ProductBatchInfoDTO>> getProductInfoBatchAsync(List<UUID> productIds) {
-        if (productIds.isEmpty()) {
-            return Mono.just(List.of());
-        }
-
-        String correlationId = UUID.randomUUID().toString();
-
-        ProductBatchRequestEventDTO request = ProductBatchRequestEventDTO.builder()
-                .correlationId(correlationId)
-                .productIds(productIds)
-                .timestamp(System.currentTimeMillis())
-                .build();
-
-        // Send request to Kafka
-        kafkaTemplate.send(KafkaTopics.PRODUCT_BATCH_REQUEST, correlationId, request);
-        log.debug("Sent product batch request for {} products with correlationId: {}", productIds.size(), correlationId);
-
-        // Wait for response
-        return responseManager.waitForResponse(correlationId, Duration.ofSeconds(8), ProductBatchResponseDTO.class)
-                .map(response -> {
-                    if (response.isSuccess()) {
-                        return response.getProducts();
-                    } else {
-                        log.warn("Product service returned error for correlationId: {}", correlationId);
-                        return List.<ProductBatchInfoDTO>of();
-                    }
-                })
-                .onErrorReturn(List.of());
-    }
-
-    // Kafka Listeners for Responses
-    @KafkaListener(topics = KafkaTopics.CART_RESPONSE)
-    public void handleCartResponse(@Payload CartResponseDTO response) {
-        log.debug("Received cart response for correlationId: {}", response.getCorrelationId());
-        responseManager.completeRequest(response.getCorrelationId(), response);
-    }
-
-    @KafkaListener(topics = KafkaTopics.PRODUCT_BATCH_RESPONSE)
-    public void handleProductBatchResponse(@Payload ProductBatchResponseDTO response) {
-        log.debug("Received product batch response for correlationId: {}", response.getCorrelationId());
-        responseManager.completeRequest(response.getCorrelationId(), response);
-    }
-
-    @KafkaListener(topics = KafkaTopics.CART_ERROR)
-    public void handleCartError(@Payload Map<String, Object> errorPayload) {
-        String correlationId = (String) errorPayload.get("correlationId");
-        String errorMessage = (String) errorPayload.get("message");
-        log.error("Received cart error for correlationId: {}, message: {}", correlationId, errorMessage);
-        responseManager.completeRequestExceptionally(correlationId, new RuntimeException(errorMessage));
-    }
-
-    @KafkaListener(topics = KafkaTopics.PRODUCT_ERROR)
-    public void handleProductError(@Payload Map<String, Object> errorPayload) {
-        String correlationId = (String) errorPayload.get("correlationId");
-        String errorMessage = (String) errorPayload.get("message");
-        log.error("Received product error for correlationId: {}, message: {}", correlationId, errorMessage);
-        responseManager.completeRequestExceptionally(correlationId, new RuntimeException(errorMessage));
-    }
-
-    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO mergeCartWithProductInfo(ShoppingCartDTO cart, List<ProductBatchInfoDTO> productInfos) {
-        log.info("Merging cart data with product information");
-
-        Map<UUID, ProductBatchInfoDTO> productMap = productInfos.stream()
-                .collect(Collectors.toMap(ProductBatchInfoDTO::getId, p -> p));
-
-        List<EnrichedCartItemDTO> enrichedItems = cart.getItems().stream()
-                .map(cartItem -> enrichCartItem(cartItem, productMap.get(cartItem.getProductId())))
                 .collect(Collectors.toList());
 
-        return EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
-                .id(cart.getId())
-                .userId(cart.getUserId())
-                .items(enrichedItems)
-                .total(cart.getTotal())
-                .itemCount(enrichedItems.size())
-                .totalQuantity(enrichedItems.stream().mapToInt(EnrichedCartItemDTO::getQuantity).sum())
-                .createdAt(cart.getCreatedAt())
-                .updatedAt(cart.getUpdatedAt())
-                .expiresAt(cart.getExpiresAt())
-                .build();
+        log.info("🔍 SERVICE: Successfully enriched {} items", enrichedItems.size());
+
+        // ✅ PRESERVE ALL ORIGINAL CART DATA, only update items and timestamp
+        EnrichedShoppingCartResponse.EnrichedCartResponseDTO result =
+                EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
+                        // ✅ PRESERVE ALL ORIGINAL CART FIELDS
+                        .id(cartResponse.getId())                           // Original cart ID
+                        .userId(cartResponse.getUserId())                   // Original user ID
+                        .total(cartResponse.getTotal())                     // Original total
+                        .itemCount(cartResponse.getItemCount())             // Original item count
+                        .totalQuantity(cartResponse.getTotalQuantity())     // Original total quantity
+                        .createdAt(cartResponse.getCreatedAt())             // Original creation time
+                        .expiresAt(cartResponse.getExpiresAt())             // Original expiration time
+
+                        // ✅ UPDATE ONLY ENRICHED DATA
+                        .items(enrichedItems)                               // Enriched items
+                        .updatedAt(LocalDateTime.now())                     // Updated timestamp
+                        .build();
+
+        log.info("🔍 SERVICE: Final merged cart result - id: {}, userId: {}, total: {}, itemCount: {}, totalQuantity: {}",
+                result.getId(), result.getUserId(), result.getTotal(),
+                result.getItemCount(), result.getTotalQuantity());
+
+        return result;
     }
 
-    private EnrichedCartItemDTO enrichCartItem(CartItemDTO cartItem, ProductBatchInfoDTO productInfo) {
-        EnrichedCartItemDTO.EnrichedCartItemDTOBuilder builder = EnrichedCartItemDTO.builder()
-                .id(cartItem.getId())
-                .productId(cartItem.getProductId())
-                .quantity(cartItem.getQuantity())
-                .price(cartItem.getPrice())
-                .subtotal(cartItem.getSubtotal())
-                .addedAt(cartItem.getAddedAt());
+    /**
+     * ✅ OLD: Merge cart data with product details - preserving ALL cart data (keeping for reference)
+     */
+    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO mergeCartWithProducts(
+            EnrichedShoppingCartResponse.EnrichedCartResponseDTO cartResponse,
+            ProductBatchResponseDTO productBatchResponse) {
 
-        if (productInfo != null) {
-            builder
-                    .productName(productInfo.getName())
-                    .productImage(productInfo.getImagePath())
-                    .inStock(productInfo.getInStock())
-                    .availableQuantity(productInfo.getAvailableQuantity())
-                    .productStatus(productInfo.getStatus().toString());
-        } else {
-            builder
-                    .productName("Product Not Found")
-                    .productImage("/api/products/images/not-found.png")
-                    .inStock(false)
-                    .availableQuantity(0)
-                    .productStatus("NOT_FOUND");
-        }
+        log.info("🔍 SERVICE: Merging cart with {} cart items and {} product details",
+                cartResponse.getItemCount(),
+                productBatchResponse.getProducts() != null ? productBatchResponse.getProducts().size() : 0);
 
-        return builder.build();
+        // Create a map of productId -> product details for quick lookup
+        Map<UUID, ProductBatchInfoDTO> productMap = productBatchResponse.getProducts().stream()
+                .collect(Collectors.toMap(
+                        ProductBatchInfoDTO::getId,
+                        product -> product,
+                        (existing, replacement) -> existing // Handle duplicates
+                ));
+
+        log.info("🔍 SERVICE: Created product map with {} entries", productMap.size());
+
+        // Enrich cart items with product details
+        List<EnrichedCartItemDTO> enrichedItems = cartResponse.getItems().stream()
+                .map(cartItem -> {
+                    ProductBatchInfoDTO productDetail = productMap.get(cartItem.getProductId());
+
+                    if (productDetail != null) {
+                        log.debug("🔍 SERVICE: Enriching cart item {} with product details", cartItem.getProductId());
+
+                        // FIXED: Merge ALL cart item data with product details
+                        return EnrichedCartItemDTO.builder()
+                                // ✅ PRESERVE ALL CART-SPECIFIC DATA
+                                .id(cartItem.getId())                           // Cart item ID
+                                .productId(cartItem.getProductId())             // Product ID
+                                .quantity(cartItem.getQuantity())               // Quantity in cart
+                                .price(cartItem.getPrice())                     // Price from cart
+                                .subtotal(cartItem.getSubtotal())               // Subtotal from cart
+                                .addedAt(cartItem.getAddedAt())                 // When added to cart
+
+                                // ✅ ADD PRODUCT DETAILS FROM PRODUCT SERVICE
+                                .productName(productDetail.getName())           // Product name
+                                .productImage(productDetail.getImagePath())    // Product image
+                                .productStatus(productDetail.getStatus())      // Product status
+                                .inStock(productDetail.getInStock())           // Stock status
+                                .availableQuantity(productDetail.getAvailableQuantity()) // Available quantity
+                                .build();
+                    } else {
+                        // Product details not found, keep cart item as is with fallback product info
+                        log.warn("🔍 SERVICE: Product details not found for productId: {}", cartItem.getProductId());
+                        return EnrichedCartItemDTO.builder()
+                                // ✅ PRESERVE ALL CART DATA
+                                .id(cartItem.getId())
+                                .productId(cartItem.getProductId())
+                                .quantity(cartItem.getQuantity())
+                                .price(cartItem.getPrice())
+                                .subtotal(cartItem.getSubtotal())
+                                .addedAt(cartItem.getAddedAt())
+
+                                // ✅ FALLBACK PRODUCT DATA
+                                .productName("Product not found")
+                                .productImage(null)
+                                .productStatus("UNKNOWN")
+                                .inStock(false)
+                                .availableQuantity(0)
+                                .build();
+                    }
+                })
+                .collect(Collectors.toList());
+
+        log.info("🔍 SERVICE: Successfully enriched {} items", enrichedItems.size());
+
+        // ✅ FIXED: PRESERVE ALL ORIGINAL CART DATA, only update items and timestamp
+        EnrichedShoppingCartResponse.EnrichedCartResponseDTO result =
+                EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
+                        // ✅ PRESERVE ALL ORIGINAL CART FIELDS
+                        .id(cartResponse.getId())                           // Original cart ID
+                        .userId(cartResponse.getUserId())                   // Original user ID
+                        .total(cartResponse.getTotal())                     // Original total
+                        .itemCount(cartResponse.getItemCount())             // Original item count
+                        .totalQuantity(cartResponse.getTotalQuantity())     // Original total quantity
+                        .createdAt(cartResponse.getCreatedAt())             // Original creation time
+                        .expiresAt(cartResponse.getExpiresAt())             // Original expiration time
+
+                        // ✅ UPDATE ONLY ENRICHED DATA
+                        .items(enrichedItems)                               // Enriched items
+                        .updatedAt(LocalDateTime.now())                     // Updated timestamp
+                        .build();
+
+        log.info("🔍 SERVICE: Final merged cart result - id: {}, userId: {}, total: {}, itemCount: {}, totalQuantity: {}",
+                result.getId(), result.getUserId(), result.getTotal(),
+                result.getItemCount(), result.getTotalQuantity());
+
+        return result;
     }
 
+    /**
+     * ✅ Create empty cart response as fallback
+     */
+    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO createEmptyCartResponse(String userId) {
+        log.warn("Creating empty cart response fallback for userId: {}", userId);
 
-    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO createEmptyEnrichedCart(String userId) {
-        UUID parsedUserId;
+        UUID userUuid = null;
         try {
-            // Try to parse as UUID first
-            parsedUserId = UUID.fromString(userId);
+            if (userId != null && !userId.trim().isEmpty()) {
+                userUuid = UUID.fromString(userId);
+            }
         } catch (IllegalArgumentException e) {
-            // If it's not a valid UUID (like MongoDB ObjectId), generate a random UUID
-            parsedUserId = UUID.randomUUID();
-            log.warn("Invalid UUID format for userId: {}, using random UUID", userId);
+            log.error("Invalid userId format for fallback: {}", userId);
         }
 
         return EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
-                .userId(parsedUserId)
+                .id(null)
+                .userId(userUuid)
                 .items(List.of())
-                .total(java.math.BigDecimal.ZERO)
+                .total(BigDecimal.ZERO)
                 .itemCount(0)
                 .totalQuantity(0)
-                .createdAt(java.time.LocalDateTime.now())
-                .updatedAt(java.time.LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .expiresAt(null)
                 .build();
     }
 
-
-    private CartServiceResponseDTO createEmptyCartServiceResponse(String userId) {
-        CartServiceResponseDTO response = new CartServiceResponseDTO();
-        response.setSuccess(false);
-        response.setMessage("Cart service unavailable");
-
-        ShoppingCartDTO emptyCart = new ShoppingCartDTO();
-
-        // Handle UUID parsing safely
-        try {
-            emptyCart.setUserId(UUID.fromString(userId));
-        } catch (IllegalArgumentException e) {
-            // If it's not a valid UUID (like MongoDB ObjectId), generate a random UUID
-            emptyCart.setUserId(UUID.randomUUID());
-            log.warn("Invalid UUID format for userId: {}, using random UUID", userId);
-        }
-
-        emptyCart.setItems(List.of());
-        emptyCart.setTotal(java.math.BigDecimal.ZERO);
-        emptyCart.setCreatedAt(java.time.LocalDateTime.now());
-        emptyCart.setUpdatedAt(java.time.LocalDateTime.now());
-
-        response.setData(emptyCart);
-        return response;
+    /**
+     * ✅ Get basic cart data without product enrichment (for internal use)
+     */
+    public Mono<EnrichedShoppingCartResponse.EnrichedCartResponseDTO> getBasicCart(String userId) {
+        return getEnrichedCart(userId);
     }
 }

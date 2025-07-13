@@ -1,5 +1,14 @@
 server:
   port: 8099
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+debug: true
+
+
+
+
 
 spring:
   config:
@@ -129,14 +138,20 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
 
 # Logging Configuration
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
-    org.springframework.web: DEBUG
-    com.Ecommerce.Gateway_Service: DEBUG
-    org.springframework.data.redis: DEBUG
-    org.springframework.web.cors: DEBUG
-    io.github.resilience4j: DEBUG
+#logging:
+#  level:
+#    org.springframework.cloud.gateway: DEBUG
+#    org.springframework.web: DEBUG
+#    com.Ecommerce.Gateway_Service: DEBUG
+#    org.springframework.data.redis: DEBUG
+#    org.springframework.web.cors: DEBUG
+#    io.github.resilience4j: DEBUG
+#    org.springframework.boot.autoconfigure: DEBUG
+#    com.Ecommerce: DEBUG  # Your package
+#    org.springframework.kafka: DEBUG
+#    org.apache.kafka: WARN
+#  pattern:
+#    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 # Management and Monitoring - Enhanced for Circuit Breakers
 management:
@@ -315,7 +330,6 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
         registerHealthIndicator: true
-        recordHealthIndicator: true
         writableStackTraceEnabled: true
         eventConsumerBufferSize: 100
     instances:
