@@ -2,6 +2,7 @@ package com.Ecommerce.Product_Service.Payload.Kafka;
 
 
 
+import com.Ecommerce.Product_Service.Entities.Category;
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,5 +24,4 @@ public class ProductBatchInfoDTO {
     private Integer availableQuantity;
     private ProductStatus status;
     private BigDecimal price;
-    private String category;
 }

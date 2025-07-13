@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -25,50 +26,124 @@ import java.util.UUID;
 @Slf4j
 public class ShoppingCartService {
     private final ShoppingCartRepository cartRepository;
-//    private final KafkaProducerService kafkaProducerService;
 
     /**
-     * Get or create a shopping cart for a user
-     * Cache the result with key 'shoppingCarts::userId'
+     * ✅ FIXED: Enhanced getOrCreateCart with better logging and cache handling
      */
     @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
-
     public ShoppingCart getOrCreateCart(UUID userId) {
-                ShoppingCart  d=  cartRepository.findByUserId(userId)
-                .orElseGet(() -> {
-                    ShoppingCart newCart = ShoppingCart.builder()
-                            .id(UUID.randomUUID())
-                            .userId(userId)
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .expiresAt(LocalDateTime.now().plusDays(7))
-                            .build();
-                    return cartRepository.save(newCart);
-                });
-        System.out.println(d);
+        log.debug("Getting or creating cart for userId: {}", userId);
 
+        Optional<ShoppingCart> existingCart = cartRepository.findByUserId(userId);
 
-        if(d.getItems() == null) {
-            System.out.println("Items list is null, initializing to empty list.");
+        if (existingCart.isPresent()) {
+            ShoppingCart cart = existingCart.get();
+            log.debug("Found existing cart: ID={}, Items={}, Total={}",
+                    cart.getId(),
+                    cart.getItems() != null ? cart.getItems().size() : 0,
+                    cart.calculateTotal());
+
+            // ✅ Ensure items list is initialized
+            if (cart.getItems() == null) {
+                log.warn("Cart items list was null, initializing empty list for cart: {}", cart.getId());
+                cart.setItems(List.of());
+            }
+
+            return cart;
+        } else {
+            log.info("No existing cart found for userId: {}. Creating new cart.", userId);
+
+            // ✅ DEBUGGING: Check if cart exists with different UUID format
+            debugCartSearch(userId);
+
+            ShoppingCart newCart = ShoppingCart.builder()
+                    .id(UUID.randomUUID())
+                    .userId(userId)
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .expiresAt(LocalDateTime.now().plusDays(7))
+                    .build();
+
+            ShoppingCart savedCart = cartRepository.save(newCart);
+            log.info("Created new cart: ID={} for userId: {}", savedCart.getId(), userId);
+
+            return savedCart;
         }
-        return d;
     }
-
-    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
-    public ShoppingCart getCart(UUID userId) {
-        return cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + userId));
-    }
-
-
-
-
 
     /**
-     * Add item to cart, update the cache, and publish event to Kafka
+     * ✅ NEW: Get cart without creating (for debugging)
+     */
+    public Optional<ShoppingCart> findCartByUserId(UUID userId) {
+        log.debug("Finding cart for userId: {}", userId);
+        return cartRepository.findByUserId(userId);
+    }
+
+    /**
+     * ✅ DEBUGGING METHOD: Search for cart with different UUID formats
+     */
+    private void debugCartSearch(UUID userId) {
+        try {
+            log.debug("Debugging cart search for UUID: {}", userId);
+
+            // Check all carts to see what exists
+            List<ShoppingCart> allCarts = cartRepository.findAll();
+            log.debug("Total carts in database: {}", allCarts.size());
+
+            // Log first few carts for comparison
+            allCarts.stream().limit(5).forEach(cart -> {
+                log.debug("Existing cart: userId='{}', id='{}', items={}",
+                        cart.getUserId(), cart.getId(),
+                        cart.getItems() != null ? cart.getItems().size() : 0);
+
+                // Check for partial matches
+                String requestedStr = userId.toString().replace("-", "");
+                String existingStr = cart.getUserId().toString().replace("-", "");
+
+                if (requestedStr.length() >= 24 && existingStr.length() >= 24) {
+                    String requestedPrefix = requestedStr.substring(0, 24);
+                    String existingPrefix = existingStr.substring(0, 24);
+
+                    if (requestedPrefix.equals(existingPrefix)) {
+                        log.warn("FOUND POTENTIAL MATCH! Requested: '{}', Existing: '{}', CartId: '{}'",
+                                userId, cart.getUserId(), cart.getId());
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("Error during cart debugging", e);
+        }
+    }
+
+    /**
+     * ✅ FIXED: Get cart with proper error handling
+     */
+    @Cacheable(value = "shoppingCarts", key = "#userId.toString()")
+    public ShoppingCart getCart(UUID userId) {
+        log.debug("Getting cart for userId: {}", userId);
+
+        Optional<ShoppingCart> cart = cartRepository.findByUserId(userId);
+        if (cart.isPresent()) {
+            log.debug("Found cart: ID={}, Items={}",
+                    cart.get().getId(),
+                    cart.get().getItems() != null ? cart.get().getItems().size() : 0);
+            return cart.get();
+        } else {
+            log.warn("Cart not found for userId: {}", userId);
+            debugCartSearch(userId);
+            throw new ResourceNotFoundException("Cart not found for user: " + userId);
+        }
+    }
+
+    /**
+     * ✅ Enhanced cache eviction and logging
      */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart addItemToCart(UUID userId, UUID productId, int quantity, BigDecimal price) {
+        log.debug("Adding item to cart: userId={}, productId={}, quantity={}, price={}",
+                userId, productId, quantity, price);
+
         ShoppingCart cart = getOrCreateCart(userId);
 
         CartItem item = CartItem.builder()
@@ -82,8 +157,10 @@ public class ShoppingCartService {
         cart.addItem(item);
         ShoppingCart updatedCart = cartRepository.save(cart);
 
-        // Publish item added event to Kafka
-//        kafkaProducerService.sendCartItemAddedEvent(updatedCart, item);
+        log.info("Added item to cart: cartId={}, total items={}, new total={}",
+                updatedCart.getId(),
+                updatedCart.getItems().size(),
+                updatedCart.calculateTotal());
 
         return updatedCart;
     }
@@ -92,67 +169,65 @@ public class ShoppingCartService {
         return addItemToCart(userId, request.getProductId(), request.getQuantity(), request.getPrice());
     }
 
-    /**
-     * Remove item from cart, update the cache, and publish event to Kafka
-     */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart removeItemFromCart(UUID userId, UUID productId) {
         ShoppingCart cart = getOrCreateCart(userId);
         cart.removeItem(productId);
         ShoppingCart updatedCart = cartRepository.save(cart);
 
-        // Publish item removed event to Kafka
-//        kafkaProducerService.sendCartItemRemovedEvent(userId, cart.getId(), productId);
+        log.info("Removed item from cart: cartId={}, remaining items={}",
+                updatedCart.getId(), updatedCart.getItems().size());
 
         return updatedCart;
     }
 
-    /**
-     * Update item quantity, update the cache, and publish event to Kafka
-     */
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     public ShoppingCart updateItemQuantity(UUID userId, UUID productId, int newQuantity) {
         ShoppingCart cart = getOrCreateCart(userId);
         cart.updateQuantity(productId, newQuantity);
         ShoppingCart updatedCart = cartRepository.save(cart);
 
-        // Publish item updated event to Kafka
-//        kafkaProducerService.sendCartItemUpdatedEvent(updatedCart, productId, newQuantity);
+        log.info("Updated item quantity in cart: cartId={}, productId={}, newQuantity={}",
+                updatedCart.getId(), productId, newQuantity);
 
         return updatedCart;
     }
 
     /**
-     * Calculate cart total (cached)
+     * ✅ FIXED: Calculate total with better cache handling
      */
     @Cacheable(value = "cartTotals", key = "#userId.toString()")
     public BigDecimal calculateCartTotal(UUID userId) {
-        ShoppingCart cart = getOrCreateCart(userId);
-        return cart.calculateTotal();
+        log.debug("Calculating cart total for userId: {}", userId);
+
+        // ✅ Use findCartByUserId to avoid creating a new cart just for total calculation
+        Optional<ShoppingCart> cartOpt = findCartByUserId(userId);
+        if (cartOpt.isPresent()) {
+            BigDecimal total = cartOpt.get().calculateTotal();
+            log.debug("Cart total for userId {}: {}", userId, total);
+            return total;
+        } else {
+            log.debug("No cart found for userId: {}, returning zero total", userId);
+            return BigDecimal.ZERO;
+        }
     }
 
-    /**
-     * Checkout process (invalidates cache) and publishes event to Kafka
-     */
     @CacheEvict(value = {"shoppingCarts", "cartTotals"}, key = "#userId.toString()")
     public void checkout(UUID userId) {
         ShoppingCart cart = getOrCreateCart(userId);
         cart.checkout();
         cartRepository.save(cart);
 
-        // Publish cart checkout event to Kafka
-//        kafkaProducerService.sendCartCheckoutEvent(cart);
+        log.info("Checked out cart: cartId={}, userId={}", cart.getId(), userId);
     }
 
-    /**
-     * Clean up expired carts and evict from cache
-     */
     @CacheEvict(value = "shoppingCarts", allEntries = true)
     public void cleanupExpiredCarts() {
         List<ShoppingCart> expiredCarts = cartRepository.findByExpiresAtBefore(LocalDateTime.now());
         cartRepository.deleteAll(expiredCarts);
-    }
 
+        log.info("Cleaned up {} expired carts", expiredCarts.size());
+    }
 
     @CachePut(value = "shoppingCarts", key = "#userId.toString()")
     @Transactional
@@ -173,11 +248,14 @@ public class ShoppingCartService {
             }
         }
 
-        return cartRepository.save(cart);
+        ShoppingCart updatedCart = cartRepository.save(cart);
+        log.info("Bulk updated cart: cartId={}, operations={}",
+                updatedCart.getId(), request.getItems().size());
+
+        return updatedCart;
     }
-//    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
-    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
-    public void addItemToExistingCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+
+    private void addItemToExistingCart(ShoppingCart cart, BulkUpdateItem updateItem) {
         CartItem item = CartItem.builder()
                 .id(UUID.randomUUID())
                 .productId(updateItem.getProductId())
@@ -186,11 +264,9 @@ public class ShoppingCartService {
                 .addedAt(LocalDateTime.now())
                 .build();
         cart.addItem(item);
-        ShoppingCart updatedCart = cartRepository.save(cart);
-
     }
-    @CachePut(value = "shoppingCarts", key = "#userId.toString()")
-    public void updateItemInCart(ShoppingCart cart, BulkUpdateItem updateItem) {
+
+    private void updateItemInCart(ShoppingCart cart, BulkUpdateItem updateItem) {
         cart.updateQuantity(updateItem.getProductId(), updateItem.getQuantity());
     }
 }

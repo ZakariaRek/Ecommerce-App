@@ -27,4 +27,6 @@ public class EnrichedCartItemDTO {
     private Boolean inStock;
     private Integer availableQuantity;
     private String productStatus;
+
+
 }
