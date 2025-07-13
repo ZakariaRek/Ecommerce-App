@@ -1,21 +1,27 @@
 package com.Ecommerce.Gateway_Service.DTOs;
 
+import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.UUID;
-
+@Builder
 @Data
 public class ProductBatchInfoDTO {
     private UUID id;
     private String name;
-    private BigDecimal price;
     private String imagePath;
     private Boolean inStock;
     private Integer availableQuantity;
-    private ProductStatus status;
+    private String status;
+    private BigDecimal price;
+    private Status productStatus;
 
-    public enum ProductStatus {
-        ACTIVE, INACTIVE, OUT_OF_STOCK, DISCONTINUED
+    public enum Status {
+        AVAILABLE,
+        UNAVAILABLE,
+        DISCONTINUED
     }
+
+
 }

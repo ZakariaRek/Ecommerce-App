@@ -11,11 +11,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
-import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import org.springframework.kafka.support.serializer.JsonDeserializer; // ✅ Add this import
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,64 +58,109 @@ public class KafkaProducerConfig {
     public static final String TOPIC_COUPON_EXPIRED = "coupon-expired";
     public static final String TOPIC_COUPON_VALIDATED = "coupon-validated";
 
-        @Bean
-        public ProducerFactory<String, Object> CARTProducerFactory() {
-            Map<String, Object> configProps = new HashMap<>();
-            configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-            configProps.put(ProducerConfig.ACKS_CONFIG, "all");
-            configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
-            configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-            return new DefaultKafkaProducerFactory<>(configProps);
-        }
+    /**
+     * ✅ FIXED Producer Configuration
+     */
+    @Bean
+    public ProducerFactory<String, Object> CARTProducerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-        @Bean
-        public KafkaTemplate<String, Object> gatewayKafkaTemplate() {
-            return new KafkaTemplate<>(CARTProducerFactory());
-        }
+        // ✅ CRITICAL: Disable type headers to avoid classpath issues
+        configProps.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
 
-        /**
-         * ✅ Consumer configuration - FIXED to ignore type headers
-         */
-        @Bean
-        public ConsumerFactory<String, Object> CARTConsumerFactory() {
-            Map<String, Object> configProps = new HashMap<>();
-            configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            configProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        configProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
+        configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        return new DefaultKafkaProducerFactory<>(configProps);
+    }
 
-            // ✅ Use ErrorHandlingDeserializer to handle serialization issues
-            configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-            configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+    @Bean
+    public KafkaTemplate<String, Object> gatewayKafkaTemplate() {
+        return new KafkaTemplate<>(CARTProducerFactory());
+    }
 
-            // ✅ Configure the actual deserializers
-            configProps.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
-            configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
+    /**
+     * ✅ FIXED Consumer configuration with proper ErrorHandlingDeserializer setup
+     */
+    @Bean
+    public ConsumerFactory<String, Object> CARTConsumerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
-            configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        // ✅ Use ErrorHandlingDeserializer to handle serialization issues
+        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
 
-            // ✅ CRITICAL SETTINGS TO FIX THE CLASS PATH ISSUE
-            configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
-            configProps.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false); // ✅ Ignore type headers
-            configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, "java.lang.Object"); // ✅ Default to Object
+        // ✅ Configure the actual deserializers for ErrorHandlingDeserializer
+        configProps.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
+        configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
 
-            return new DefaultKafkaConsumerFactory<>(configProps);
-        }
+        configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
+        // ✅ FIXED: Proper configuration for nested JsonDeserializer
+        // These properties need to be prefixed for the nested deserializer
+        configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS + "." + JsonDeserializer.TRUSTED_PACKAGES, "*");
+        configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS + "." + JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
+        configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS + "." + JsonDeserializer.VALUE_DEFAULT_TYPE, "java.lang.Object");
+
+        return new DefaultKafkaConsumerFactory<>(configProps);
+    }
+
+    /**
+     * ✅ FIXED Kafka Listener Container Factory with better error handling
+     */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> gatewayKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(CARTConsumerFactory());
         factory.setConcurrency(3);
 
-        // ✅ Configure error handling
-        factory.setCommonErrorHandler(new DefaultErrorHandler());
+        // ✅ Configure better error handling with retry
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(new FixedBackOff(1000L, 3L));
+
+        // ✅ Add specific exception handling for deserialization issues
+        errorHandler.addNotRetryableExceptions(
+                org.springframework.kafka.support.serializer.DeserializationException.class,
+                org.apache.kafka.common.errors.SerializationException.class
+        );
+
+        factory.setCommonErrorHandler(errorHandler);
 
         return factory;
     }
 
+    // ✅ Alternative simpler consumer factory (you can use this instead if above doesn't work)
+    @Bean
+    public ConsumerFactory<String, String> simpleConsumerFactory() {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId + "-simple");
+        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
+        return new DefaultKafkaConsumerFactory<>(configProps);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> simpleKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(simpleConsumerFactory());
+        factory.setConcurrency(3);
+
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(new FixedBackOff(1000L, 3L));
+        factory.setCommonErrorHandler(errorHandler);
+
+        return factory;
+    }
+
+    // Rest of your topic definitions remain the same...
     @Bean
     public NewTopic cartRequestTopic() {
         return TopicBuilder.name("cart.request")
@@ -139,6 +184,7 @@ public class KafkaProducerConfig {
                 .replicas(1)
                 .build();
     }
+
     // Shopping Cart Topic definitions
     @Bean
     public NewTopic cartCreatedTopic() {

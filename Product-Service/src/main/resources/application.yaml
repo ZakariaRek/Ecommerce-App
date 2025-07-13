@@ -100,3 +100,13 @@ management:
   endpoint:
     env:
       show-values: ALWAYS
+
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: WARN
+    com.Ecommerce.Product_Service.Listener: DEBUG
+    com.Ecommerce.Product_Service.Config.KafkaProducerConfig: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+

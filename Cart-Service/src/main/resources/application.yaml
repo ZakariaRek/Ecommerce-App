@@ -5,73 +5,56 @@ spring:
     name: cart-service
   data:
     mongodb:
-      database: Cart-service  # Ensure this is your intended database name
-      host: localhost         # Ensure MongoDB is running on this host
-      port: 27017             # Ensure MongoDB is listening on this port
+      database: Cart-service
+      host: localhost
+      port: 27017
     redis:
       host: localhost
       port: 6379
       timeout: 2000
-      # Add these if using authentication
-      # password: your_password
     cache:
       type: redis
       redis:
-        time-to-live: 600000  # Default cache TTL in milliseconds (10 minutes)
+        time-to-live: 600000
         cache-null-values: false
+
+  # ✅ FIXED Kafka Configuration
   kafka:
     bootstrap-servers: localhost:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
+        # ✅ CRITICAL: Disable type headers to avoid classpath issues
         spring.json.add.type.headers: false
+        # Additional producer settings for reliability
+        acks: all
+        retries: 3
+        enable.idempotence: true
     consumer:
-      group-id: user-service-group
+      group-id: cart-service-group
       auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      enable-auto-commit: false
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        # ✅ Configure nested deserializers for ErrorHandlingDeserializer
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # ✅ CRITICAL: JsonDeserializer settings for ErrorHandlingDeserializer
         spring.json.trusted.packages: "*"
-
-#springdoc:
-#  api-docs:
-#    path: /api-docs
-#    enabled: true
-#  swagger-ui:
-#    path: /swagger-ui.html
-#    enabled: true
-#    operations-sorter: method
-#    tags-sorter: alpha
-#    doc-expansion: none
-#  group-configs:
-#    - group: cart-service
-#      paths-to-match:
-#        - /**
-# OpenAPI/Swagger Configuration
-
-
-# OpenAPI Configuration
-
-# OpenAPI/Swagger Configuration
-#springdoc:
-#  api-docs:
-#    enabled: true
-#    path: /api-docs
-#    version: 3.0  # Explicitly set the OpenAPI version
-#  swagger-ui:
-#    enabled: true
-#    path: /swagger-ui.html
-#    displayRequestDuration: true
-#    defaultModelsExpandDepth: 1
-#    defaultModelExpandDepth: 1
-#  packages-to-scan: com.Ecommerce.Cart.Service.Controllers
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.lang.Object
 
 server:
   port: 8087
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
   servlet:
-     context-path: /api/carts
-
+    context-path: /api/carts
+debug: true
 eureka:
   instance:
     preferIpAddress: true
@@ -84,28 +67,32 @@ eureka:
     fetchRegistry: true
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
-# ELK configuration - include in all services
+
+# Redis configuration
 redis:
-#  timeout: 2000
   maximumActiveConnectionCount: 128
 
+# Logging configuration for debugging
+logging:
+  level:
+    root: INFO
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
+    com.Ecommerce: DEBUG  # Your package
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: WARN
+    com.Ecommerce.Cart.Service.Lisiteners: DEBUG
+    com.Ecommerce.Cart.Service.Config.KafkaProducerConfig: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
-#kafka:
-#  bootstrap-servers: localhost:9092
-#  producer:
-#    key-serializer: org.apache.kafka.common.serialization.StringSerializer
-#    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-#  consumer:
-#    group-id: cart-service-group
-#    auto-offset-reset: earliest
-#    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-#    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-#    properties:
-#      spring.json.trusted.packages: com.Ecommerce.Cart.Service
-#
-#
-#app:
-#  kafka:
-#    topics:
-#      cart-events: cart-events
-#      product-price-updates: product-price-updates
+# Management endpoints for monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,kafka
+  endpoint:
+    health:
+      show-details: always

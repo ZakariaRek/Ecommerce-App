@@ -21,27 +21,54 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class AsyncEnrichedCartController {
 
-    private final AsyncCartBffService asyncCartBffService; // 🔄 Use async service
+    private final AsyncCartBffService asyncCartBffService;
 
     @Operation(
-            summary = "Get enriched cart data (Async)",
-            description = "Returns cart data enriched with product information using async Kafka communication"
+            summary = "Get enriched cart data with product details (Async)",
+            description = "Returns cart data enriched with complete product information using async Kafka communication"
     )
     @GetMapping("/{userId}/enriched")
     public Mono<ResponseEntity<EnrichedShoppingCartResponse.EnrichedCartResponseDTO>> getEnrichedCart(
             @Parameter(description = "User ID", required = true)
             @PathVariable String userId) {
 
-        log.info("Fetching enriched cart for user: {} (async)", userId);
+        log.info("Fetching enriched cart with products for user: {} (async)", userId);
 
-        return asyncCartBffService.getEnrichedCart(userId) // 🔄 Now async
+        return asyncCartBffService.getEnrichedCartWithProducts(userId) // ✅ Now uses product enrichment
                 .map(enrichedCart -> {
-                    log.info("Successfully fetched enriched cart for user: {} with {} items",
-                            userId, enrichedCart.getItemCount());
+                    log.info("Successfully fetched enriched cart for user: {} with {} items and {} products enriched",
+                            userId, enrichedCart.getItemCount(),
+                            enrichedCart.getItems().stream()
+                                    .mapToInt(item -> item.getProductName() != null &&
+                                            !item.getProductName().equals("Loading...") ? 1 : 0)
+                                    .sum());
                     return ResponseEntity.ok(enrichedCart);
                 })
                 .onErrorResume(error -> {
                     log.error("Error fetching enriched cart for user {}: {}", userId, error.getMessage());
+                    return Mono.just(ResponseEntity.internalServerError().build());
+                });
+    }
+
+    @Operation(
+            summary = "Get basic cart data (Async)",
+            description = "Returns basic cart data without product enrichment using async Kafka communication"
+    )
+    @GetMapping("/{userId}/basic")
+    public Mono<ResponseEntity<EnrichedShoppingCartResponse.EnrichedCartResponseDTO>> getBasicCart(
+            @Parameter(description = "User ID", required = true)
+            @PathVariable String userId) {
+
+        log.info("Fetching basic cart for user: {} (async)", userId);
+
+        return asyncCartBffService.getBasicCart(userId)
+                .map(cart -> {
+                    log.info("Successfully fetched basic cart for user: {} with {} items",
+                            userId, cart.getItemCount());
+                    return ResponseEntity.ok(cart);
+                })
+                .onErrorResume(error -> {
+                    log.error("Error fetching basic cart for user {}: {}", userId, error.getMessage());
                     return Mono.just(ResponseEntity.internalServerError().build());
                 });
     }
