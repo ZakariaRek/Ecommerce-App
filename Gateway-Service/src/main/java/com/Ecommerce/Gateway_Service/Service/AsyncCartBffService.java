@@ -149,7 +149,7 @@ public class AsyncCartBffService {
     }
 
     /**
-     * ✅ NEW: Merge cart data with product items (for AsyncProductService that returns List<EnrichedCartItemDTO>)
+     * ✅ Enhanced merge method with detailed discount field logging
      */
     private EnrichedShoppingCartResponse.EnrichedCartResponseDTO mergeCartWithProductItems(
             EnrichedShoppingCartResponse.EnrichedCartResponseDTO cartResponse,
@@ -157,6 +157,15 @@ public class AsyncCartBffService {
 
         log.info("🔍 SERVICE: Merging cart with {} cart items and {} product items",
                 cartResponse.getItemCount(), productItems.size());
+
+        // ✅ DEBUG: Log all product items with their discount fields
+        for (EnrichedCartItemDTO productItem : productItems) {
+            log.info("🔍 PRODUCT ITEM DEBUG: productId={}, name={}, discountValue={}, discountType={}",
+                    productItem.getProductId(),
+                    productItem.getProductName(),
+                    productItem.getDiscountValue(),
+                    productItem.getDiscountType());
+        }
 
         // Create a map of productId -> product details for quick lookup
         Map<UUID, EnrichedCartItemDTO> productMap = productItems.stream()
@@ -174,10 +183,16 @@ public class AsyncCartBffService {
                     EnrichedCartItemDTO productDetail = productMap.get(cartItem.getProductId());
 
                     if (productDetail != null) {
-                        log.debug("🔍 SERVICE: Enriching cart item {} with product details", cartItem.getProductId());
+                        log.info("🔍 SERVICE: Enriching cart item {} with product details", cartItem.getProductId());
 
-                        // ✅ Merge ALL cart item data with product details
-                        return EnrichedCartItemDTO.builder()
+                        // ✅ DEBUG: Log the product detail discount fields before merging
+                        log.info("🔍 PRODUCT DETAIL DEBUG: productId={}, discountValue={}, discountType={}",
+                                productDetail.getProductId(),
+                                productDetail.getDiscountValue(),
+                                productDetail.getDiscountType());
+
+                        // ✅ FIXED: Merge ALL cart item data with product details INCLUDING DISCOUNT FIELDS
+                        EnrichedCartItemDTO enrichedItem = EnrichedCartItemDTO.builder()
                                 // ✅ PRESERVE ALL CART-SPECIFIC DATA
                                 .id(cartItem.getId())                           // Cart item ID
                                 .productId(cartItem.getProductId())             // Product ID
@@ -192,7 +207,19 @@ public class AsyncCartBffService {
                                 .productStatus(productDetail.getProductStatus())      // Product status
                                 .inStock(productDetail.getInStock())                  // Stock status
                                 .availableQuantity(productDetail.getAvailableQuantity()) // Available quantity
+
+                                // ✅ FIXED: ADD MISSING DISCOUNT FIELDS
+                                .discountValue(productDetail.getDiscountValue())      // Discount value
+                                .discountType(productDetail.getDiscountType())        // Discount type
                                 .build();
+
+                        // ✅ DEBUG: Log the final enriched item discount fields
+                        log.info("🔍 ENRICHED ITEM DEBUG: productId={}, discountValue={}, discountType={}",
+                                enrichedItem.getProductId(),
+                                enrichedItem.getDiscountValue(),
+                                enrichedItem.getDiscountType());
+
+                        return enrichedItem;
                     } else {
                         // Product details not found, keep cart item as is with fallback product info
                         log.warn("🔍 SERVICE: Product details not found for productId: {}", cartItem.getProductId());
@@ -211,6 +238,10 @@ public class AsyncCartBffService {
                                 .productStatus("UNKNOWN")
                                 .inStock(false)
                                 .availableQuantity(0)
+
+                                // ✅ FALLBACK DISCOUNT DATA
+                                .discountValue(null)
+                                .discountType(null)
                                 .build();
                     }
                 })
@@ -219,101 +250,6 @@ public class AsyncCartBffService {
         log.info("🔍 SERVICE: Successfully enriched {} items", enrichedItems.size());
 
         // ✅ PRESERVE ALL ORIGINAL CART DATA, only update items and timestamp
-        EnrichedShoppingCartResponse.EnrichedCartResponseDTO result =
-                EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
-                        // ✅ PRESERVE ALL ORIGINAL CART FIELDS
-                        .id(cartResponse.getId())                           // Original cart ID
-                        .userId(cartResponse.getUserId())                   // Original user ID
-                        .total(cartResponse.getTotal())                     // Original total
-                        .itemCount(cartResponse.getItemCount())             // Original item count
-                        .totalQuantity(cartResponse.getTotalQuantity())     // Original total quantity
-                        .createdAt(cartResponse.getCreatedAt())             // Original creation time
-                        .expiresAt(cartResponse.getExpiresAt())             // Original expiration time
-
-                        // ✅ UPDATE ONLY ENRICHED DATA
-                        .items(enrichedItems)                               // Enriched items
-                        .updatedAt(LocalDateTime.now())                     // Updated timestamp
-                        .build();
-
-        log.info("🔍 SERVICE: Final merged cart result - id: {}, userId: {}, total: {}, itemCount: {}, totalQuantity: {}",
-                result.getId(), result.getUserId(), result.getTotal(),
-                result.getItemCount(), result.getTotalQuantity());
-
-        return result;
-    }
-
-    /**
-     * ✅ OLD: Merge cart data with product details - preserving ALL cart data (keeping for reference)
-     */
-    private EnrichedShoppingCartResponse.EnrichedCartResponseDTO mergeCartWithProducts(
-            EnrichedShoppingCartResponse.EnrichedCartResponseDTO cartResponse,
-            ProductBatchResponseDTO productBatchResponse) {
-
-        log.info("🔍 SERVICE: Merging cart with {} cart items and {} product details",
-                cartResponse.getItemCount(),
-                productBatchResponse.getProducts() != null ? productBatchResponse.getProducts().size() : 0);
-
-        // Create a map of productId -> product details for quick lookup
-        Map<UUID, ProductBatchInfoDTO> productMap = productBatchResponse.getProducts().stream()
-                .collect(Collectors.toMap(
-                        ProductBatchInfoDTO::getId,
-                        product -> product,
-                        (existing, replacement) -> existing // Handle duplicates
-                ));
-
-        log.info("🔍 SERVICE: Created product map with {} entries", productMap.size());
-
-        // Enrich cart items with product details
-        List<EnrichedCartItemDTO> enrichedItems = cartResponse.getItems().stream()
-                .map(cartItem -> {
-                    ProductBatchInfoDTO productDetail = productMap.get(cartItem.getProductId());
-
-                    if (productDetail != null) {
-                        log.debug("🔍 SERVICE: Enriching cart item {} with product details", cartItem.getProductId());
-
-                        // FIXED: Merge ALL cart item data with product details
-                        return EnrichedCartItemDTO.builder()
-                                // ✅ PRESERVE ALL CART-SPECIFIC DATA
-                                .id(cartItem.getId())                           // Cart item ID
-                                .productId(cartItem.getProductId())             // Product ID
-                                .quantity(cartItem.getQuantity())               // Quantity in cart
-                                .price(cartItem.getPrice())                     // Price from cart
-                                .subtotal(cartItem.getSubtotal())               // Subtotal from cart
-                                .addedAt(cartItem.getAddedAt())                 // When added to cart
-
-                                // ✅ ADD PRODUCT DETAILS FROM PRODUCT SERVICE
-                                .productName(productDetail.getName())           // Product name
-                                .productImage(productDetail.getImagePath())    // Product image
-                                .productStatus(productDetail.getStatus())      // Product status
-                                .inStock(productDetail.getInStock())           // Stock status
-                                .availableQuantity(productDetail.getAvailableQuantity()) // Available quantity
-                                .build();
-                    } else {
-                        // Product details not found, keep cart item as is with fallback product info
-                        log.warn("🔍 SERVICE: Product details not found for productId: {}", cartItem.getProductId());
-                        return EnrichedCartItemDTO.builder()
-                                // ✅ PRESERVE ALL CART DATA
-                                .id(cartItem.getId())
-                                .productId(cartItem.getProductId())
-                                .quantity(cartItem.getQuantity())
-                                .price(cartItem.getPrice())
-                                .subtotal(cartItem.getSubtotal())
-                                .addedAt(cartItem.getAddedAt())
-
-                                // ✅ FALLBACK PRODUCT DATA
-                                .productName("Product not found")
-                                .productImage(null)
-                                .productStatus("UNKNOWN")
-                                .inStock(false)
-                                .availableQuantity(0)
-                                .build();
-                    }
-                })
-                .collect(Collectors.toList());
-
-        log.info("🔍 SERVICE: Successfully enriched {} items", enrichedItems.size());
-
-        // ✅ FIXED: PRESERVE ALL ORIGINAL CART DATA, only update items and timestamp
         EnrichedShoppingCartResponse.EnrichedCartResponseDTO result =
                 EnrichedShoppingCartResponse.EnrichedCartResponseDTO.builder()
                         // ✅ PRESERVE ALL ORIGINAL CART FIELDS

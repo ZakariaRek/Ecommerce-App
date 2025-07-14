@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Payload.Discont;
 
 import com.Ecommerce.Product_Service.Entities.DiscountType;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -14,7 +15,9 @@ public class DiscountResponseDTO {
     private String productName;
     private DiscountType discountType;
     private BigDecimal discountValue;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endDate;
     private BigDecimal minPurchaseAmount;
     private BigDecimal maxDiscountAmount;

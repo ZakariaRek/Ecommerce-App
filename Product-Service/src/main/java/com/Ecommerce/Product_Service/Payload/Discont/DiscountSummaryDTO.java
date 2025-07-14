@@ -1,6 +1,7 @@
 package com.Ecommerce.Product_Service.Payload.Discont;
 
 import com.Ecommerce.Product_Service.Entities.DiscountType;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -13,6 +14,9 @@ public class DiscountSummaryDTO {
     private UUID productId;
     private DiscountType discountType;
     private BigDecimal discountValue;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endDate;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime startDate;
     private boolean isActive;
 }

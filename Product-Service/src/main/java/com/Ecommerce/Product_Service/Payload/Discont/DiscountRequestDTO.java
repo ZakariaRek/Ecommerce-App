@@ -32,6 +32,7 @@ public class DiscountRequestDTO {
     @DecimalMin(value = "0.0", message = "Maximum discount amount must be non-negative")
     private BigDecimal maxDiscountAmount;
 
+
     @AssertTrue(message = "End date must be after start date")
     public boolean isEndDateAfterStartDate() {
         if (startDate == null || endDate == null) {

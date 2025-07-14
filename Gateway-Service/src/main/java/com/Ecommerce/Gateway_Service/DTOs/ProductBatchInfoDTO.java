@@ -16,6 +16,8 @@ public class ProductBatchInfoDTO {
     private String status;
     private BigDecimal price;
     private Status productStatus;
+    private BigDecimal discountValue;
+    private String discountType;
 
     public enum Status {
         AVAILABLE,

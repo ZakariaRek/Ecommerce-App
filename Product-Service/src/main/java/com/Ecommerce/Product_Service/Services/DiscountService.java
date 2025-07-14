@@ -8,6 +8,8 @@ import com.Ecommerce.Product_Service.Payload.Discont.PricingResponseDTO;
 import com.Ecommerce.Product_Service.Repositories.DiscountRepository;
 import com.Ecommerce.Product_Service.Repositories.ProductRepository;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,8 @@ public class DiscountService {
 
     @Autowired
     private DiscountRepository discountRepository;
+
+    private static final Logger logger = LoggerFactory.getLogger(DiscountService.class);
 
     @Autowired
     private ProductRepository productRepository;

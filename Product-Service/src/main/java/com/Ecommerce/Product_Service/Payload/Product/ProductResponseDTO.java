@@ -2,6 +2,7 @@ package com.Ecommerce.Product_Service.Payload.Product;
 
 
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ public class ProductResponseDTO {
     private String dimensions;
     private List<String> images;
     private ProductStatus status;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
 }

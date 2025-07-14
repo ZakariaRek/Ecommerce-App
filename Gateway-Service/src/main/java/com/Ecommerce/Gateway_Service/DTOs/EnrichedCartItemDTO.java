@@ -27,6 +27,7 @@ public class EnrichedCartItemDTO {
     private Boolean inStock;
     private Integer availableQuantity;
     private String productStatus;
-
+    private BigDecimal discountValue;
+    private String discountType;
 
 }
