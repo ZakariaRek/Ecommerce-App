@@ -186,4 +186,38 @@ public class OrderService {
                 .map(OrderItem::getTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
+
+    /**
+     * Remove an order item from an order
+     */
+    public void removeOrderItem(UUID orderId, UUID itemId) {
+        // Verify order exists
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found with ID: " + orderId));
+
+        // Check if order is in a state where items can be removed
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.PAID) {
+            throw new IllegalStateException("Cannot remove items from order in " + order.getStatus() + " status");
+        }
+
+        // Find the item to remove
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("Order item not found with ID: " + itemId));
+
+        // Verify item belongs to the specified order
+        if (!item.getOrder().getId().equals(orderId)) {
+            throw new IllegalArgumentException("Item does not belong to the specified order");
+        }
+
+        // Remove the item
+        orderItemRepository.delete(item);
+
+        // Recalculate order total
+        BigDecimal newTotal = calculateOrderTotal(orderId);
+        order.setTotalAmount(newTotal);
+        orderRepository.save(order);
+
+        // Publish event to Kafka
+        kafkaService.publishOrderItemUpdated(order, item, item.getQuantity());
+    }
 }
