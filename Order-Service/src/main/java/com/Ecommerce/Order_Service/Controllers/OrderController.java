@@ -3,44 +3,60 @@ package com.Ecommerce.Order_Service.Controllers;
 
 import com.Ecommerce.Order_Service.Entities.Order;
 import com.Ecommerce.Order_Service.Entities.OrderItem;
-import com.Ecommerce.Order_Service.Entities.OrderStatus;
+
+import com.Ecommerce.Order_Service.Payload.OrderMapper;
+import com.Ecommerce.Order_Service.Payload.Request.OrderItem.CreateOrderItemRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.OrderItem.UpdateOrderItemQuantityRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.order.CreateOrderRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.order.UpdateOrderStatusRequestDto;
+import com.Ecommerce.Order_Service.Payload.Response.Order.InvoiceResponseDto;
+import com.Ecommerce.Order_Service.Payload.Response.Order.OrderResponseDto;
+import com.Ecommerce.Order_Service.Payload.Response.Order.OrderTotalResponseDto;
+import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
 import com.Ecommerce.Order_Service.Services.OrderService;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
- * REST controller for order operations
+ * REST controller for order operations using DTOs
  */
 @RestController
+@RequestMapping("/api/orders")
+@Validated
 public class OrderController {
 
     @Autowired
     private OrderService orderService;
 
+    @Autowired
+    private OrderMapper orderMapper;
+
     /**
      * Create a new order
      */
     @PostMapping
-    public ResponseEntity<Order> createOrder(@RequestBody Map<String, Object> orderRequest) {
+    public ResponseEntity<OrderResponseDto> createOrder(@Valid @RequestBody CreateOrderRequestDto orderRequest) {
         try {
-            UUID userId = UUID.fromString((String) orderRequest.get("userId"));
-            UUID cartId = UUID.fromString((String) orderRequest.get("cartId"));
-            UUID billingAddressId = UUID.fromString((String) orderRequest.get("billingAddressId"));
-            UUID shippingAddressId = UUID.fromString((String) orderRequest.get("shippingAddressId"));
+            Order newOrder = orderService.createOrder(
+                    orderRequest.getUserId(),
+                    orderRequest.getCartId(),
+                    orderRequest.getBillingAddressId(),
+                    orderRequest.getShippingAddressId()
+            );
 
-            Order newOrder = orderService.createOrder(userId, cartId, billingAddressId, shippingAddressId);
-            return new ResponseEntity<>(newOrder, HttpStatus.CREATED);
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(newOrder);
+            return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format: " + e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request data: " + e.getMessage());
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error creating order: " + e.getMessage());
         }
@@ -50,10 +66,11 @@ public class OrderController {
      * Get an order by ID
      */
     @GetMapping("/{orderId}")
-    public ResponseEntity<Order> getOrderById(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderResponseDto> getOrderById(@PathVariable UUID orderId) {
         try {
             Order order = orderService.getOrderById(orderId);
-            return ResponseEntity.ok(order);
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(order);
+            return ResponseEntity.ok(responseDto);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
@@ -63,24 +80,25 @@ public class OrderController {
      * Get all orders for a user
      */
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<Order>> getOrdersByUser(@PathVariable UUID userId) {
+    public ResponseEntity<List<OrderResponseDto>> getOrdersByUser(@PathVariable UUID userId) {
         List<Order> orders = orderService.getOrdersByUserId(userId);
-        return ResponseEntity.ok(orders);
+        List<OrderResponseDto> responseDtos = orderMapper.toOrderResponseDtoList(orders);
+        return ResponseEntity.ok(responseDtos);
     }
 
     /**
      * Update order status
      */
     @PatchMapping("/{orderId}/status")
-    public ResponseEntity<Order> updateOrderStatus(
+    public ResponseEntity<OrderResponseDto> updateOrderStatus(
             @PathVariable UUID orderId,
-            @RequestBody Map<String, String> statusUpdate) {
+            @Valid @RequestBody UpdateOrderStatusRequestDto statusUpdate) {
         try {
-            OrderStatus newStatus = OrderStatus.valueOf(statusUpdate.get("status"));
-            Order updatedOrder = orderService.updateOrderStatus(orderId, newStatus);
-            return ResponseEntity.ok(updatedOrder);
+            Order updatedOrder = orderService.updateOrderStatus(orderId, statusUpdate.getStatus());
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(updatedOrder);
+            return ResponseEntity.ok(responseDto);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value: " + e.getMessage());
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
@@ -90,10 +108,11 @@ public class OrderController {
      * Cancel an order
      */
     @PostMapping("/{orderId}/cancel")
-    public ResponseEntity<Order> cancelOrder(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderResponseDto> cancelOrder(@PathVariable UUID orderId) {
         try {
             Order canceledOrder = orderService.cancelOrder(orderId);
-            return ResponseEntity.ok(canceledOrder);
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(canceledOrder);
+            return ResponseEntity.ok(responseDto);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
@@ -105,10 +124,12 @@ public class OrderController {
      * Generate invoice for an order
      */
     @GetMapping("/{orderId}/invoice")
-    public ResponseEntity<String> generateInvoice(@PathVariable UUID orderId) {
+    public ResponseEntity<InvoiceResponseDto> generateInvoice(@PathVariable UUID orderId) {
         try {
-            String invoice = orderService.generateInvoice(orderId);
-            return ResponseEntity.ok(invoice);
+            Order order = orderService.getOrderById(orderId);
+            String invoiceData = orderService.generateInvoice(orderId);
+            InvoiceResponseDto responseDto = orderMapper.toInvoiceResponseDto(invoiceData, order);
+            return ResponseEntity.ok(responseDto);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
@@ -118,10 +139,11 @@ public class OrderController {
      * Get order items for an order
      */
     @GetMapping("/{orderId}/items")
-    public ResponseEntity<List<OrderItem>> getOrderItems(@PathVariable UUID orderId) {
+    public ResponseEntity<List<OrderItemResponseDto>> getOrderItems(@PathVariable UUID orderId) {
         try {
             List<OrderItem> items = orderService.getOrderItems(orderId);
-            return ResponseEntity.ok(items);
+            List<OrderItemResponseDto> responseDtos = orderMapper.toOrderItemResponseDtoList(items);
+            return ResponseEntity.ok(responseDtos);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
@@ -131,12 +153,14 @@ public class OrderController {
      * Add item to an order
      */
     @PostMapping("/{orderId}/items")
-    public ResponseEntity<OrderItem> addOrderItem(
+    public ResponseEntity<OrderItemResponseDto> addOrderItem(
             @PathVariable UUID orderId,
-            @RequestBody OrderItem orderItem) {
+            @Valid @RequestBody CreateOrderItemRequestDto orderItemRequest) {
         try {
-            OrderItem addedItem = orderService.addOrderItem(orderId, orderItem);
-            return new ResponseEntity<>(addedItem, HttpStatus.CREATED);
+            OrderItem orderItemEntity = orderMapper.toOrderItem(orderItemRequest);
+            OrderItem addedItem = orderService.addOrderItem(orderId, orderItemEntity);
+            OrderItemResponseDto responseDto = orderMapper.toOrderItemResponseDto(addedItem);
+            return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
@@ -148,14 +172,18 @@ public class OrderController {
      * Update item quantity
      */
     @PatchMapping("/{orderId}/items/{itemId}")
-    public ResponseEntity<OrderItem> updateItemQuantity(
+    public ResponseEntity<OrderItemResponseDto> updateItemQuantity(
             @PathVariable UUID orderId,
             @PathVariable UUID itemId,
-            @RequestBody Map<String, Integer> quantityUpdate) {
+            @Valid @RequestBody UpdateOrderItemQuantityRequestDto quantityUpdate) {
         try {
-            int newQuantity = quantityUpdate.get("quantity");
-            OrderItem updatedItem = orderService.updateOrderItemQuantity(orderId, itemId, newQuantity);
-            return ResponseEntity.ok(updatedItem);
+            OrderItem updatedItem = orderService.updateOrderItemQuantity(
+                    orderId,
+                    itemId,
+                    quantityUpdate.getQuantity()
+            );
+            OrderItemResponseDto responseDto = orderMapper.toOrderItemResponseDto(updatedItem);
+            return ResponseEntity.ok(responseDto);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalArgumentException e) {
@@ -167,10 +195,45 @@ public class OrderController {
      * Calculate order total
      */
     @GetMapping("/{orderId}/total")
-    public ResponseEntity<Map<String, BigDecimal>> calculateOrderTotal(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderTotalResponseDto> calculateOrderTotal(@PathVariable UUID orderId) {
         try {
+            Order order = orderService.getOrderById(orderId);
             BigDecimal total = orderService.calculateOrderTotal(orderId);
-            return ResponseEntity.ok(Map.of("total", total));
+            OrderTotalResponseDto responseDto = orderMapper.toOrderTotalResponseDto(total, order);
+            return ResponseEntity.ok(responseDto);
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    /**
+     * Delete/Remove an order item
+     */
+    @DeleteMapping("/{orderId}/items/{itemId}")
+    public ResponseEntity<Void> removeOrderItem(
+            @PathVariable UUID orderId,
+            @PathVariable UUID itemId) {
+        try {
+            orderService.removeOrderItem(orderId, itemId);
+            return ResponseEntity.noContent().build();
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    /**
+     * Get order summary (without items details)
+     */
+    @GetMapping("/{orderId}/summary")
+    public ResponseEntity<OrderResponseDto> getOrderSummary(@PathVariable UUID orderId) {
+        try {
+            Order order = orderService.getOrderById(orderId);
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(order);
+            // Clear items for summary view
+            responseDto.setItems(null);
+            return ResponseEntity.ok(responseDto);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
