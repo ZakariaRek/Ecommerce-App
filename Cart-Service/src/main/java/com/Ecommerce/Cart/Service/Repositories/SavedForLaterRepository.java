@@ -12,4 +12,31 @@ import java.util.UUID;
 public interface SavedForLaterRepository extends MongoRepository<SavedForLater, UUID> {
     List<SavedForLater> findByUserId(UUID userId);
     void deleteByUserIdAndProductId(UUID userId, UUID productId);
+
+//    List<SavedForLater> findByUserId(UUID userId);
+
+    /**
+     * Find a specific saved item by user and product
+     */
+    SavedForLater findByUserIdAndProductId(UUID userId, UUID productId);
+
+    /**
+     * Delete a specific saved item by user and product
+     */
+//    void deleteByUserIdAndProductId(UUID userId, UUID productId);
+
+    /**
+     * Check if a product is saved by a user
+     */
+    boolean existsByUserIdAndProductId(UUID userId, UUID productId);
+
+    /**
+     * Count saved items for a user
+     */
+    long countByUserId(UUID userId);
+
+    /**
+     * Delete all saved items for a user
+     */
+    void deleteByUserId(UUID userId);
 }

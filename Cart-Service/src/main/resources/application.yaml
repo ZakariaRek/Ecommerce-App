@@ -73,19 +73,19 @@ redis:
   maximumActiveConnectionCount: 128
 
 # Logging configuration for debugging
-logging:
-  level:
-    root: INFO
-    org.springframework.web: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.boot.autoconfigure: DEBUG
-    com.Ecommerce: DEBUG  # Your package
-    org.springframework.kafka: DEBUG
-    org.apache.kafka: WARN
-    com.Ecommerce.Cart.Service.Lisiteners: DEBUG
-    com.Ecommerce.Cart.Service.Config.KafkaProducerConfig: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+#logging:
+#  level:
+#    root: INFO
+#    org.springframework.web: DEBUG
+#    org.springframework.security: DEBUG
+#    org.springframework.boot.autoconfigure: DEBUG
+#    com.Ecommerce: DEBUG  # Your package
+#    org.springframework.kafka: DEBUG
+#    org.apache.kafka: WARN
+#    com.Ecommerce.Cart.Service.Lisiteners: DEBUG
+#    com.Ecommerce.Cart.Service.Config.KafkaProducerConfig: DEBUG
+#  pattern:
+#    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 # Management endpoints for monitoring
 management:
