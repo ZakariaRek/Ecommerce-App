@@ -110,6 +110,8 @@ public class AsyncProductService {
                 .price(productInfo.getPrice())
                 .availableQuantity(productInfo.getAvailableQuantity())
                 .inStock(productInfo.getInStock())
+                .discountType(productInfo.getDiscountType())
+                .discountValue(productInfo.getDiscountValue())
                 .productStatus(productInfo.getStatus() != null ? productInfo.getStatus().toString() : null)
                 .build();
     }

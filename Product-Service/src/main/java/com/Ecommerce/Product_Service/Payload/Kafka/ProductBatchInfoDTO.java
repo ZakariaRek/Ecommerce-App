@@ -24,4 +24,6 @@ public class ProductBatchInfoDTO {
     private Integer availableQuantity;
     private ProductStatus status;
     private BigDecimal price;
+    private BigDecimal discountValue;
+    private String discountType;
 }

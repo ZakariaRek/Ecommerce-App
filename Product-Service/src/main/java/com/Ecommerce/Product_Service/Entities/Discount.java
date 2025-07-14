@@ -38,7 +38,8 @@ public class Discount {
 
     public boolean isActive() {
         LocalDateTime now = LocalDateTime.now();
-        return now.isAfter(startDate) && now.isBefore(endDate);
+        return (now.isAfter(startDate) || now.isEqual(startDate)) &&
+                (now.isBefore(endDate) || now.isEqual(endDate));
     }
 }
 
