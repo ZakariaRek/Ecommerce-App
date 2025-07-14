@@ -16,10 +16,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 @RestController
 @Tag(name = "Shopping Cart", description = "Cart management endpoints")
 @RequiredArgsConstructor
+@Slf4j
 public class ShoppingCartController {
     private final ShoppingCartService cartService;
     private final SavedForLaterService savedForLaterService;
@@ -164,7 +167,11 @@ public class ShoppingCartController {
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Checkout completed successfully", null));
     }
 
-    // Saved for later endpoints
+
+
+
+
+    //                                Saved for later endpoints
 
     @Operation(
             summary = "Get saved items",
@@ -182,14 +189,14 @@ public class ShoppingCartController {
     @GetMapping("/{userId}/saved")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<List<SavedItemResponse>>> getSavedItems(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId) {
-        List<SavedForLater> savedItems = savedForLaterService.getSavedItems(userId);
+            @PathVariable String userId) {
+        UUID parsedUserId = parseUUID(userId);
+        List<SavedForLater> savedItems = savedForLaterService.getSavedItems(parsedUserId);
         List<SavedItemResponse> response = savedItems.stream()
                 .map(this::mapToSavedItemResponse)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(response));
     }
-
     @Operation(
             summary = "Save item for later",
             description = "Saves an item for later purchase"
@@ -202,19 +209,54 @@ public class ShoppingCartController {
                             schema = @Schema(implementation = SavedItemResponse.class))
             ),
             @ApiResponse(responseCode = "400", description = "Invalid request data"),
+            @ApiResponse(responseCode = "409", description = "Item already saved"),
             @ApiResponse(responseCode = "500", description = "Server error")
     })
     @PostMapping("/{userId}/saved")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<SavedItemResponse>> saveForLater(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Product details to save", required = true)
             @Valid @RequestBody SaveForLaterRequest request) {
-        SavedForLater savedItem = savedForLaterService.saveForLater(userId, request.getProductId());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item saved for later", mapToSavedItemResponse(savedItem)));
-    }
 
+        try {
+            // ✅ FIXED: Parse userId first and handle errors
+            UUID parsedUserId = parseUUID(userId);
+
+            // ✅ FIXED: Validate request data properly
+            if (request.getProductId() == null) {
+                return ResponseEntity.badRequest()
+                        .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Product ID is required"));
+            }
+
+            // ✅ FIXED: Don't parse productId again since SaveForLaterRequest.getProductId() already returns UUID
+            UUID productId = request.getProductId();
+
+            // ✅ FIXED: Call service method with proper error handling
+            SavedForLater savedItem = savedForLaterService.saveForLater(parsedUserId, productId);
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(
+                            "Item saved for later",
+                            mapToSavedItemResponse(savedItem)));
+
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("UUID format")) {
+                return ResponseEntity.badRequest()
+                        .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+            } else if (e.getMessage().contains("already saved")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Item is already saved for later"));
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error(e.getMessage()));
+            }
+        } catch (Exception e) {
+            log.error("Error saving item for later: userId={}, productId={}", userId, request.getProductId(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Failed to save item for later"));
+        }
+    }
     @Operation(
             summary = "Move saved item to cart",
             description = "Moves an item from saved-for-later to the active shopping cart"
@@ -233,13 +275,13 @@ public class ShoppingCartController {
     @PostMapping("/{userId}/saved/{productId}/move-to-cart")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<ShoppingCartResponse>> moveToCart(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Product ID to move to cart", required = true, example = "123e4567-e89b-12d3-a456-426614174001")
-            @PathVariable UUID productId,
+            @PathVariable String productId,
             @Parameter(description = "Price details", required = true)
             @Valid @RequestBody MoveToCartRequest request) {
-        savedForLaterService.moveToCart(userId, productId, request.getPrice());
-        ShoppingCart updatedCart = cartService.getOrCreateCart(userId);
+        savedForLaterService.moveToCart(parseUUID(userId), parseUUID(productId), request.getPrice());
+        ShoppingCart updatedCart = cartService.getOrCreateCart(parseUUID(userId));
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item moved to cart", mapToCartResponse(updatedCart)));
     }
 
@@ -259,12 +301,137 @@ public class ShoppingCartController {
     @DeleteMapping("/{userId}/saved/{productId}")
     public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Void>> removeFromSaved(
             @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
-            @PathVariable UUID userId,
+            @PathVariable String userId,
             @Parameter(description = "Product ID to remove", required = true, example = "123e4567-e89b-12d3-a456-426614174001")
-            @PathVariable UUID productId) {
-        savedForLaterService.removeFromSaved(userId, productId);
+            @PathVariable String productId) {
+        savedForLaterService.removeFromSaved(parseUUID(userId), parseUUID(productId));
         return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("Item removed from saved items", null));
     }
+
+
+
+
+    @Operation(
+            summary = "Clear all saved items",
+            description = "Removes all saved items for the user"
+    )
+    @DeleteMapping("/{userId}/saved")
+    public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Void>> clearAllSavedItems(
+            @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable String userId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            savedForLaterService.clearAllSavedItems(parsedUserId);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success("All saved items cleared", null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Failed to clear saved items"));
+        }
+    }
+
+    @Operation(
+            summary = "Get saved items count",
+            description = "Returns the number of items saved for later by the user"
+    )
+    @GetMapping("/{userId}/saved/count")
+    public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Long>> getSavedItemsCount(
+            @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable String userId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            long count = savedForLaterService.getSavedItemCount(parsedUserId);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(count));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        }
+    }
+
+    @Operation(
+            summary = "Check if product is saved",
+            description = "Checks if a specific product is saved for later by the user"
+    )
+    @GetMapping("/{userId}/saved/{productId}/exists")
+    public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<Boolean>> isProductSaved(
+            @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable String userId,
+            @Parameter(description = "Product ID to check", required = true, example = "123e4567-e89b-12d3-a456-426614174001")
+            @PathVariable String productId) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            UUID parsedProductId = parseUUID(productId);
+            boolean isSaved = savedForLaterService.isProductSaved(parsedUserId, parsedProductId);
+            return ResponseEntity.ok(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(isSaved));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format"));
+        }
+    }
+
+    @Operation(
+            summary = "Bulk save items for later",
+            description = "Saves multiple items for later in a single request"
+    )
+    @PostMapping("/{userId}/saved/bulk")
+    public ResponseEntity<com.Ecommerce.Cart.Service.Payload.Response.ApiResponse<List<SavedItemResponse>>> bulkSaveForLater(
+            @Parameter(description = "User ID", required = true, example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable String userId,
+            @Parameter(description = "List of product IDs to save", required = true)
+            @Valid @RequestBody BulkSaveForLaterRequest request) {
+        try {
+            UUID parsedUserId = parseUUID(userId);
+            List<SavedItemResponse> savedItems = new ArrayList<>();
+            int successCount = 0;
+            int skipCount = 0;
+
+            for (UUID productId : request.getProductIds()) {
+                try {
+                    SavedForLater savedItem = savedForLaterService.saveForLater(parsedUserId, productId);
+                    savedItems.add(mapToSavedItemResponse(savedItem));
+                    successCount++;
+                } catch (IllegalArgumentException e) {
+                    if (e.getMessage().contains("already saved")) {
+                        skipCount++;
+                    } else {
+                        throw e; // Re-throw other validation errors
+                    }
+                }
+            }
+
+            String message = String.format("Saved %d items for later", successCount);
+            if (skipCount > 0) {
+                message += String.format(" (%d items were already saved)", skipCount);
+            }
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.success(message, savedItems));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Invalid UUID format: " + userId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Failed to save items for later"));
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // Helper methods for mapping entities to DTOs
     private ShoppingCartResponse mapToCartResponse(ShoppingCart cart) {
