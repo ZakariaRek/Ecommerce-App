@@ -40,6 +40,8 @@ public class KafkaProducerConfig {
     public static final String TOPIC_CART_ABANDONED = "cart-abandoned";
     public static final String TOPIC_CART_RECOVERED = "cart-recovered";
 
+
+
     // Cart Item Topics
     public static final String TOPIC_CART_ITEM_ADDED = "cart-item-added";
     public static final String TOPIC_CART_ITEM_UPDATED = "cart-item-updated";
@@ -57,6 +59,11 @@ public class KafkaProducerConfig {
     public static final String TOPIC_COUPON_REMOVED = "coupon-removed";
     public static final String TOPIC_COUPON_EXPIRED = "coupon-expired";
     public static final String TOPIC_COUPON_VALIDATED = "coupon-validated";
+
+    // Save4Later Topics (for BFF communication)
+    public static final String TOPIC_SAVED4LATER_REQUEST = "saved4later.request";
+    public static final String TOPIC_SAVED4LATER_RESPONSE = "saved4later.response";
+    public static final String TOPIC_SAVED4LATER_ERROR = "saved4later.error";
 
     /**
      * ✅ FIXED Producer Configuration
@@ -328,6 +335,31 @@ public class KafkaProducerConfig {
     @Bean
     public NewTopic couponValidatedTopic() {
         return TopicBuilder.name(TOPIC_COUPON_VALIDATED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    // Save4Later BFF Communication Topics
+    @Bean
+    public NewTopic saved4laterRequestTopic() {
+        return TopicBuilder.name(TOPIC_SAVED4LATER_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic saved4laterResponseTopic() {
+        return TopicBuilder.name(TOPIC_SAVED4LATER_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic saved4laterErrorTopic() {
+        return TopicBuilder.name(TOPIC_SAVED4LATER_ERROR)
                 .partitions(3)
                 .replicas(1)
                 .build();
