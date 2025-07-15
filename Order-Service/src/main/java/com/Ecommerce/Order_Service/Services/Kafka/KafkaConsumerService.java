@@ -141,4 +141,5 @@ public class KafkaConsumerService {
             log.error("Error processing product price change event", e);
         }
     }
+
 }
