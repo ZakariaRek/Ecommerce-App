@@ -70,7 +70,7 @@ public class OrderService {
      * Get all orders for a user
      */
     public List<Order> getOrdersByUserId(UUID userId) {
-        return orderRepository.findByUserId(userId);
+        return orderRepository.findRecentOrdersByUserId(userId);
     }
 
     /**

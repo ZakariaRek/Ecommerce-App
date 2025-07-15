@@ -1,6 +1,6 @@
 package com.Ecommerce.Gateway_Service.Kafka.DTOs;
 
-import com.Ecommerce.Gateway_Service.DTOs.CartServiceResponseDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.CartServiceResponseDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

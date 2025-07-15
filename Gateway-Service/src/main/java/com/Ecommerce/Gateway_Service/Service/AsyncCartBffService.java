@@ -1,9 +1,7 @@
 package com.Ecommerce.Gateway_Service.Service;
 
-import com.Ecommerce.Gateway_Service.DTOs.EnrichedCartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
 import com.Ecommerce.Gateway_Service.DTOs.EnrichedShoppingCartResponse;
-import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
-import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchResponseDTO;
 import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

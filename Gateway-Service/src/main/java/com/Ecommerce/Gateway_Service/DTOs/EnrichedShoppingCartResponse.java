@@ -1,5 +1,6 @@
 package com.Ecommerce.Gateway_Service.DTOs;
 
+import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
