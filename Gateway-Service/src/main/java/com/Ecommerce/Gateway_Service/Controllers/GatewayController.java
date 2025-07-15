@@ -168,6 +168,8 @@ public class GatewayController {
                 new ServiceInfo("order-service", "Order Management Service", "/api/orders/**", "lb://ORDER-SERVICE"),
                 new ServiceInfo("payment-service", "Payment Processing Service", "/api/payments/**", "lb://PAYMENT-SERVICE"),
                 new ServiceInfo("cart-service", "Shopping Cart Service", "/api/cart/**", "lb://CART-SERVICE"),
+                new ServiceInfo("saved4later-service", "Shopping Cart Service", "/api/saved4later/**", "lb://CART-SERVICE"),
+
                 new ServiceInfo("loyalty-service", "Loyalty Program Service", "/api/loyalty/**", "lb://LOYALTY-SERVICE"),
                 new ServiceInfo("notification-service", "Notification Service", "/api/notifications/**", "lb://NOTIFICATION-SERVICE"),
                 new ServiceInfo("shipping-service", "Shipping Service", "/api/shipping/**", "lb://SHIPPING-SERVICE")

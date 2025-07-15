@@ -1,6 +1,5 @@
 package com.Ecommerce.Gateway_Service.Kafka.DTOs;
 
-import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,6 +9,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SavedForLaterResponseDTO {
-
+public class Saved4LaterRequestDTO {
+    private String correlationId;
+    private String userId;
+    private long timestamp;
 }
+
