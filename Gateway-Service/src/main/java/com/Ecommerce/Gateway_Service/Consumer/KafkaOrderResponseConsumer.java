@@ -403,4 +403,100 @@ public class KafkaOrderResponseConsumer {
                 .updatedAt(LocalDateTime.now())
                 .build();
     }
+
+    /**
+     * ✅ Listen for user orders responses from order service
+     */
+    @KafkaListener(
+            topics = "user.orders.response",
+            groupId = "gateway-bff-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleUserOrdersResponse(ConsumerRecord<String, Object> record) {
+        Object responsePayload = record.value();
+        log.info("Received user orders response: {}", responsePayload);
+
+        try {
+            Map<String, Object> responseMap = convertToMap(responsePayload);
+            String correlationId = (String) responseMap.get("correlationId");
+            Boolean success = (Boolean) responseMap.get("success");
+            String message = (String) responseMap.get("message");
+
+            log.info("Processing user orders response - correlationId: {}, success: {}, message: {}",
+                    correlationId, success, message);
+
+            if (correlationId == null) {
+                log.error("No correlationId in user orders response: {}", responsePayload);
+                return;
+            }
+
+            if (success != null && success) {
+                Object orderIdsData = responseMap.get("data");
+
+                if (orderIdsData != null) {
+                    List<String> orderIds = convertToOrderIdsList(orderIdsData);
+
+                    log.info("Completing user orders request for correlationId: {} with {} order IDs",
+                            correlationId, orderIds.size());
+
+                    asyncResponseManager.completeRequest(correlationId, orderIds);
+                } else {
+                    log.error("No order IDs data in successful user orders response: {}", responsePayload);
+                    asyncResponseManager.completeRequest(correlationId, List.of()); // Empty list
+                }
+            } else {
+                log.error("User orders response indicates failure: {}", message);
+                asyncResponseManager.completeRequestExceptionally(correlationId,
+                        new RuntimeException("User orders service error: " + message));
+            }
+
+        } catch (Exception e) {
+            log.error("Error processing user orders response: {}", responsePayload, e);
+            handleResponseError(responsePayload, e);
+        }
+    }
+
+    /**
+     * ✅ Listen for user orders error responses
+     */
+    @KafkaListener(
+            topics = "user.orders.error",
+            groupId = "gateway-bff-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleUserOrdersError(ConsumerRecord<String, Object> record) {
+        Object errorPayload = record.value();
+        log.error("Received user orders error response: {}", errorPayload);
+        handleErrorResponse(errorPayload, "User orders service error");
+    }
+
+    /**
+     * ✅ Convert order IDs data to list of strings
+     */
+    private List<String> convertToOrderIdsList(Object orderIdsData) {
+        try {
+            if (orderIdsData instanceof List) {
+                List<?> orderIdsList = (List<?>) orderIdsData;
+                return orderIdsList.stream()
+                        .map(Object::toString)
+                        .collect(Collectors.toList());
+            } else if (orderIdsData instanceof String) {
+                // Handle comma-separated string
+                String orderIdsString = (String) orderIdsData;
+                if (orderIdsString.trim().isEmpty()) {
+                    return List.of();
+                }
+                return Arrays.stream(orderIdsString.split(","))
+                        .map(String::trim)
+                        .filter(id -> !id.isEmpty())
+                        .collect(Collectors.toList());
+            } else {
+                log.warn("Unexpected order IDs data type: {}", orderIdsData.getClass());
+                return List.of();
+            }
+        } catch (Exception e) {
+            log.error("Error converting order IDs data: {}", orderIdsData, e);
+            return List.of();
+        }
+    }
 }

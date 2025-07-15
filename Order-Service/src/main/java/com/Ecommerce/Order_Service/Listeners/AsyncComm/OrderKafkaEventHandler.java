@@ -3,6 +3,7 @@ package com.Ecommerce.Order_Service.Listeners.AsyncComm;
 
 import com.Ecommerce.Order_Service.Entities.Order;
 import com.Ecommerce.Order_Service.Entities.OrderItem;
+import com.Ecommerce.Order_Service.Entities.OrderStatus;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -193,7 +194,93 @@ public class OrderKafkaEventHandler {
         }
     }
 
+    /**
+     * ✅ Handle batch order requests (optional - for future use)
+     */
+    @KafkaListener(
+            topics = "order.batch.request",
+            groupId = "order-service-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    @Transactional(readOnly = true)
+    public void handleOrderBatchRequest(ConsumerRecord<String, Object> record) {
+        Object requestPayload = record.value();
+        String correlationId = record.key();
 
+        log.info("📦 ORDER SERVICE: Received batch order request with correlationId: {}", correlationId);
 
+        try {
+            Map<String, Object> request = convertToMap(requestPayload);
+            String userId = (String) request.get("userId");
+            String status = (String) request.get("status");
+            Integer limit = (Integer) request.get("limit");
 
+            if (userId == null || userId.trim().isEmpty()) {
+                sendBatchErrorResponse(correlationId, "User ID is required for batch request");
+                return;
+            }
+
+            log.info("📦 ORDER SERVICE: Fetching orders for user: {} with status: {}", userId, status);
+
+            // Fetch orders based on criteria
+            List<Order> orders;
+            if (status != null && !status.isEmpty()) {
+                orders = orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(
+                        UUID.fromString(userId),
+                        OrderStatus.valueOf(status)
+                );
+            } else {
+                orders = orderRepository.findByUserIdOrderByCreatedAtDesc(UUID.fromString(userId));
+            }
+
+            // Apply limit if specified
+            if (limit != null && limit > 0) {
+                orders = orders.stream().limit(limit).collect(Collectors.toList());
+            }
+
+            log.info("📦 ORDER SERVICE: Found {} orders for user: {}", orders.size(), userId);
+
+            // Convert orders to response format
+            List<Map<String, Object>> orderDataList = orders.stream()
+                    .map(this::convertOrderToMap)
+                    .collect(Collectors.toList());
+
+            // Send successful response
+            sendBatchSuccessResponse(correlationId, orderDataList);
+
+        } catch (Exception e) {
+            log.error("📦 ORDER SERVICE: Error processing batch order request", e);
+            sendBatchErrorResponse(correlationId, "Internal error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ Send batch success response
+     */
+    private void sendBatchSuccessResponse(String correlationId, List<Map<String, Object>> orders) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("correlationId", correlationId);
+        response.put("success", true);
+        response.put("message", "Orders retrieved successfully");
+        response.put("data", orders);
+        response.put("count", orders.size());
+        response.put("timestamp", System.currentTimeMillis());
+
+        log.info("📦 ORDER SERVICE: Sending batch success response with {} orders", orders.size());
+
+        kafkaTemplate.send("order.batch.response", correlationId, response);
+    }
+
+    /**
+     * ✅ Send batch error response
+     */
+    private void sendBatchErrorResponse(String correlationId, String errorMessage) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("correlationId", correlationId);
+        response.put("success", false);
+        response.put("message", errorMessage);
+        response.put("timestamp", System.currentTimeMillis());
+
+        kafkaTemplate.send("order.batch.error", correlationId, response);
+    }
 }
