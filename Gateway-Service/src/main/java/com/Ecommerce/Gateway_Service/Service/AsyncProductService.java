@@ -1,9 +1,9 @@
 package com.Ecommerce.Gateway_Service.Service;
 
-import com.Ecommerce.Gateway_Service.DTOs.EnrichedCartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
 import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchRequestEventDTO;
 import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchResponseDTO;
-import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Product.ProductBatchInfoDTO;
 import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
 import com.Ecommerce.Gateway_Service.Kafka.KafkaTopics;
 import lombok.RequiredArgsConstructor;

@@ -1,4 +1,4 @@
-package com.Ecommerce.Gateway_Service.DTOs;
+package com.Ecommerce.Gateway_Service.DTOs.Product;
 
 import lombok.Builder;
 import lombok.Data;
