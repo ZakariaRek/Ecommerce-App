@@ -1,6 +1,12 @@
 package com.Ecommerce.Gateway_Service.Service;
 
 import com.Ecommerce.Gateway_Service.DTOs.*;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.CartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.CartServiceResponseDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.ShoppingCartDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Product.ProductBatchInfoDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Product.ProductBatchRequestDTO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

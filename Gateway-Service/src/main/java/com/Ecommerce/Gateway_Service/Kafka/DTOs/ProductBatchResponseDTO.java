@@ -1,5 +1,5 @@
 package com.Ecommerce.Gateway_Service.Kafka.DTOs;
-import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Product.ProductBatchInfoDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

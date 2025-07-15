@@ -1,9 +1,9 @@
-package com.Ecommerce.Gateway_Service.Config;
+package com.Ecommerce.Gateway_Service.Consumer;
 
-import com.Ecommerce.Gateway_Service.DTOs.EnrichedCartItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
 import com.Ecommerce.Gateway_Service.DTOs.EnrichedShoppingCartResponse;
 import com.Ecommerce.Gateway_Service.Kafka.DTOs.ProductBatchResponseDTO;
-import com.Ecommerce.Gateway_Service.DTOs.ProductBatchInfoDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Product.ProductBatchInfoDTO;
 import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class KafkaResponseConsumer {
+public class KafkaCartResponseConsumer {
 
     private final AsyncResponseManager asyncResponseManager;
     private final ObjectMapper objectMapper;

@@ -33,7 +33,7 @@
         <appender-ref ref="CUSTOM_CONSOLE"/>
     </logger>
 
-    <logger name="com.Ecommerce.Gateway_Service.Config.KafkaResponseConsumer" level="DEBUG" additivity="false">
+    <logger name="com.Ecommerce.Gateway_Service.Consumer.KafkaResponseConsumer" level="DEBUG" additivity="false">
         <appender-ref ref="CUSTOM_CONSOLE"/>
     </logger>
 
