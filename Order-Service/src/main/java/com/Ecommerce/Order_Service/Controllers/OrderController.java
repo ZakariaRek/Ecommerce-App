@@ -19,6 +19,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -30,7 +31,7 @@ import java.util.UUID;
  * REST controller for order operations using DTOs
  */
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/order")
 @Validated
 public class OrderController {
 
@@ -39,6 +40,21 @@ public class OrderController {
 
     @Autowired
     private OrderMapper orderMapper;
+
+
+    /**
+     * Get an orders list
+     */
+    @GetMapping
+    public ResponseEntity<List<OrderResponseDto>> getAllOrders() {
+        try {
+            List<Order> orders = orderService.getAllOrders();
+            List<OrderResponseDto> responseDtos = orderMapper.toOrderResponseDtoList(orders);
+            return ResponseEntity.ok(responseDtos);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error retrieving orders: " + e.getMessage());
+        }
+    }
 
     /**
      * Create a new order
@@ -52,6 +68,16 @@ public class OrderController {
                     orderRequest.getBillingAddressId(),
                     orderRequest.getShippingAddressId()
             );
+
+            // Add items if provided in the request
+            if (orderRequest.getItems() != null && !orderRequest.getItems().isEmpty()) {
+                List<OrderItem> items = orderMapper.toOrderItemList(orderRequest.getItems());
+                for (OrderItem item : items) {
+                    orderService.addOrderItem(newOrder.getId(), item);
+                }
+                // Refresh the order to get updated items and total
+                newOrder = orderService.getOrderById(newOrder.getId());
+            }
 
             OrderResponseDto responseDto = orderMapper.toOrderResponseDto(newOrder);
             return new ResponseEntity<>(responseDto, HttpStatus.CREATED);

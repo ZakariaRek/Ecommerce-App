@@ -1,8 +1,11 @@
 package com.Ecommerce.Order_Service.Payload.Request.order;
 
 
+import com.Ecommerce.Order_Service.Payload.Request.OrderItem.CreateOrderItemRequestDto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -18,4 +21,7 @@ public class CreateOrderRequestDto {
 
     @NotNull(message = "Shipping address ID is required")
     private UUID shippingAddressId;
+
+    private List<CreateOrderItemRequestDto> items;
+
 }

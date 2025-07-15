@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -28,6 +29,14 @@ public class OrderService {
     @Autowired
     private OrderKafkaService kafkaService;
 
+
+
+    /**
+     * Get all orders
+     */
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
     /**
      * Creates a new order
      */
@@ -44,11 +53,19 @@ public class OrderService {
     /**
      * Get an order by ID
      */
+    /**
+     * Get an order by ID with items loaded
+     */
     public Order getOrderById(UUID orderId) {
-        return orderRepository.findById(orderId)
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found with ID: " + orderId));
-    }
 
+        // Explicitly load items to avoid lazy loading issues
+        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+        order.setItems(items);
+
+        return order;
+    }
     /**
      * Get all orders for a user
      */
