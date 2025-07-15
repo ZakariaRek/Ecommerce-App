@@ -166,6 +166,8 @@ public class ProductKafkaEventHandler {
      * ✅ Convert service DTO to Kafka DTO
      */
     private ProductBatchInfoDTO convertToKafkaDTO(com.Ecommerce.Product_Service.Payload.Product.ProductBatchResponseDTO serviceDTO) {
+
+
         return ProductBatchInfoDTO.builder()
                 .id(serviceDTO.getId())
                 .name(serviceDTO.getName())
@@ -174,6 +176,8 @@ public class ProductKafkaEventHandler {
                 .inStock(serviceDTO.getInStock())
                 .availableQuantity(serviceDTO.getAvailableQuantity())
                 .status(serviceDTO.getStatus())
+                .discountType(serviceDTO.getDiscountType())
+                .discountValue(serviceDTO.getDiscountValue())
                 .build();
     }
     /**

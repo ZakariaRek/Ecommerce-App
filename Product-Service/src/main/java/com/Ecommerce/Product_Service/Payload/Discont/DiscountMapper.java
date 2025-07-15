@@ -47,6 +47,7 @@ public class DiscountMapper {
         dto.setProductId(entity.getProduct() != null ? entity.getProduct().getId() : null);
         dto.setDiscountType(entity.getDiscountType());
         dto.setDiscountValue(entity.getDiscountValue());
+        dto.setStartDate(entity.getStartDate());
         dto.setEndDate(entity.getEndDate());
         dto.setActive(entity.isActive());
 

@@ -21,4 +21,6 @@ public class ProductBatchResponseDTO {
     private Boolean inStock;
     private Integer availableQuantity;
     private ProductStatus status;
+    private BigDecimal discountValue;
+    private String discountType; // e.g., "PERCENTAGE", "AMOUNT"
 }

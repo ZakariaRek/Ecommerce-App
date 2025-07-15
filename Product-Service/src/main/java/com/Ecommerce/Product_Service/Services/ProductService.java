@@ -162,6 +162,17 @@ public class ProductService {
     }
 
     private ProductBatchResponseDTO mapToProductBatchResponse(Product product) {
+
+        BigDecimal totalDiscountValue = product.getDiscounts().stream()
+                .filter(discount -> discount.isActive())
+                .map(discount -> discount.applyDiscount(product.getPrice()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        String discountTypes = product.getDiscounts().stream()
+                .filter(discount -> discount.isActive())
+                .map(discount -> discount.getDiscountType().toString())
+                .collect(Collectors.joining(", "));
+
         return ProductBatchResponseDTO.builder()
                 .id(product.getId())
                 .name(product.getName())
@@ -170,6 +181,8 @@ public class ProductService {
                 .inStock(isProductInStock(product))
                 .availableQuantity(getAvailableQuantity(product))
                 .status(product.getStatus())
+                .discountValue(totalDiscountValue)
+                .discountType(discountTypes.isEmpty() ? null : discountTypes)
                 .build();
     }
 

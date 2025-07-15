@@ -501,6 +501,9 @@ public class KafkaResponseConsumer {
                     .availableQuantity(convertToInteger((Number) productMap.get("availableQuantity"), "availableQuantity"))
                     .status((String) productMap.get("status"))
                     .price(convertToBigDecimal((Number) productMap.get("price"), "price"))
+                    .discountType((String) productMap.get("discountType"))
+                    .discountValue((Number) productMap.get("discountValue") != null ?
+                            convertToBigDecimal((Number) productMap.get("discountValue"), "discountValue") : BigDecimal.ZERO)
                     .build();
         } catch (Exception e) {
             log.error("Error converting product info: {}", productMap, e);
