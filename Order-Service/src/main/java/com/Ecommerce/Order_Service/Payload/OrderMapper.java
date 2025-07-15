@@ -61,6 +61,15 @@ public class OrderMapper {
         return item;
     }
 
+    public List<OrderItem> toOrderItemList(List<CreateOrderItemRequestDto> itemDtos) {
+        if (itemDtos == null) {
+            return null;
+        }
+        return itemDtos.stream()
+                .map(this::toOrderItem)
+                .collect(Collectors.toList());
+    }
+
     public OrderTotalResponseDto toOrderTotalResponseDto(BigDecimal total, Order order) {
         OrderTotalResponseDto dto = new OrderTotalResponseDto();
         dto.setTotal(total);
