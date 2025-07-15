@@ -2,7 +2,10 @@ package com.Ecommerce.Gateway_Service.Service;
 
 import com.Ecommerce.Gateway_Service.DTOs.Cart.EnrichedCartItemDTO;
 import com.Ecommerce.Gateway_Service.DTOs.EnrichedOrderItemDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Order.BatchOrderRequestDTO;
+import com.Ecommerce.Gateway_Service.DTOs.Order.BatchOrderResponseDTO;
 import com.Ecommerce.Gateway_Service.DTOs.Order.EnrichedOrderResponse;
+import com.Ecommerce.Gateway_Service.DTOs.Order.OrderResult;
 import com.Ecommerce.Gateway_Service.Kafka.AsyncResponseManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -278,4 +281,86 @@ public class AsyncOrderBffService {
     public Mono<EnrichedOrderResponse> getBasicOrder(String orderId) {
         return getEnrichedOrder(orderId);
     }
+
+
+
+    /**
+     * ✅ Get multiple enriched orders using async Kafka communication
+     */
+    public Mono<BatchOrderResponseDTO> getEnrichedOrdersBatch(BatchOrderRequestDTO request) {
+        log.info("🔍 SERVICE: Starting batch order request for {} orders with includeProducts: {}",
+                request.getOrderIds().size(), request.isIncludeProducts());
+
+        long startTime = System.currentTimeMillis();
+
+        if (request.getOrderIds() == null || request.getOrderIds().isEmpty()) {
+            return Mono.just(createEmptyBatchResponse(request, startTime));
+        }
+
+        // Process orders in parallel
+        List<Mono<OrderResult>> orderMonos = request.getOrderIds().stream()
+                .map(orderId -> processOrderForBatch(orderId, request.isIncludeProducts()))
+                .collect(Collectors.toList());
+
+        // Combine all results
+        return Mono.zip(orderMonos, results -> {
+            List<EnrichedOrderResponse> successfulOrders = new ArrayList<>();
+            Map<String, String> failures = new HashMap<>();
+
+            for (Object result : results) {
+                OrderResult orderResult = (OrderResult) result;
+                if (orderResult.isSuccess()) {
+                    successfulOrders.add(orderResult.getOrder());
+                } else {
+                    failures.put(orderResult.getOrderId(), orderResult.getErrorMessage());
+                }
+            }
+
+            long processingTime = System.currentTimeMillis() - startTime;
+
+            return BatchOrderResponseDTO.builder()
+                    .orders(successfulOrders)
+                    .failures(failures)
+                    .totalRequested(request.getOrderIds().size())
+                    .successful(successfulOrders.size())
+                    .failed(failures.size())
+                    .includeProducts(request.isIncludeProducts())
+                    .processingTimeMs(processingTime)
+                    .build();
+        });
+    }
+
+    /**
+     * ✅ Process individual order for batch operation
+     */
+    private Mono<OrderResult> processOrderForBatch(String orderId, boolean includeProducts) {
+        Mono<EnrichedOrderResponse> orderMono = includeProducts
+                ? getEnrichedOrderWithProducts(orderId)
+                : getBasicOrder(orderId);
+
+        return orderMono
+                .map(order -> OrderResult.success(orderId, order))
+                .onErrorResume(error -> {
+                    log.warn("Failed to process order {} in batch: {}", orderId, error.getMessage());
+                    return Mono.just(OrderResult.failure(orderId, error.getMessage()));
+                });
+    }
+
+    /**
+     * ✅ Create empty batch response
+     */
+    private BatchOrderResponseDTO createEmptyBatchResponse(BatchOrderRequestDTO request, long startTime) {
+        long processingTime = System.currentTimeMillis() - startTime;
+
+        return BatchOrderResponseDTO.builder()
+                .orders(List.of())
+                .failures(Map.of())
+                .totalRequested(request.getOrderIds() != null ? request.getOrderIds().size() : 0)
+                .successful(0)
+                .failed(0)
+                .includeProducts(request.isIncludeProducts())
+                .processingTimeMs(processingTime)
+                .build();
+    }
+
 }
