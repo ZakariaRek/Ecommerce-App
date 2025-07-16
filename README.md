@@ -164,7 +164,7 @@ Our API Gateway (Port 8099) is the intelligent edge of our platform, providing:
 - Java 17+
 - Go 1.18+
 - Maven/Gradle
-- Redis (for rate limiting)
+- Redis (caching & rate limiting)
 
 ### Quick Start
 
