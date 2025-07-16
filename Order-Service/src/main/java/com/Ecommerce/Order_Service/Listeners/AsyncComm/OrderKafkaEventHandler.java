@@ -283,4 +283,92 @@ public class OrderKafkaEventHandler {
 
         kafkaTemplate.send("order.batch.error", correlationId, response);
     }
+
+    /**
+     * Add this to your OrderKafkaEventHandler for more efficient ID-only requests
+     */
+    @KafkaListener(
+            topics = "order.ids.request",
+            groupId = "order-service-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    @Transactional(readOnly = true)
+    public void handleOrderIdsRequest(ConsumerRecord<String, Object> record) {
+        Object requestPayload = record.value();
+        String correlationId = record.key();
+
+        log.info("📦 ORDER SERVICE: Received order IDs request with correlationId: {}", correlationId);
+
+        try {
+            Map<String, Object> request = convertToMap(requestPayload);
+            String userId = (String) request.get("userId");
+            String status = (String) request.get("status");
+            Integer limit = (Integer) request.get("limit");
+
+            if (userId == null || userId.trim().isEmpty()) {
+                sendIdsErrorResponse(correlationId, "User ID is required");
+                return;
+            }
+
+            log.info("📦 ORDER SERVICE: Fetching order IDs for user: {} with status: {}", userId, status);
+
+            // Fetch orders based on criteria
+            List<Order> orders;
+            if (status != null && !status.isEmpty()) {
+                orders = orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(
+                        UUID.fromString(userId),
+                        OrderStatus.valueOf(status)
+                );
+            } else {
+                orders = orderRepository.findByUserIdOrderByCreatedAtDesc(UUID.fromString(userId));
+            }
+
+            // Apply limit if specified
+            if (limit != null && limit > 0) {
+                orders = orders.stream().limit(limit).collect(Collectors.toList());
+            }
+
+            // Extract only IDs (more efficient)
+            List<String> orderIds = orders.stream()
+                    .map(order -> order.getId().toString())
+                    .collect(Collectors.toList());
+
+            log.info("📦 ORDER SERVICE: Found {} order IDs for user: {}", orderIds.size(), userId);
+
+            // Send IDs-only response
+            sendIdsSuccessResponse(correlationId, orderIds);
+
+        } catch (Exception e) {
+            log.error("📦 ORDER SERVICE: Error processing order IDs request", e);
+            sendIdsErrorResponse(correlationId, "Internal error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Send IDs-only success response
+     */
+    private void sendIdsSuccessResponse(String correlationId, List<String> orderIds) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("correlationId", correlationId);
+        response.put("success", true);
+        response.put("message", "Order IDs retrieved successfully");
+        response.put("data", orderIds); // Just the IDs, not full objects
+        response.put("count", orderIds.size());
+        response.put("timestamp", System.currentTimeMillis());
+
+        kafkaTemplate.send("order.ids.response", correlationId, response);
+    }
+
+    /**
+     * Send IDs-only error response
+     */
+    private void sendIdsErrorResponse(String correlationId, String errorMessage) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("correlationId", correlationId);
+        response.put("success", false);
+        response.put("message", errorMessage);
+        response.put("timestamp", System.currentTimeMillis());
+
+        kafkaTemplate.send("order.ids.error", correlationId, response);
+    }
 }

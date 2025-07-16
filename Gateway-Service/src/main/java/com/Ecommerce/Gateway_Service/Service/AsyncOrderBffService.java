@@ -362,5 +362,50 @@ public class AsyncOrderBffService {
                 .processingTimeMs(processingTime)
                 .build();
     }
+    public Mono<List<String>> getUserOrderIds(String userId, String status, int limit) {
+        String correlationId = UUID.randomUUID().toString();
+
+        log.info("Getting order IDs for user: {} with status: {}, limit: {}", userId, status, limit);
+
+        try {
+            Map<String, Object> idsRequest = new HashMap<>();
+            idsRequest.put("userId", userId);
+            idsRequest.put("status", status);
+            idsRequest.put("limit", limit);
+
+            log.info("🔍 SERVICE: Sending order IDs request to Kafka: {}", idsRequest);
+
+            // Send to dedicated IDs endpoint
+            gatewayKafkaTemplate.send("order.ids.request", correlationId, idsRequest);
+
+            Duration timeout = Duration.ofSeconds(15);
+
+            return asyncResponseManager.waitForResponse(correlationId, timeout, List.class)
+                    .map(response -> {
+                        // The response should be a List<String> directly since handleOrderIdsResponse
+                        // already extracts the order IDs from the response map
+                        if (response instanceof List) {
+                            List<String> orderIds = (List<String>) response;
+                            log.info("🔍 SERVICE: Successfully received {} order IDs for user: {}",
+                                    orderIds.size(), userId);
+                            return orderIds;
+                        } else {
+                            log.error("🔍 SERVICE: Unexpected response type: {}, content: {}",
+                                    response.getClass(), response);
+                            return List.<String>of();
+                        }
+                    })
+                    .doOnError(error -> {
+                        log.error("Failed to get order IDs for user: {}", userId, error);
+                    })
+                    .onErrorReturn(List.of());
+
+        } catch (Exception e) {
+            log.error("Error initiating order IDs request for userId: {}", userId, e);
+            return Mono.just(List.of());
+        }
+    }
+
+
 
 }

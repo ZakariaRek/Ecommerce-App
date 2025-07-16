@@ -261,17 +261,17 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(30, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("order-cb")))
-                        .uri("lb://ORDER-SERVICE"))
+                        .uri("lb://order-service"))
 
                 .route("order-service-swagger-ui", r -> r
                         .path("/order-service/swagger-ui/**")
                         .filters(f -> f.rewritePath("/order-service/swagger-ui/(?<segment>.*)", "/swagger-ui/${segment}"))
-                        .uri("lb://ORDER-SERVICE"))
+                        .uri("lb://order-service"))
 
                 .route("order-service-api-docs", r -> r
                         .path("/order-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/order-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
-                        .uri("lb://ORDER-SERVICE"))
+                        .uri("lb://order-service"))
 
                 // Payment service - Very restrictive limits for security
                 .route("payment-service", r -> r

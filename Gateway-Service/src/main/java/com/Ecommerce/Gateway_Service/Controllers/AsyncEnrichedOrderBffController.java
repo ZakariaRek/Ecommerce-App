@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/api/order")
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = "*")
@@ -78,10 +78,19 @@ public class AsyncEnrichedOrderBffController {
 
 
 
+
     /**
-     * ✅ Get orders by multiple order IDs (GET version for simple batch)
+     * ✅ Health check endpoint
      */
-    @PostMapping("/batch")
+    @GetMapping("/health")
+    public Mono<ResponseEntity<String>> healthCheck() {
+        return Mono.just(ResponseEntity.ok("Order BFF Service is healthy"));
+    }
+
+    /**
+     * ✅ Get multiple enriched orders (batch processing) - with enhanced debugging
+     */
+    @GetMapping("/batch")
     public Mono<ResponseEntity<BatchOrderResponseDTO>> getEnrichedOrdersBatch(
             @RequestBody BatchOrderRequestDTO request) {
 
@@ -153,13 +162,110 @@ public class AsyncEnrichedOrderBffController {
                 });
     }
 
+
     /**
-     * ✅ Health check endpoint
+     * ✅ Get all orders for a user - ENHANCED VERSION with better logging and error handling
      */
-    @GetMapping("/health")
-    public Mono<ResponseEntity<String>> healthCheck() {
-        return Mono.just(ResponseEntity.ok("Order BFF Service is healthy"));
+    @GetMapping("/user/{userId}/all")
+    public Mono<ResponseEntity<BatchOrderResponseDTO>> getUserOrdersBatch(
+            @PathVariable String userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "true") boolean includeProducts,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        log.info("🎯 CONTROLLER: === USER ORDERS REQUEST ===");
+        log.info("🎯 CONTROLLER: User ID: {}", userId);
+        log.info("🎯 CONTROLLER: Status filter: {}", status);
+        log.info("🎯 CONTROLLER: Include products: {}", includeProducts);
+        log.info("🎯 CONTROLLER: Limit: {}", limit);
+
+        // Validate userId
+        if (userId == null || userId.trim().isEmpty()) {
+            log.error("🎯 CONTROLLER: Invalid userId provided");
+            BatchOrderResponseDTO errorResponse = BatchOrderResponseDTO.builder()
+                    .orders(List.of())
+                    .failures(Map.of("validation", "User ID is required"))
+                    .totalRequested(0)
+                    .successful(0)
+                    .failed(1)
+                    .includeProducts(includeProducts)
+                    .processingTimeMs(0L)
+                    .build();
+            return Mono.just(ResponseEntity.badRequest().body(errorResponse));
+        }
+
+        return asyncOrderBffService.getUserOrderIds(userId, status, limit)
+                .doOnNext(orderIds -> {
+                    log.info("🎯 CONTROLLER: === ORDER IDS RECEIVED ===");
+                    log.info("🎯 CONTROLLER: Received {} order IDs for user: {}", orderIds.size(), userId);
+                    log.info("🎯 CONTROLLER: Order IDs: {}", orderIds);
+                })
+                .flatMap(orderIds -> {
+                    if (orderIds.isEmpty()) {
+                        log.info("🎯 CONTROLLER: No orders found for user: {}", userId);
+                        BatchOrderResponseDTO emptyResponse = BatchOrderResponseDTO.builder()
+                                .orders(List.of())
+                                .failures(Map.of())
+                                .totalRequested(0)
+                                .successful(0)
+                                .failed(0)
+                                .includeProducts(includeProducts)
+                                .processingTimeMs(0L)
+                                .build();
+                        return Mono.just(ResponseEntity.ok(emptyResponse));
+                    }
+
+                    log.info("🎯 CONTROLLER: === CREATING BATCH REQUEST ===");
+                    log.info("🎯 CONTROLLER: Processing {} order IDs with includeProducts: {}",
+                            orderIds.size(), includeProducts);
+
+                    BatchOrderRequestDTO request = BatchOrderRequestDTO.builder()
+                            .orderIds(orderIds)
+                            .includeProducts(includeProducts)
+                            .userId(userId)
+                            .status(status)
+                            .build();
+
+                    return asyncOrderBffService.getEnrichedOrdersBatch(request)
+                            .doOnNext(batchResponse -> {
+                                log.info("🎯 CONTROLLER: === BATCH RESPONSE RECEIVED ===");
+                                log.info("🎯 CONTROLLER: Total requested: {}", batchResponse.getTotalRequested());
+                                log.info("🎯 CONTROLLER: Successful: {}", batchResponse.getSuccessful());
+                                log.info("🎯 CONTROLLER: Failed: {}", batchResponse.getFailed());
+                                log.info("🎯 CONTROLLER: Processing time: {}ms", batchResponse.getProcessingTimeMs());
+                                log.info("🎯 CONTROLLER: Include products: {}", batchResponse.isIncludeProducts());
+
+                                // Log details about product enrichment
+                                if (batchResponse.isIncludeProducts()) {
+                                    batchResponse.getOrders().forEach(order -> {
+                                        log.info("🎯 CONTROLLER: Order {} has {} items",
+                                                order.getId(), order.getItems().size());
+                                        order.getItems().forEach(item -> {
+                                            log.info("🎯 CONTROLLER:   - Item: productId={}, name={}, inStock={}",
+                                                    item.getProductId(), item.getProductName(), item.getInStock());
+                                        });
+                                    });
+                                }
+                            })
+                            .map(ResponseEntity::ok);
+                })
+                .doOnError(error -> {
+                    log.error("🎯 CONTROLLER: === ERROR IN USER ORDERS BATCH ===", error);
+                    log.error("🎯 CONTROLLER: Error for user: {}, status: {}, includeProducts: {}",
+                            userId, status, includeProducts);
+                })
+                .onErrorResume(error -> {
+                    log.error("🎯 CONTROLLER: Error getting user orders batch", error);
+                    BatchOrderResponseDTO errorResponse = BatchOrderResponseDTO.builder()
+                            .orders(List.of())
+                            .failures(Map.of("system_error", error.getMessage()))
+                            .totalRequested(0)
+                            .successful(0)
+                            .failed(1)
+                            .includeProducts(includeProducts)
+                            .processingTimeMs(0L)
+                            .build();
+                    return Mono.just(ResponseEntity.internalServerError().body(errorResponse));
+                });
     }
-
-
 }
