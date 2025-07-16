@@ -131,7 +131,7 @@ public class AsyncEnrichedOrderBffController {
 
         log.info("🎯 CONTROLLER: Calling asyncOrderBffService.getEnrichedOrdersBatch()");
 
-        return asyncOrderBffService.getEnrichedOrdersBatch(request)
+        return asyncOrderBffService.getEnrichedOrdersBatchOptimized(request)
                 .map(batchResponse -> {
                     log.info("🎯 CONTROLLER: === BATCH RESPONSE RECEIVED ===");
                     log.info("🎯 CONTROLLER: Batch response type: {}", batchResponse.getClass().getSimpleName());
@@ -226,7 +226,7 @@ public class AsyncEnrichedOrderBffController {
                             .status(status)
                             .build();
 
-                    return asyncOrderBffService.getEnrichedOrdersBatch(request)
+                    return asyncOrderBffService.getEnrichedOrdersBatchOptimized(request)
                             .doOnNext(batchResponse -> {
                                 log.info("🎯 CONTROLLER: === BATCH RESPONSE RECEIVED ===");
                                 log.info("🎯 CONTROLLER: Total requested: {}", batchResponse.getTotalRequested());
