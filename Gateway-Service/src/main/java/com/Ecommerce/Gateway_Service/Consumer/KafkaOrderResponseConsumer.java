@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.MonoSink;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -498,5 +499,58 @@ public class KafkaOrderResponseConsumer {
             log.error("Error converting order IDs data: {}", orderIdsData, e);
             return List.of();
         }
+    }
+
+
+    @KafkaListener(topics = "order.ids.response", groupId = "gateway-bff-group")
+    public void handleOrderIdsResponse(ConsumerRecord<String, Object> record) {
+        Object responsePayload = record.value();
+        log.info("📨 GATEWAY: Received order IDs response: {}", responsePayload);
+
+        try {
+            Map<String, Object> responseMap = convertToMap(responsePayload);
+            String correlationId = (String) responseMap.get("correlationId");
+            Boolean success = (Boolean) responseMap.get("success");
+            String message = (String) responseMap.get("message");
+
+            log.info("Processing order IDs response - correlationId: {}, success: {}, message: {}",
+                    correlationId, success, message);
+
+            if (correlationId == null) {
+                log.error("No correlationId in order IDs response: {}", responsePayload);
+                return;
+            }
+
+            if (success != null && success) {
+                Object orderIdsData = responseMap.get("data");
+
+                if (orderIdsData != null) {
+                    List<String> orderIds = convertToOrderIdsList(orderIdsData);
+
+                    log.info("Completing order IDs request for correlationId: {} with {} order IDs",
+                            correlationId, orderIds.size());
+
+                    asyncResponseManager.completeRequest(correlationId, orderIds);
+                } else {
+                    log.error("No order IDs data in successful response: {}", responsePayload);
+                    asyncResponseManager.completeRequest(correlationId, List.of());
+                }
+            } else {
+                log.error("Order IDs response indicates failure: {}", message);
+                asyncResponseManager.completeRequestExceptionally(correlationId,
+                        new RuntimeException("Order IDs service error: " + message));
+            }
+
+        } catch (Exception e) {
+            log.error("Error processing order IDs response: {}", responsePayload, e);
+            handleResponseError(responsePayload, e);
+        }
+    }
+
+    @KafkaListener(topics = "order.ids.error", groupId = "gateway-bff-group")
+    public void handleOrderIdsError(ConsumerRecord<String, Object> record) {
+        Object errorPayload = record.value();
+        log.error("📨 GATEWAY: Received order IDs error response: {}", errorPayload);
+        handleErrorResponse(errorPayload, "Order IDs service error");
     }
 }

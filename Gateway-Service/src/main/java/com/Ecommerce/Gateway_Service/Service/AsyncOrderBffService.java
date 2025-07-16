@@ -285,10 +285,10 @@ public class AsyncOrderBffService {
 
 
     /**
-     * ✅ Get multiple enriched orders using async Kafka communication
+     * ✅ OPTIMIZED: Get multiple enriched orders with single product batch request
      */
-    public Mono<BatchOrderResponseDTO> getEnrichedOrdersBatch(BatchOrderRequestDTO request) {
-        log.info("🔍 SERVICE: Starting batch order request for {} orders with includeProducts: {}",
+    public Mono<BatchOrderResponseDTO> getEnrichedOrdersBatchOptimized(BatchOrderRequestDTO request) {
+        log.info("🔍 SERVICE: Starting optimized batch order request for {} orders with includeProducts: {}",
                 request.getOrderIds().size(), request.isIncludeProducts());
 
         long startTime = System.currentTimeMillis();
@@ -297,54 +297,191 @@ public class AsyncOrderBffService {
             return Mono.just(createEmptyBatchResponse(request, startTime));
         }
 
-        // Process orders in parallel
+        // Step 1: Get all basic orders in parallel (5 requests)
         List<Mono<OrderResult>> orderMonos = request.getOrderIds().stream()
-                .map(orderId -> processOrderForBatch(orderId, request.isIncludeProducts()))
+                .map(orderId -> getBasicOrderForBatch(orderId))  // Only get basic order data
                 .collect(Collectors.toList());
 
-        // Combine all results
-        return Mono.zip(orderMonos, results -> {
-            List<EnrichedOrderResponse> successfulOrders = new ArrayList<>();
-            Map<String, String> failures = new HashMap<>();
+        return Mono.zip(orderMonos, results -> Arrays.asList(results))
+                .cast(List.class)
+                .flatMap(orderResults -> {
+                    List<OrderResult> typedResults = (List<OrderResult>) orderResults;
 
-            for (Object result : results) {
-                OrderResult orderResult = (OrderResult) result;
-                if (orderResult.isSuccess()) {
-                    successfulOrders.add(orderResult.getOrder());
-                } else {
-                    failures.put(orderResult.getOrderId(), orderResult.getErrorMessage());
-                }
-            }
+                    // Separate successful and failed orders
+                    List<EnrichedOrderResponse> successfulOrders = typedResults.stream()
+                            .filter(OrderResult::isSuccess)
+                            .map(OrderResult::getOrder)
+                            .collect(Collectors.toList());
 
-            long processingTime = System.currentTimeMillis() - startTime;
+                    Map<String, String> failures = typedResults.stream()
+                            .filter(result -> !result.isSuccess())
+                            .collect(Collectors.toMap(
+                                    OrderResult::getOrderId,
+                                    OrderResult::getErrorMessage
+                            ));
 
-            return BatchOrderResponseDTO.builder()
-                    .orders(successfulOrders)
-                    .failures(failures)
-                    .totalRequested(request.getOrderIds().size())
-                    .successful(successfulOrders.size())
-                    .failed(failures.size())
-                    .includeProducts(request.isIncludeProducts())
-                    .processingTimeMs(processingTime)
-                    .build();
-        });
+                    if (!request.isIncludeProducts() || successfulOrders.isEmpty()) {
+                        // Return without product enrichment
+                        long processingTime = System.currentTimeMillis() - startTime;
+                        return Mono.just(BatchOrderResponseDTO.builder()
+                                .orders(successfulOrders)
+                                .failures(failures)
+                                .totalRequested(request.getOrderIds().size())
+                                .successful(successfulOrders.size())
+                                .failed(failures.size())
+                                .includeProducts(request.isIncludeProducts())
+                                .processingTimeMs(processingTime)
+                                .build());
+                    }
+
+                    // Step 2: Collect ALL unique product IDs from ALL orders
+                    Set<UUID> allProductIds = successfulOrders.stream()
+                            .flatMap(order -> order.getItems().stream())
+                            .map(EnrichedOrderItemDTO::getProductId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet());
+
+                    if (allProductIds.isEmpty()) {
+                        long processingTime = System.currentTimeMillis() - startTime;
+                        return Mono.just(BatchOrderResponseDTO.builder()
+                                .orders(successfulOrders)
+                                .failures(failures)
+                                .totalRequested(request.getOrderIds().size())
+                                .successful(successfulOrders.size())
+                                .failed(failures.size())
+                                .includeProducts(true)
+                                .processingTimeMs(processingTime)
+                                .build());
+                    }
+
+                    log.info("🔍 SERVICE: Fetching {} unique products for {} orders",
+                            allProductIds.size(), successfulOrders.size());
+
+                    // Step 3: Make SINGLE product batch request for all products (1 request)
+                    return asyncProductService.getProductsBatch(new ArrayList<>(allProductIds))
+                            .map(productItems -> {
+                                // Step 4: Create product lookup map
+                                Map<UUID, EnrichedCartItemDTO> productMap = productItems.stream()
+                                        .collect(Collectors.toMap(
+                                                EnrichedCartItemDTO::getProductId,
+                                                product -> product,
+                                                (existing, replacement) -> existing
+                                        ));
+
+                                // Step 5: Enrich all orders with the same product data
+                                List<EnrichedOrderResponse> enrichedOrders = successfulOrders.stream()
+                                        .map(order -> enrichOrderWithProducts(order, productMap))
+                                        .collect(Collectors.toList());
+
+                                long processingTime = System.currentTimeMillis() - startTime;
+
+                                return BatchOrderResponseDTO.builder()
+                                        .orders(enrichedOrders)
+                                        .failures(failures)
+                                        .totalRequested(request.getOrderIds().size())
+                                        .successful(enrichedOrders.size())
+                                        .failed(failures.size())
+                                        .includeProducts(true)
+                                        .processingTimeMs(processingTime)
+                                        .build();
+                            })
+                            .onErrorResume(productError -> {
+                                log.error("🔍 SERVICE: Error fetching products, returning orders without enrichment", productError);
+                                long processingTime = System.currentTimeMillis() - startTime;
+                                return Mono.just(BatchOrderResponseDTO.builder()
+                                        .orders(successfulOrders)
+                                        .failures(failures)
+                                        .totalRequested(request.getOrderIds().size())
+                                        .successful(successfulOrders.size())
+                                        .failed(failures.size())
+                                        .includeProducts(false) // Mark as false since enrichment failed
+                                        .processingTimeMs(processingTime)
+                                        .build());
+                            });
+                });
     }
 
     /**
-     * ✅ Process individual order for batch operation
+     * ✅ Get basic order without product enrichment (for batch processing)
      */
-    private Mono<OrderResult> processOrderForBatch(String orderId, boolean includeProducts) {
-        Mono<EnrichedOrderResponse> orderMono = includeProducts
-                ? getEnrichedOrderWithProducts(orderId)
-                : getBasicOrder(orderId);
-
-        return orderMono
+    private Mono<OrderResult> getBasicOrderForBatch(String orderId) {
+        return getBasicOrder(orderId)
                 .map(order -> OrderResult.success(orderId, order))
                 .onErrorResume(error -> {
-                    log.warn("Failed to process order {} in batch: {}", orderId, error.getMessage());
+                    log.warn("Failed to get basic order {} in batch: {}", orderId, error.getMessage());
                     return Mono.just(OrderResult.failure(orderId, error.getMessage()));
                 });
     }
+
+    /**
+     * ✅ Enrich single order with pre-fetched product data
+     */
+    private EnrichedOrderResponse enrichOrderWithProducts(
+            EnrichedOrderResponse order,
+            Map<UUID, EnrichedCartItemDTO> productMap) {
+
+        List<EnrichedOrderItemDTO> enrichedItems = order.getItems().stream()
+                .map(orderItem -> {
+                    EnrichedCartItemDTO productDetail = productMap.get(orderItem.getProductId());
+
+                    if (productDetail != null) {
+                        return EnrichedOrderItemDTO.builder()
+                                // Preserve order data
+                                .id(orderItem.getId())
+                                .productId(orderItem.getProductId())
+                                .quantity(orderItem.getQuantity())
+                                .priceAtPurchase(orderItem.getPriceAtPurchase())
+                                .discount(orderItem.getDiscount())
+                                .total(orderItem.getTotal())
+
+                                // Add product details
+                                .productName(productDetail.getProductName())
+                                .productImage(productDetail.getProductImage())
+                                .productStatus(productDetail.getProductStatus())
+                                .inStock(productDetail.getInStock())
+                                .availableQuantity(productDetail.getAvailableQuantity())
+                                .discountType(productDetail.getDiscountType())
+                                .discountValue(productDetail.getDiscountValue())
+                                .build();
+                    } else {
+                        // Fallback for missing product
+                        return EnrichedOrderItemDTO.builder()
+                                .id(orderItem.getId())
+                                .productId(orderItem.getProductId())
+                                .quantity(orderItem.getQuantity())
+                                .priceAtPurchase(orderItem.getPriceAtPurchase())
+                                .discount(orderItem.getDiscount())
+                                .total(orderItem.getTotal())
+                                .productName("Product not found")
+                                .productStatus("UNKNOWN")
+                                .inStock(false)
+                                .availableQuantity(0)
+                                .build();
+                    }
+                })
+                .collect(Collectors.toList());
+
+        return EnrichedOrderResponse.builder()
+                // Preserve all original order data
+                .id(order.getId())
+                .userId(order.getUserId())
+                .cartId(order.getCartId())
+                .status(order.getStatus())
+                .totalAmount(order.getTotalAmount())
+                .tax(order.getTax())
+                .shippingCost(order.getShippingCost())
+                .discount(order.getDiscount())
+                .createdAt(order.getCreatedAt())
+                .billingAddressId(order.getBillingAddressId())
+                .shippingAddressId(order.getShippingAddressId())
+
+                // Update with enriched items
+                .items(enrichedItems)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+
 
     /**
      * ✅ Create empty batch response
@@ -362,5 +499,50 @@ public class AsyncOrderBffService {
                 .processingTimeMs(processingTime)
                 .build();
     }
+    public Mono<List<String>> getUserOrderIds(String userId, String status, int limit) {
+        String correlationId = UUID.randomUUID().toString();
+
+        log.info("Getting order IDs for user: {} with status: {}, limit: {}", userId, status, limit);
+
+        try {
+            Map<String, Object> idsRequest = new HashMap<>();
+            idsRequest.put("userId", userId);
+            idsRequest.put("status", status);
+            idsRequest.put("limit", limit);
+
+            log.info("🔍 SERVICE: Sending order IDs request to Kafka: {}", idsRequest);
+
+            // Send to dedicated IDs endpoint
+            gatewayKafkaTemplate.send("order.ids.request", correlationId, idsRequest);
+
+            Duration timeout = Duration.ofSeconds(15);
+
+            return asyncResponseManager.waitForResponse(correlationId, timeout, List.class)
+                    .map(response -> {
+                        // The response should be a List<String> directly since handleOrderIdsResponse
+                        // already extracts the order IDs from the response map
+                        if (response instanceof List) {
+                            List<String> orderIds = (List<String>) response;
+                            log.info("🔍 SERVICE: Successfully received {} order IDs for user: {}",
+                                    orderIds.size(), userId);
+                            return orderIds;
+                        } else {
+                            log.error("🔍 SERVICE: Unexpected response type: {}, content: {}",
+                                    response.getClass(), response);
+                            return List.<String>of();
+                        }
+                    })
+                    .doOnError(error -> {
+                        log.error("Failed to get order IDs for user: {}", userId, error);
+                    })
+                    .onErrorReturn(List.of());
+
+        } catch (Exception e) {
+            log.error("Error initiating order IDs request for userId: {}", userId, e);
+            return Mono.just(List.of());
+        }
+    }
+
+
 
 }

@@ -61,9 +61,15 @@ public class BffAuthenticationWebFilter implements WebFilter {
     }
 
     private boolean isBffEndpoint(String path) {
-        return path.matches("/api/cart/[^/]+/enriched");
+        return path.matches("/api/cart/[^/]+/enriched") ||
+                path.matches("/api/order/[^/]+/enriched") ||
+                path.matches("/api/order/user/[^/]+") ||
+                path.matches("/api/order/batch") ||
+                path.matches("/api/order/user/[^/]+/all") ||
+                path.matches("/api/saved4later/[^/]+/enriched") ||
+                path.matches("/api/saved4later/[^/]+/basic") ||
+                path.matches("/api/saved4later/[^/]+/availability-summary");
     }
-
     private String extractToken(ServerHttpRequest request) {
         // First try Authorization header
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
