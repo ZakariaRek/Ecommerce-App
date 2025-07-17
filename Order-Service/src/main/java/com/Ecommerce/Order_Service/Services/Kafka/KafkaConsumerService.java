@@ -93,7 +93,7 @@ public class KafkaConsumerService {
     public void listenCartCheckedOut(String message) {
         try {
             JsonNode eventNode = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(eventNode.path("userId").asText());
+            String userId =eventNode.path("userId").asText();
             UUID cartId = UUID.fromString(eventNode.path("cartId").asText());
 
             // Extract shipping and billing address IDs

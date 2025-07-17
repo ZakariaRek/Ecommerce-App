@@ -11,7 +11,7 @@ import java.util.UUID;
 @Data
 public class CreateOrderRequestDto {
     @NotNull(message = "User ID is required")
-    private UUID userId;
+    private String userId;
 
     @NotNull(message = "Cart ID is required")
     private UUID cartId;

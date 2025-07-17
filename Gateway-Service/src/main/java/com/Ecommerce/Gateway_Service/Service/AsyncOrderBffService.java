@@ -499,7 +499,7 @@ public class AsyncOrderBffService {
                 .processingTimeMs(processingTime)
                 .build();
     }
-    public Mono<List<String>> getUserOrderIds(String userId, String status, int limit) {
+    public Mono<List<String>> getUserOrderIds(UUID userId, String status, int limit) {
         String correlationId = UUID.randomUUID().toString();
 
         log.info("Getting order IDs for user: {} with status: {}, limit: {}", userId, status, limit);
