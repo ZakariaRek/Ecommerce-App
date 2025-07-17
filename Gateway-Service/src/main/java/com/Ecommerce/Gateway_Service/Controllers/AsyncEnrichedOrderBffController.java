@@ -10,8 +10,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/order")
@@ -75,8 +79,6 @@ public class AsyncEnrichedOrderBffController {
                 .items(java.util.List.of())
                 .build()));
     }
-
-
 
 
     /**
@@ -163,9 +165,6 @@ public class AsyncEnrichedOrderBffController {
     }
 
 
-    /**
-     * ✅ Get all orders for a user - ENHANCED VERSION with better logging and error handling
-     */
     @GetMapping("/user/{userId}/all")
     public Mono<ResponseEntity<BatchOrderResponseDTO>> getUserOrdersBatch(
             @PathVariable String userId,
@@ -179,7 +178,7 @@ public class AsyncEnrichedOrderBffController {
         log.info("🎯 CONTROLLER: Include products: {}", includeProducts);
         log.info("🎯 CONTROLLER: Limit: {}", limit);
 
-        // Validate userId
+        // Validate and normalize userId (handle both UUID and ObjectId formats)
         if (userId == null || userId.trim().isEmpty()) {
             log.error("🎯 CONTROLLER: Invalid userId provided");
             BatchOrderResponseDTO errorResponse = BatchOrderResponseDTO.builder()
@@ -194,15 +193,34 @@ public class AsyncEnrichedOrderBffController {
             return Mono.just(ResponseEntity.badRequest().body(errorResponse));
         }
 
-        return asyncOrderBffService.getUserOrderIds(userId, status, limit)
+        // Parse and validate userId, convert to UUID
+        UUID parsedUserId;
+        try {
+            parsedUserId = parseToUUID(userId);
+            log.info("🎯 CONTROLLER: Successfully parsed userId to UUID: {}", parsedUserId);
+        } catch (IllegalArgumentException e) {
+            log.error("🎯 CONTROLLER: Invalid userId format: {}", userId);
+            BatchOrderResponseDTO errorResponse = BatchOrderResponseDTO.builder()
+                    .orders(List.of())
+                    .failures(Map.of("validation", "Invalid User ID format"))
+                    .totalRequested(0)
+                    .successful(0)
+                    .failed(1)
+                    .includeProducts(includeProducts)
+                    .processingTimeMs(0L)
+                    .build();
+            return Mono.just(ResponseEntity.badRequest().body(errorResponse));
+        }
+
+        return asyncOrderBffService.getUserOrderIds(parsedUserId, status, limit)
                 .doOnNext(orderIds -> {
                     log.info("🎯 CONTROLLER: === ORDER IDS RECEIVED ===");
-                    log.info("🎯 CONTROLLER: Received {} order IDs for user: {}", orderIds.size(), userId);
+                    log.info("🎯 CONTROLLER: Received {} order IDs for user: {}", orderIds.size(), parsedUserId);
                     log.info("🎯 CONTROLLER: Order IDs: {}", orderIds);
                 })
                 .flatMap(orderIds -> {
                     if (orderIds.isEmpty()) {
-                        log.info("🎯 CONTROLLER: No orders found for user: {}", userId);
+                        log.info("🎯 CONTROLLER: No orders found for user: {}", parsedUserId);
                         BatchOrderResponseDTO emptyResponse = BatchOrderResponseDTO.builder()
                                 .orders(List.of())
                                 .failures(Map.of())
@@ -222,7 +240,7 @@ public class AsyncEnrichedOrderBffController {
                     BatchOrderRequestDTO request = BatchOrderRequestDTO.builder()
                             .orderIds(orderIds)
                             .includeProducts(includeProducts)
-                            .userId(userId)
+                            .userId(parsedUserId.toString()) // Convert back to string for DTO
                             .status(status)
                             .build();
 
@@ -252,7 +270,7 @@ public class AsyncEnrichedOrderBffController {
                 .doOnError(error -> {
                     log.error("🎯 CONTROLLER: === ERROR IN USER ORDERS BATCH ===", error);
                     log.error("🎯 CONTROLLER: Error for user: {}, status: {}, includeProducts: {}",
-                            userId, status, includeProducts);
+                            parsedUserId, status, includeProducts);
                 })
                 .onErrorResume(error -> {
                     log.error("🎯 CONTROLLER: Error getting user orders batch", error);
@@ -267,5 +285,90 @@ public class AsyncEnrichedOrderBffController {
                             .build();
                     return Mono.just(ResponseEntity.internalServerError().body(errorResponse));
                 });
+    }
+
+
+    /**
+     * Converts MongoDB ObjectId to UUID using deterministic MD5 hashing
+     */
+    private UUID convertObjectIdToUuid(String objectId) {
+        if (objectId == null || !objectId.matches("^[a-fA-F0-9]{24}$")) {
+            throw new IllegalArgumentException("Invalid ObjectId format: " + objectId);
+        }
+
+        try {
+            // Use MD5 hash for deterministic conversion
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(objectId.getBytes(StandardCharsets.UTF_8));
+
+            // Convert to UUID using the hash bytes
+            long mostSigBits = 0;
+            long leastSigBits = 0;
+
+            for (int i = 0; i < 8; i++) {
+                mostSigBits = (mostSigBits << 8) | (hash[i] & 0xff);
+            }
+            for (int i = 8; i < 16; i++) {
+                leastSigBits = (leastSigBits << 8) | (hash[i] & 0xff);
+            }
+
+            UUID result = new UUID(mostSigBits, leastSigBits);
+            log.info("🎯 Converted ObjectId {} to UUID {}", objectId, result);
+
+            return result;
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("MD5 algorithm not available", e);
+        }
+    }
+
+    /**
+     * Alternative: Simple deterministic conversion using ObjectId structure
+     */
+    private UUID convertObjectIdToUuidSimple(String objectId) {
+        if (objectId == null || !objectId.matches("^[a-fA-F0-9]{24}$")) {
+            throw new IllegalArgumentException("Invalid ObjectId format: " + objectId);
+        }
+
+        // Take the first 12 bytes (24 hex chars) of ObjectId
+        // ObjectId structure: 4-byte timestamp + 5-byte random + 3-byte counter
+        String timestamp = objectId.substring(0, 8);    // First 4 bytes
+        String machine = objectId.substring(8, 18);     // Next 5 bytes
+        String counter = objectId.substring(18, 24);    // Last 3 bytes
+
+        // Pad to create 32 hex characters for UUID
+        String uuidHex = timestamp + "0000" + machine + counter + "00";
+
+        // Parse as UUID
+        long mostSigBits = Long.parseUnsignedLong(uuidHex.substring(0, 16), 16);
+        long leastSigBits = Long.parseUnsignedLong(uuidHex.substring(16, 32), 16);
+
+        UUID result = new UUID(mostSigBits, leastSigBits);
+        log.info("🎯 Converted ObjectId {} to UUID {}", objectId, result);
+
+        return result;
+    }
+
+    /**
+     * Utility method to handle both UUID and ObjectId formats
+     */
+    private UUID parseToUUID(String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+
+        userId = userId.trim();
+
+        try {
+            // Try to parse as UUID first
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            // If not a UUID, check if it's an ObjectId
+            if (userId.matches("^[a-fA-F0-9]{24}$")) {
+                return convertObjectIdToUuid(userId);
+            } else {
+                throw new IllegalArgumentException("Invalid User ID format: " + userId +
+                        ". Must be either UUID or MongoDB ObjectId (24 hex characters)");
+            }
+        }
     }
 }

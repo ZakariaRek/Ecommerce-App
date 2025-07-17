@@ -40,14 +40,50 @@ public class OrderService {
     /**
      * Creates a new order
      */
-    public Order createOrder(UUID userId, UUID cartId, UUID billingAddressId, UUID shippingAddressId) {
-        Order order = Order.createOrder(userId, cartId, billingAddressId, shippingAddressId);
+    public Order createOrder(String userId, UUID cartId, UUID billingAddressId, UUID shippingAddressId) {
+        UUID userUuid;
+
+        try {
+            // Try to parse as UUID first
+            userUuid = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            // If not a UUID, assume it's a MongoDB ObjectId and convert it
+            userUuid = convertObjectIdToUuid(userId);
+        }
+
+        Order order = Order.createOrder(userUuid, cartId, billingAddressId, shippingAddressId);
         Order savedOrder = orderRepository.save(order);
 
         // Publish event to Kafka
         kafkaService.publishOrderCreated(savedOrder);
 
         return savedOrder;
+    }
+
+    private UUID convertObjectIdToUuid(String objectId) {
+        // Convert MongoDB ObjectId to UUID using a deterministic approach
+        // This ensures the same ObjectId always maps to the same UUID
+        try {
+            // Use a hash-based approach to convert ObjectId to UUID
+            byte[] bytes = objectId.getBytes("UTF-8");
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(bytes);
+
+            // Create UUID from hash bytes
+            long mostSigBits = 0;
+            long leastSigBits = 0;
+
+            for (int i = 0; i < 8; i++) {
+                mostSigBits = (mostSigBits << 8) | (hash[i] & 0xff);
+            }
+            for (int i = 8; i < 16; i++) {
+                leastSigBits = (leastSigBits << 8) | (hash[i] & 0xff);
+            }
+
+            return new UUID(mostSigBits, leastSigBits);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid user ID format: " + objectId, e);
+        }
     }
 
     /**
