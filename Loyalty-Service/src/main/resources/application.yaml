@@ -96,3 +96,11 @@ loyalty:
         min-points: 10000
         benefits: "All benefits plus exclusive access and personalized offers"
 
+Point Earning Events:
+  - Order Completion: 1 point per $1 spent
+  - First Order Bonus: +100 points
+  - Credit Card Payment: +10 points
+  - Product Review: +10 points (verified purchases only)
+  - User Referral: +100 points (referrer)
+  - Welcome Bonus: +50 points (new user)
+  - Birthday: Tier-based bonus points

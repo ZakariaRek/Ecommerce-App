@@ -40,16 +40,15 @@ public class OrderMapper {
 
         return dto;
     }
-
     public OrderItemResponseDto toOrderItemResponseDto(OrderItem item) {
-        OrderItemResponseDto dto = new OrderItemResponseDto();
-        dto.setId(item.getId());
-        dto.setProductId(item.getProductId());
-        dto.setQuantity(item.getQuantity());
-        dto.setPriceAtPurchase(item.getPriceAtPurchase());
-        dto.setDiscount(item.getDiscount());
-        dto.setTotal(item.getTotal());
-        return dto;
+        return OrderItemResponseDto.builder()
+                .id(item.getId())
+                .productId(item.getProductId())
+                .quantity(item.getQuantity())
+                .priceAtPurchase(item.getPriceAtPurchase())
+                .discount(item.getDiscount())
+                .total(item.getTotal())
+                .build();
     }
 
     public OrderItem toOrderItem(CreateOrderItemRequestDto dto) {
