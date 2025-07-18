@@ -1,9 +1,11 @@
 package com.Ecommerce.Order_Service.Payload.Response.OrderItem;
 
+import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+@Builder
 @Data
 public class OrderItemResponseDto {
     private UUID id;

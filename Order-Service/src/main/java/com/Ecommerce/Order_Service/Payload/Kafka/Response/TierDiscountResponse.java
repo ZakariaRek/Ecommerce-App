@@ -13,11 +13,15 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TierDiscountResponse {
     private String correlationId;
-    private UUID userId;
-    private String tier;
-    private BigDecimal discountAmount;
-    private BigDecimal applicableAmount;
-    private BigDecimal maxDiscountAmount;
-    private BigDecimal discountPercentage;
-    private String error;
+    private UUID orderId;
+    private BigDecimal tierDiscount;
+
+    // INCLUDE ALL CONTEXT FOR FINAL CALCULATION
+    private BigDecimal originalAmount;
+    private BigDecimal productDiscount;
+    private BigDecimal orderLevelDiscount;
+    private BigDecimal couponDiscount;
+    private BigDecimal finalAmount; // Pre-calculated
+
+    private boolean success;
 }

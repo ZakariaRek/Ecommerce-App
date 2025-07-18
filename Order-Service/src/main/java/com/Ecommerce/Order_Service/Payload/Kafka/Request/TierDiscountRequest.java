@@ -15,5 +15,12 @@ import java.util.UUID;
 public class TierDiscountRequest {
     private String correlationId;
     private UUID userId;
-    private BigDecimal amount;
+    private UUID orderId;
+    private BigDecimal amount; // Amount to apply tier discount to
+
+    // INCLUDE ALL PREVIOUS CALCULATIONS
+    private BigDecimal originalAmount;
+    private BigDecimal productDiscount;
+    private BigDecimal orderLevelDiscount;
+    private BigDecimal couponDiscount;
 }

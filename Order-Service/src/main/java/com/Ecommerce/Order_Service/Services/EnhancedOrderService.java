@@ -3,22 +3,27 @@ package com.Ecommerce.Order_Service.Services;
 import com.Ecommerce.Order_Service.Entities.DiscountApplication;
 import com.Ecommerce.Order_Service.Entities.DiscountType;
 import com.Ecommerce.Order_Service.Entities.Order;
+import com.Ecommerce.Order_Service.Entities.OrderItem;
 import com.Ecommerce.Order_Service.Payload.Kafka.CouponUsageNotification;
+import com.Ecommerce.Order_Service.Payload.Kafka.OrderItemDto;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountBreakdown;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
-import com.Ecommerce.Order_Service.Payload.Request.OrderItem.CreateOrderItemRequestDto;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
+import com.Ecommerce.Order_Service.Repositories.OrderRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
-
+import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -29,6 +34,8 @@ import java.util.stream.Collectors;
 @Transactional
 @Slf4j
 public class EnhancedOrderService extends OrderService {
+    @Autowired
+    private OrderRepository orderRepository;
 
     private  DiscountCalculationService discountCalculationService;
     private DiscountApplicationRepository discountApplicationRepository;
@@ -125,7 +132,7 @@ public class EnhancedOrderService extends OrderService {
         }
     }
 
-    private void saveDiscountApplications(Order order, DiscountCalculationResponse response) {
+    private void saveDiscountApplications(Order order, DiscountCalculationResponse response) throws JsonProcessingException {
         List<DiscountApplication> applications = new ArrayList<>();
 
         for (DiscountBreakdown breakdown : response.getBreakdown()) {
@@ -162,12 +169,12 @@ public class EnhancedOrderService extends OrderService {
         kafkaTemplate.send("coupon-usage-notification", notification);
     }
 
-    private List<CreateOrderItemRequestDto> convertToOrderItemDtos(List<CreateOrderItemRequestDto> items) {
+    private List<OrderItemResponseDto> convertToOrderItemDtos(List<OrderItem> items) {
         return items.stream()
-                .map(item -> CreateOrderItemRequestDto.builder()
+                .map(item -> OrderItemResponseDto.builder()
                         .productId(item.getProductId())
                         .quantity(item.getQuantity())
-                        .price(item.getPriceAtPurchase())
+                        .priceAtPurchase(item.getPriceAtPurchase())
                         .discount(item.getDiscount())
                         .build())
                 .collect(Collectors.toList());

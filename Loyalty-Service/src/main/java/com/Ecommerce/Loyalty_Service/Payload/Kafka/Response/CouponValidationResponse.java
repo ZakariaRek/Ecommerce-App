@@ -15,8 +15,16 @@ import java.util.UUID;
 public class CouponValidationResponse {
     private String correlationId;
     private UUID userId;
+    private UUID orderId;
     private BigDecimal totalDiscount;
     private List<CouponDiscountDetail> validCoupons;
-    private List<String> errors;
+
+    // INCLUDE CONTEXT FOR NEXT STEP
+    private BigDecimal originalAmount;
+    private BigDecimal productDiscount;
+    private BigDecimal orderLevelDiscount;
+    private BigDecimal amountAfterCoupons; // For tier calculation
+
     private boolean success;
+    private List<String> errors;
 }

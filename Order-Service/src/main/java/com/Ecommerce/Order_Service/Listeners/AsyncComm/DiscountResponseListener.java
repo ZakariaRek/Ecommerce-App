@@ -16,17 +16,24 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class DiscountResponseListener {
 
-    private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final DiscountApplicationRepository discountApplicationRepository;
+
+    // In-memory storage instead of Redis
+    private final Map<String, DiscountCalculationContext> contextStore = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<DiscountCalculationResponse>> futureStore = new ConcurrentHashMap<>();
 
     @KafkaListener(topics = "coupon-validation-response", groupId = "order-service-group")
     public void handleCouponValidationResponse(ConsumerRecord<String, Object> record) {
@@ -77,8 +84,8 @@ public class DiscountResponseListener {
                 return;
             }
 
-            // Final calculation
-            BigDecimal tierDiscount = response.getDiscountAmount();
+            // Final calculation - assuming TierDiscountResponse has getDiscountAmount() method
+            BigDecimal tierDiscount = response.getTierDiscount();
             BigDecimal finalAmount = context.getAmountAfterCouponDiscount().subtract(tierDiscount);
 
             log.info("🛒 ORDER SERVICE: Tier discount: {}, Final amount: {}", tierDiscount, finalAmount);
@@ -121,11 +128,8 @@ public class DiscountResponseListener {
         context.setCouponDiscount(couponDiscount);
         context.setAmountAfterCouponDiscount(afterCouponDiscount);
 
-        redisTemplate.opsForValue().set(
-                "discount-context:" + originalRequest.getCorrelationId(),
-                context,
-                Duration.ofMinutes(5)
-        );
+        // Store in memory instead of Redis
+        contextStore.put(originalRequest.getCorrelationId(), context);
 
         log.info("🛒 ORDER SERVICE: Requesting tier discount for amount: {}", afterCouponDiscount);
     }
@@ -165,7 +169,7 @@ public class DiscountResponseListener {
         if (tierDiscount.compareTo(BigDecimal.ZERO) > 0) {
             breakdown.add(DiscountBreakdown.builder()
                     .discountType("TIER_BENEFIT")
-                    .description("Membership tier benefit (" + tierResponse.getTier() + ")")
+                    .description("Membership tier benefit (" + tierResponse.getTierDiscount() + ")")
                     .amount(tierDiscount)
                     .source("Loyalty Service")
                     .build());
@@ -175,24 +179,21 @@ public class DiscountResponseListener {
     }
 
     private DiscountCalculationContext getContext(String correlationId) {
-        return (DiscountCalculationContext) redisTemplate
-                .opsForValue().get("discount-context:" + correlationId);
+        return contextStore.get("discount-context:" + correlationId);
     }
 
     private void completeDiscountCalculation(String correlationId,
                                              DiscountCalculationResponse response) {
-        @SuppressWarnings("unchecked")
         CompletableFuture<DiscountCalculationResponse> future =
-                (CompletableFuture<DiscountCalculationResponse>) redisTemplate
-                        .opsForValue().get("discount-calculation:" + correlationId);
+                futureStore.get("discount-calculation:" + correlationId);
 
         if (future != null) {
             future.complete(response);
             log.info("🛒 ORDER SERVICE: Discount calculation completed for correlation: {}", correlationId);
 
-            // Clean up Redis
-            redisTemplate.delete("discount-calculation:" + correlationId);
-            redisTemplate.delete("discount-context:" + correlationId);
+            // Clean up memory
+            futureStore.remove("discount-calculation:" + correlationId);
+            contextStore.remove("discount-context:" + correlationId);
         }
     }
 }

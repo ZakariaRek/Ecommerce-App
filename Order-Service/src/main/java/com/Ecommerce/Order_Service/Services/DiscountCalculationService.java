@@ -15,20 +15,23 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class DiscountCalculationService {
+public class DiscountCalculationService{
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final RedisTemplate<String, Object> redisTemplate;
     private final DiscountRuleRepository discountRuleRepository;
     private final ObjectMapper objectMapper;
+
+    // In-memory storage for correlation contexts
+    private final Map<String, CompletableFuture<DiscountCalculationResponse>> pendingCalculations = new ConcurrentHashMap<>();
+    private final Map<String, DiscountCalculationContext> contexts = new ConcurrentHashMap<>();
 
     public CompletableFuture<DiscountCalculationResponse> calculateOrderDiscounts(
             DiscountCalculationRequest request) {
@@ -37,11 +40,7 @@ public class DiscountCalculationService {
         CompletableFuture<DiscountCalculationResponse> future = new CompletableFuture<>();
 
         // Store the future for later completion
-        redisTemplate.opsForValue().set(
-                "discount-calculation:" + correlationId,
-                future,
-                Duration.ofMinutes(5)
-        );
+        pendingCalculations.put(correlationId, future);
 
         log.info("🛒 ORDER SERVICE: Starting discount calculation for order {} with correlation {}",
                 request.getOrderId(), correlationId);
@@ -56,11 +55,9 @@ public class DiscountCalculationService {
         try {
             log.info("🛒 ORDER SERVICE: Processing discount calculation for order {}", request.getOrderId());
 
-            // Step 1: Calculate product-level discounts (already applied at product level)
             BigDecimal productDiscount = calculateProductDiscounts(request.getItems());
             log.info("🛒 ORDER SERVICE: Product discount calculated: {}", productDiscount);
 
-            // Step 2: Calculate order-level discounts
             BigDecimal orderDiscount = calculateOrderLevelDiscounts(request);
             log.info("🛒 ORDER SERVICE: Order-level discount calculated: {}", orderDiscount);
 
@@ -68,12 +65,10 @@ public class DiscountCalculationService {
                     .subtract(productDiscount)
                     .subtract(orderDiscount);
 
-            // Step 3: Request coupon validation from Loyalty Service
             if (request.getCouponCodes() != null && !request.getCouponCodes().isEmpty()) {
                 log.info("🛒 ORDER SERVICE: Requesting coupon validation for codes: {}", request.getCouponCodes());
                 requestCouponValidation(request, afterOrderDiscount, productDiscount, orderDiscount);
             } else {
-                // Skip coupon validation, go to tier discount
                 log.info("🛒 ORDER SERVICE: No coupons provided, proceeding to tier discount");
                 requestTierDiscount(request, afterOrderDiscount, productDiscount, orderDiscount, BigDecimal.ZERO);
             }
@@ -97,7 +92,6 @@ public class DiscountCalculationService {
                 .orderId(request.getOrderId())
                 .build();
 
-        // Store context for when response comes back
         DiscountCalculationContext context = DiscountCalculationContext.builder()
                 .originalRequest(request)
                 .productDiscount(productDiscount)
@@ -105,11 +99,7 @@ public class DiscountCalculationService {
                 .amountAfterOrderDiscount(afterOrderDiscount)
                 .build();
 
-        redisTemplate.opsForValue().set(
-                "discount-context:" + request.getCorrelationId(),
-                context,
-                Duration.ofMinutes(5)
-        );
+        contexts.put(request.getCorrelationId(), context);
 
         log.info("🛒 ORDER SERVICE: Sending coupon validation request to Loyalty Service");
         kafkaTemplate.send("coupon-validation-request",
@@ -130,19 +120,10 @@ public class DiscountCalculationService {
                 .amount(afterCouponDiscount)
                 .build();
 
-        // Update context with coupon discount
-        DiscountCalculationContext context = (DiscountCalculationContext) redisTemplate
-                .opsForValue().get("discount-context:" + request.getCorrelationId());
-
+        DiscountCalculationContext context = contexts.get(request.getCorrelationId());
         if (context != null) {
             context.setCouponDiscount(couponDiscount);
             context.setAmountAfterCouponDiscount(afterCouponDiscount);
-
-            redisTemplate.opsForValue().set(
-                    "discount-context:" + request.getCorrelationId(),
-                    context,
-                    Duration.ofMinutes(5)
-            );
         }
 
         log.info("🛒 ORDER SERVICE: Sending tier discount request to Loyalty Service");
@@ -152,8 +133,6 @@ public class DiscountCalculationService {
 
     private BigDecimal calculateOrderLevelDiscounts(DiscountCalculationRequest request) {
         BigDecimal discount = BigDecimal.ZERO;
-
-        // Get active discount rules
         List<DiscountRule> activeRules = discountRuleRepository.findByActiveTrue();
 
         for (DiscountRule rule : activeRules) {
@@ -177,12 +156,10 @@ public class DiscountCalculationService {
             Map<String, Object> conditions = objectMapper.readValue(rule.getConditions(), Map.class);
             Map<String, Object> config = objectMapper.readValue(rule.getDiscountConfig(), Map.class);
 
-            // Check if conditions are met
             if (!areConditionsMet(conditions, request)) {
                 return BigDecimal.ZERO;
             }
 
-            // Calculate discount based on type
             String discountType = (String) config.get("type");
             Number discountValue = (Number) config.get("value");
             Number maxDiscount = (Number) config.get("max_discount");
@@ -196,7 +173,6 @@ public class DiscountCalculationService {
                 calculatedDiscount = BigDecimal.valueOf(discountValue.doubleValue());
             }
 
-            // Apply max discount limit
             if (maxDiscount != null &&
                     calculatedDiscount.compareTo(BigDecimal.valueOf(maxDiscount.doubleValue())) > 0) {
                 calculatedDiscount = BigDecimal.valueOf(maxDiscount.doubleValue());
@@ -211,7 +187,6 @@ public class DiscountCalculationService {
     }
 
     private boolean areConditionsMet(Map<String, Object> conditions, DiscountCalculationRequest request) {
-        // Bulk discount condition
         if (conditions.containsKey("min_items")) {
             int minItems = ((Number) conditions.get("min_items")).intValue();
             if (request.getTotalItems() < minItems) {
@@ -219,7 +194,6 @@ public class DiscountCalculationService {
             }
         }
 
-        // Minimum purchase amount condition
         if (conditions.containsKey("min_amount")) {
             double minAmount = ((Number) conditions.get("min_amount")).doubleValue();
             if (request.getSubtotal().compareTo(BigDecimal.valueOf(minAmount)) < 0) {
@@ -239,10 +213,8 @@ public class DiscountCalculationService {
     }
 
     private void completeWithError(String correlationId, String errorMessage) {
-        @SuppressWarnings("unchecked")
-        CompletableFuture<DiscountCalculationResponse> future =
-                (CompletableFuture<DiscountCalculationResponse>) redisTemplate
-                        .opsForValue().get("discount-calculation:" + correlationId);
+        CompletableFuture<DiscountCalculationResponse> future = pendingCalculations.remove(correlationId);
+        contexts.remove(correlationId);
 
         if (future != null) {
             DiscountCalculationResponse errorResponse = DiscountCalculationResponse.builder()
@@ -252,10 +224,6 @@ public class DiscountCalculationService {
                     .build();
 
             future.complete(errorResponse);
-
-            // Clean up Redis
-            redisTemplate.delete("discount-calculation:" + correlationId);
-            redisTemplate.delete("discount-context:" + correlationId);
         }
     }
 }

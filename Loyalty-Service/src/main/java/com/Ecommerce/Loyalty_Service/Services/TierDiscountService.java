@@ -5,6 +5,7 @@ import com.Ecommerce.Loyalty_Service.Entities.BenefitType;
 import com.Ecommerce.Loyalty_Service.Entities.CRM;
 import com.Ecommerce.Loyalty_Service.Entities.MembershipTier;
 import com.Ecommerce.Loyalty_Service.Entities.TierBenefit;
+import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.TierDiscountResponse;
 import com.Ecommerce.Loyalty_Service.Repositories.TierBenefitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

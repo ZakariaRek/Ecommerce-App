@@ -1,6 +1,9 @@
 package com.Ecommerce.Loyalty_Service.Services;
 
 import com.Ecommerce.Loyalty_Service.Entities.Coupon;
+import com.Ecommerce.Loyalty_Service.Entities.DiscountType;
+import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CouponDiscountDetail;
+import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CouponValidationResponse;
 import com.Ecommerce.Loyalty_Service.Repositories.CouponRepository;
 import com.Ecommerce.Loyalty_Service.Repositories.CouponUsageHistoryRepository;
 import lombok.AllArgsConstructor;
@@ -10,7 +13,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor

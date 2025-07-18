@@ -1,6 +1,6 @@
 package com.Ecommerce.Loyalty_Service.Payload.Kafka.Request;
 
-import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
+import com.Ecommerce.Loyalty_Service.Payload.Kafka.OrderItemDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +22,6 @@ public class DiscountCalculationRequest {
     private BigDecimal subtotal;
     private Integer totalItems;
     private List<String> couponCodes;
-    private List<OrderItemResponseDto> items;
+    private List<OrderItemDto> items;
     private Map<String, Object> additionalData;
 }
