@@ -143,10 +143,6 @@ public class EnhancedOrderService extends OrderService {
                     .originalAmount(response.getOriginalAmount())
                     .discountAmount(breakdown.getAmount())
                     .finalAmount(response.getFinalAmount())
-                    .metadata(objectMapper.writeValueAsString(Map.of(
-                            "description", breakdown.getDescription(),
-                            "correlationId", response.getCorrelationId()
-                    )))
                     .build();
 
             applications.add(application);
