@@ -16,4 +16,6 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findByStatus(ProductStatus status);
 
+
+    List<Product> findByInventoryIsNull();
 }
