@@ -26,9 +26,7 @@ public class Inventory {
     private LocalDateTime lastRestocked;
     private String warehouseLocation;
 
-    public void updateStock() {
-        // Implementation logic here
-    }
+
 
     public boolean checkAvailability() {
         // Implementation logic here

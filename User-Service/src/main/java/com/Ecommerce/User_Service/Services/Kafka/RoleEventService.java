@@ -71,45 +71,5 @@ public class RoleEventService {
         }
     }
 
-    public void publishRoleAssignedToUserEvent(Role role, User user) {
-        try {
-            RoleEvents.RoleAssignedToUserEvent event = RoleEvents.RoleAssignedToUserEvent.builder()
-                    .roleId(role.getId())
-                    .roleName(role.getName())
-                    .userId(user.getId())
-                    .username(user.getUsername())
-                    .assignedAt(LocalDateTime.now())
-                    .build();
 
-            log.info("Publishing role assigned to user event: {}", event);
-            String key = role.getId() + "-" + user.getId();
-            kafkaTemplate.send(KafkaConfig.TOPIC_ROLE_ASSIGNED_TO_USER, key, event);
-            log.info("Role assigned to user event published successfully for role ID: {} and user ID: {}",
-                    role.getId(), user.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish role assigned to user event: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to publish role assigned to user event", e);
-        }
-    }
-
-    public void publishRoleRemovedFromUserEvent(Role role, User user) {
-        try {
-            RoleEvents.RoleRemovedFromUserEvent event = RoleEvents.RoleRemovedFromUserEvent.builder()
-                    .roleId(role.getId())
-                    .roleName(role.getName())
-                    .userId(user.getId())
-                    .username(user.getUsername())
-                    .removedAt(LocalDateTime.now())
-                    .build();
-
-            log.info("Publishing role removed from user event: {}", event);
-            String key = role.getId() + "-" + user.getId();
-            kafkaTemplate.send(KafkaConfig.TOPIC_ROLE_REMOVED_FROM_USER, key, event);
-            log.info("Role removed from user event published successfully for role ID: {} and user ID: {}",
-                    role.getId(), user.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish role removed from user event: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to publish role removed from user event", e);
-        }
-    }
 }

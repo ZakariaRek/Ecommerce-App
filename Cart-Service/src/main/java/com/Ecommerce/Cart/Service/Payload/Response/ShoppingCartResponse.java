@@ -25,24 +25,4 @@ public class ShoppingCartResponse {
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;
 
-    public static ShoppingCartResponse fromShoppingCart(ShoppingCart cart) {
-        return ShoppingCartResponse.builder()
-                .id(cart.getId())
-                .userId(cart.getUserId())
-                .items(cart.getItems() != null ? cart.getItems().stream()
-                        .map(item -> CartItemResponse.builder()
-                                .id(item.getId())
-                                .productId(item.getProductId())
-                                .quantity(item.getQuantity())
-                                .price(item.getPrice())
-                                .subtotal(item.getSubtotal())
-                                .addedAt(item.getAddedAt())
-                                .build())
-                        .collect(Collectors.toList()) : List.of())
-                .total(cart.calculateTotal())
-                .createdAt(cart.getCreatedAt())
-                .updatedAt(cart.getUpdatedAt())
-                .expiresAt(cart.getExpiresAt())
-                .build();
-    }
 }

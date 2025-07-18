@@ -118,7 +118,6 @@ public class LoyaltyDiscountKafkaListener {
             }
 
             // Increment usage count
-            coupon.setUsageCount(coupon.getUsageCount() + 1);
             couponRepository.save(coupon);
 
             // Create usage history record

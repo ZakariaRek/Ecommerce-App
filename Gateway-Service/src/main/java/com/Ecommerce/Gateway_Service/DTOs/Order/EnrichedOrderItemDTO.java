@@ -30,8 +30,4 @@ public class EnrichedOrderItemDTO {
     private String discountType;
     private BigDecimal discountValue;
 
-    // Helper method to check if product is enriched
-    public boolean isProductEnriched() {
-        return productName != null && !productName.equals("Product not found");
-    }
 }

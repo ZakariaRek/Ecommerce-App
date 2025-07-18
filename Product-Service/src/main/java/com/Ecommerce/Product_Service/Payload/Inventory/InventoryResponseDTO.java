@@ -42,19 +42,5 @@ public class InventoryResponseDTO {
         return quantity != null && quantity == 0;
     }
 
-    public Integer getAvailableQuantity() {
-        if (quantity == null) return 0;
-        if (reserved == null) return quantity;
-        return Math.max(0, quantity - reserved);
-    }
 
-    public String getStockStatus() {
-        if (getIsOutOfStock()) {
-            return "OUT_OF_STOCK";
-        } else if (getIsLowStock()) {
-            return "LOW_STOCK";
-        } else {
-            return "IN_STOCK";
-        }
-    }
 }

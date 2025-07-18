@@ -35,10 +35,5 @@ public class EnrichedOrderResponse {
         return items != null ? items.size() : 0;
     }
 
-    public int getTotalQuantity() {
-        return items != null ?
-                items.stream()
-                        .mapToInt(item -> item.getQuantity() != null ? item.getQuantity() : 0)
-                        .sum() : 0;
-    }
+
 }

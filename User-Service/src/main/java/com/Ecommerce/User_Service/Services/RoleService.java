@@ -34,14 +34,6 @@ public class RoleService {
         return roleRepository.save(role);
     }
 
-    public RoleRepository getRoleRepository() {
-        return roleRepository;
-    }
-
-    public void setRoleRepository(RoleRepository roleRepository) {
-        this.roleRepository = roleRepository;
-    }
-
     public Role updateRole(Role role) {
         role.setUpdatedAt(LocalDateTime.now());
         return roleRepository.save(role);

@@ -42,27 +42,5 @@ public class RoleEvents {
         private LocalDateTime deletedAt;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class RoleAssignedToUserEvent {
-        private String roleId;
-        private ERole roleName;
-        private String userId;
-        private String username;
-        private LocalDateTime assignedAt;
-    }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class RoleRemovedFromUserEvent {
-        private String roleId;
-        private ERole roleName;
-        private String userId;
-        private String username;
-        private LocalDateTime removedAt;
-    }
 }

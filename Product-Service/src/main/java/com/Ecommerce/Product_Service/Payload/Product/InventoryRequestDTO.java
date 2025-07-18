@@ -30,12 +30,5 @@ public class InventoryRequestDTO {
     @Min(value = 0, message = "Low stock threshold cannot be negative")
     private Integer lowStockThreshold = 10; // Default threshold
 
-    // Additional validation method
-    @AssertTrue(message = "Available quantity cannot be less than reserved quantity")
-    public boolean isQuantityValid() {
-        if (quantity == null || reserved == null) {
-            return true; // Let @NotNull handle null validation
-        }
-        return quantity >= reserved;
-    }
+
 }

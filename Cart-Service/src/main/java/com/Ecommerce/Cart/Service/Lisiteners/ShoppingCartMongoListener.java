@@ -141,19 +141,7 @@ public class ShoppingCartMongoListener extends AbstractMongoEventListener<Shoppi
         }
     }
 
-    /**
-     * Store state before save for later comparison in afterSave
-     * This should be called by the service layer before saving changes
-     */
-    public void storeStateBeforeSave(ShoppingCart cart) {
-        String key = getEntityKey(cart);
-        entityStateMap.put(key, new EntityState(
-                cart.getItems().size(),
-                cart.calculateTotal(),
-                cart.getUpdatedAt()
-        ));
-        log.debug("Stored state before shopping cart save: {}", cart.getId());
-    }
+
 
     /**
      * Generate a unique key for the entity

@@ -65,30 +65,5 @@ public class ReviewEvents {
         private LocalDateTime verifiedAt;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ReviewRatingChangedEvent {
-        private UUID reviewId;
-        private UUID userId;
-        private UUID productId;
-        private String productName;
-        private Integer previousRating;
-        private Integer newRating;
-        private LocalDateTime updatedAt;
-    }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ProductAverageRatingChangedEvent {
-        private UUID productId;
-        private String productName;
-        private Double previousAverageRating;
-        private Double newAverageRating;
-        private Integer totalReviews;
-        private LocalDateTime updatedAt;
-    }
 }

@@ -33,18 +33,7 @@ public class SavedForLaterKafkaService {
         log.info("Published item saved for later event: {}", event);
     }
 
-    /**
-     * Publish an event when a saved item is moved to cart
-     */
-    public void publishSavedItemMovedToCart(SavedForLater savedItem) {
-        SavedForLaterEvents.SavedItemMovedToCartEvent event =
-                new SavedForLaterEvents.SavedItemMovedToCartEvent(savedItem);
 
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_SAVED_ITEM_MOVED_TO_CART,
-                savedItem.getUserId().toString(), event);
-
-        log.info("Published saved item moved to cart event: {}", event);
-    }
 
     /**
      * Publish an event when a saved item is removed

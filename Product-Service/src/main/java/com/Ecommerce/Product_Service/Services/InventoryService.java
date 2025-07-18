@@ -53,11 +53,6 @@ public class InventoryService {
                 .toList();
     }
 
-    public List<Inventory> findItemsNeedingRestock(int days) {
-        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(days);
-        return inventoryRepository.findByLastRestockedBefore(cutoffDate);
-    }
-
 
 
     // ====== UTILITY METHODS ======
@@ -66,11 +61,6 @@ public class InventoryService {
         return inventoryRepository.existsById(productId);
     }
 
-    public boolean isInStock(UUID productId) {
-        return inventoryRepository.findById(productId)
-                .map(inventory -> inventory.getQuantity() > 0)
-                .orElse(false);
-    }
 
     public boolean canFulfillOrder(UUID productId, Integer requestedQuantity) {
         return inventoryRepository.findById(productId)
@@ -80,62 +70,7 @@ public class InventoryService {
 
     // ====== CREATE OPERATIONS ======
 
-    @Transactional
-    public Inventory createInventory(Inventory inventory) {
-        // Validate that product exists
-        if (inventory.getProduct() == null || inventory.getProduct().getId() == null) {
-            throw new IllegalArgumentException("Product ID is required");
-        }
 
-        UUID productId = inventory.getProduct().getId();
-
-        // Check if inventory already exists for this product
-        if (inventoryRepository.existsById(productId)) {
-            throw new IllegalStateException("Inventory already exists for product ID: " + productId);
-        }
-
-        // Fetch the complete product entity from database
-        Optional<Product> productOpt = productRepository.findById(productId);
-        if (productOpt.isEmpty()) {
-            throw new IllegalArgumentException("Product not found with ID: " + productId);
-        }
-
-        Product product = productOpt.get();
-
-        // Create NEW inventory entity (important: don't set ID yet)
-        Inventory newInventory = new Inventory();
-
-        // Set the product first (this will generate the ID through @MapsId)
-        newInventory.setProduct(product);
-
-        // Now set other fields
-        newInventory.setQuantity(inventory.getQuantity() != null ? inventory.getQuantity() : 0);
-        newInventory.setLowStockThreshold(inventory.getLowStockThreshold() != null ? inventory.getLowStockThreshold() : 10);
-        newInventory.setWarehouseLocation(inventory.getWarehouseLocation());
-        newInventory.setLastRestocked(LocalDateTime.now());
-
-        // Update product status based on stock
-        updateProductStatusBasedOnStock(product, newInventory.getQuantity());
-
-        try {
-            // Save inventory - use save() for new entities
-            Inventory savedInventory = inventoryRepository.saveAndFlush(newInventory);
-
-            // Update product with inventory reference and sync stock
-            product.setInventory(savedInventory);
-            product.setStock(newInventory.getQuantity());
-            productRepository.save(product);
-
-            // Publish event
-            inventoryEventService.publishInventoryCreatedEvent(savedInventory);
-
-            return savedInventory;
-
-        } catch (Exception e) {
-            // Log the error and re-throw with meaningful message
-            throw new RuntimeException("Failed to create inventory for product " + productId + ": " + e.getMessage(), e);
-        }
-    }
 
     @Transactional
     public Inventory createInventoryForProduct(UUID productId, Integer quantity, String warehouseLocation, Integer lowStockThreshold) {
@@ -222,52 +157,7 @@ public class InventoryService {
                 });
     }
 
-    @Transactional
-    public Optional<Inventory> partialUpdateInventory(UUID productId, InventoryRequestDTO requestDTO) {
-        return inventoryRepository.findById(productId)
-                .map(existingInventory -> {
-                    Integer previousQuantity = existingInventory.getQuantity();
-                    Integer previousThreshold = existingInventory.getLowStockThreshold();
 
-                    // Update only provided fields
-                    if (requestDTO.getQuantity() != null && requestDTO.getQuantity() >= 0) {
-                        existingInventory.setQuantity(requestDTO.getQuantity());
-                        existingInventory.setLastRestocked(LocalDateTime.now());
-                    }
-
-                    if (requestDTO.getWarehouseLocation() != null) {
-                        existingInventory.setWarehouseLocation(requestDTO.getWarehouseLocation());
-                    }
-
-                    if (requestDTO.getLowStockThreshold() != null) {
-                        existingInventory.setLowStockThreshold(requestDTO.getLowStockThreshold());
-                    }
-
-                    // Update product status and stock
-                    updateProductStatusBasedOnStock(existingInventory.getProduct(), existingInventory.getQuantity());
-                    existingInventory.getProduct().setStock(existingInventory.getQuantity());
-                    productRepository.save(existingInventory.getProduct());
-
-                    // Check for low stock
-                    checkAndNotifyLowStock(existingInventory);
-
-                    // Save inventory
-                    Inventory savedInventory = inventoryRepository.save(existingInventory);
-
-                    // Publish events
-                    inventoryEventService.publishInventoryUpdatedEvent(savedInventory);
-
-                    if (!previousQuantity.equals(existingInventory.getQuantity())) {
-                        inventoryEventService.publishInventoryStockChangedEvent(savedInventory, previousQuantity);
-                    }
-
-                    if (previousThreshold != null && !previousThreshold.equals(existingInventory.getLowStockThreshold())) {
-                        inventoryEventService.publishInventoryThresholdChangedEvent(savedInventory, previousThreshold);
-                    }
-
-                    return savedInventory;
-                });
-    }
 
     @Transactional
     public Optional<Inventory> updateStock(UUID productId, Integer newQuantity) {
@@ -299,29 +189,7 @@ public class InventoryService {
                 });
     }
 
-    @Transactional
-    public Optional<Inventory> updateLowStockThreshold(UUID productId, Integer newThreshold) {
-        if (newThreshold < 0) {
-            throw new IllegalArgumentException("Low stock threshold cannot be negative");
-        }
 
-        return inventoryRepository.findById(productId)
-                .map(inventory -> {
-                    Integer previousThreshold = inventory.getLowStockThreshold();
-                    inventory.setLowStockThreshold(newThreshold);
-
-                    // Check for low stock with new threshold
-                    checkAndNotifyLowStock(inventory);
-
-                    // Save inventory
-                    Inventory savedInventory = inventoryRepository.save(inventory);
-
-                    // Publish event
-                    inventoryEventService.publishInventoryThresholdChangedEvent(savedInventory, previousThreshold);
-
-                    return savedInventory;
-                });
-    }
 
     @Transactional
     public Optional<Inventory> restockInventory(UUID productId, Integer additionalQuantity) {
