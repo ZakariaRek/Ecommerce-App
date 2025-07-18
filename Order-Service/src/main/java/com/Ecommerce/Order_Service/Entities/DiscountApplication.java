@@ -31,7 +31,7 @@ public class DiscountApplication {
     private DiscountType discountType;
 
     @Column(length = 100)
-    private String discountSource; // coupon code, tier level, rule name
+    private String discountSource; // coupon code, tier level
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal originalAmount;
@@ -45,6 +45,4 @@ public class DiscountApplication {
     @CreationTimestamp
     private LocalDateTime appliedAt;
 
-    @Column(columnDefinition = "TEXT")
-    private String metadata; // JSON for additional context
 }

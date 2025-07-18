@@ -1,13 +1,11 @@
 package com.Ecommerce.Order_Service.Services;
 
-import com.Ecommerce.Order_Service.Entities.DiscountRule;
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.CouponValidationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
 import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
-import com.Ecommerce.Order_Service.Repositories.DiscountRuleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class DiscountCalculationService{
+public class DiscountCalculationService {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final DiscountRuleRepository discountRuleRepository;
     private final ObjectMapper objectMapper;
 
     // In-memory storage for correlation contexts
@@ -131,77 +128,53 @@ public class DiscountCalculationService{
                 request.getCorrelationId(), tierRequest);
     }
 
+    /**
+     * Calculate simple order-level discounts without complex rule engine
+     * You can implement basic business logic here or remove completely
+     */
     private BigDecimal calculateOrderLevelDiscounts(DiscountCalculationRequest request) {
         BigDecimal discount = BigDecimal.ZERO;
-        List<DiscountRule> activeRules = discountRuleRepository.findByActiveTrue();
 
-        for (DiscountRule rule : activeRules) {
-            try {
-                BigDecimal ruleDiscount = applyDiscountRule(rule, request);
-                discount = discount.add(ruleDiscount);
+        try {
+            // Option 1: No order-level discounts
+            // return BigDecimal.ZERO;
 
-                if (ruleDiscount.compareTo(BigDecimal.ZERO) > 0) {
-                    log.info("🛒 ORDER SERVICE: Applied rule '{}': {}", rule.getRuleName(), ruleDiscount);
-                }
-            } catch (Exception e) {
-                log.warn("🛒 ORDER SERVICE: Failed to apply rule '{}': {}", rule.getRuleName(), e.getMessage());
+            // Option 2: Simple hardcoded business rules
+            BigDecimal subtotal = request.getSubtotal();
+            Integer totalItems = request.getTotalItems();
+
+            // Example: Bulk discount - 10% off for 5+ items
+            if (totalItems != null && totalItems >= 5) {
+                BigDecimal bulkDiscount = subtotal.multiply(BigDecimal.valueOf(0.10));
+                discount = discount.add(bulkDiscount);
+                log.info("🛒 ORDER SERVICE: Applied bulk discount (5+ items): {}", bulkDiscount);
             }
+
+            // Example: Minimum purchase discount - $15 off orders over $100
+            if (subtotal.compareTo(BigDecimal.valueOf(100)) >= 0) {
+                BigDecimal minPurchaseDiscount = BigDecimal.valueOf(15);
+                discount = discount.add(minPurchaseDiscount);
+                log.info("🛒 ORDER SERVICE: Applied minimum purchase discount ($100+): {}", minPurchaseDiscount);
+            }
+
+            // Example: Large order discount - 5% off orders over $500
+            if (subtotal.compareTo(BigDecimal.valueOf(500)) >= 0) {
+                BigDecimal largeOrderDiscount = subtotal.multiply(BigDecimal.valueOf(0.05));
+                // Cap at $50 maximum
+                if (largeOrderDiscount.compareTo(BigDecimal.valueOf(50)) > 0) {
+                    largeOrderDiscount = BigDecimal.valueOf(50);
+                }
+                discount = discount.add(largeOrderDiscount);
+                log.info("🛒 ORDER SERVICE: Applied large order discount ($500+): {}", largeOrderDiscount);
+            }
+
+        } catch (Exception e) {
+            log.error("🛒 ORDER SERVICE: Error calculating order-level discounts", e);
+            // Return zero discount on error to avoid breaking the order
+            return BigDecimal.ZERO;
         }
 
         return discount;
-    }
-
-    private BigDecimal applyDiscountRule(DiscountRule rule, DiscountCalculationRequest request) {
-        try {
-            Map<String, Object> conditions = objectMapper.readValue(rule.getConditions(), Map.class);
-            Map<String, Object> config = objectMapper.readValue(rule.getDiscountConfig(), Map.class);
-
-            if (!areConditionsMet(conditions, request)) {
-                return BigDecimal.ZERO;
-            }
-
-            String discountType = (String) config.get("type");
-            Number discountValue = (Number) config.get("value");
-            Number maxDiscount = (Number) config.get("max_discount");
-
-            BigDecimal calculatedDiscount = BigDecimal.ZERO;
-
-            if ("PERCENTAGE".equals(discountType)) {
-                calculatedDiscount = request.getSubtotal()
-                        .multiply(BigDecimal.valueOf(discountValue.doubleValue() / 100));
-            } else if ("FIXED_AMOUNT".equals(discountType)) {
-                calculatedDiscount = BigDecimal.valueOf(discountValue.doubleValue());
-            }
-
-            if (maxDiscount != null &&
-                    calculatedDiscount.compareTo(BigDecimal.valueOf(maxDiscount.doubleValue())) > 0) {
-                calculatedDiscount = BigDecimal.valueOf(maxDiscount.doubleValue());
-            }
-
-            return calculatedDiscount;
-
-        } catch (Exception e) {
-            log.error("🛒 ORDER SERVICE: Error applying discount rule {}: {}", rule.getRuleName(), e.getMessage());
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private boolean areConditionsMet(Map<String, Object> conditions, DiscountCalculationRequest request) {
-        if (conditions.containsKey("min_items")) {
-            int minItems = ((Number) conditions.get("min_items")).intValue();
-            if (request.getTotalItems() < minItems) {
-                return false;
-            }
-        }
-
-        if (conditions.containsKey("min_amount")) {
-            double minAmount = ((Number) conditions.get("min_amount")).doubleValue();
-            if (request.getSubtotal().compareTo(BigDecimal.valueOf(minAmount)) < 0) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private BigDecimal calculateProductDiscounts(List<OrderItemResponseDto> items) {
