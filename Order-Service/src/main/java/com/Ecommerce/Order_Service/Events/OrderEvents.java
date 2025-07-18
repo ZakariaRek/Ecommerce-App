@@ -179,4 +179,36 @@ public class OrderEvents {
             this.newTotal = item.getTotal();
         }
     }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OrderCompletedEvent {
+        private UUID eventId;
+        private LocalDateTime timestamp;
+        private UUID orderId;
+        private UUID userId;
+        private BigDecimal orderTotal;
+        private int itemCount;
+        private boolean firstOrder;
+        private String paymentMethod;
+        private String orderStatus;
+        private LocalDateTime completedAt;
+
+        public OrderCompletedEvent(UUID orderId, UUID userId, BigDecimal orderTotal,
+                                   int itemCount, boolean firstOrder, String paymentMethod,
+                                   String orderStatus) {
+            this.eventId = UUID.randomUUID();
+            this.timestamp = LocalDateTime.now();
+            this.orderId = orderId;
+            this.userId = userId;
+            this.orderTotal = orderTotal;
+            this.itemCount = itemCount;
+            this.firstOrder = firstOrder;
+            this.paymentMethod = paymentMethod;
+            this.orderStatus = orderStatus;
+            this.completedAt = LocalDateTime.now();
+        }
+    }
 }

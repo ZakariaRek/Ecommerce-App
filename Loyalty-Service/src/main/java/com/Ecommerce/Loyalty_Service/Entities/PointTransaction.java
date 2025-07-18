@@ -43,6 +43,12 @@ public class PointTransaction {
     private LocalDateTime expirationDate; // When points expire
 
     @Column(precision = 10, scale = 2)
-    private BigDecimal orderAmount; // Related order amount for context
+    private BigDecimal orderAmount;
+
+    @Version
+    @Column(name = "version")
+    private Long version ;
+    // New field for idempotency
+    private String idempotencyKey;
 
 }

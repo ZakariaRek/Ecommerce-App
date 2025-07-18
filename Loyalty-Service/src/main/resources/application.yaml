@@ -62,14 +62,14 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
 
-# Logging configuration
-logging:
-  level:
-    com.loyalty: DEBUG
-    org.springframework: INFO
-    org.hibernate: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+## Logging configuration
+#logging:
+#  level:
+#    com.loyalty: DEBUG
+#    org.springframework: INFO
+#    org.hibernate: INFO
+#    org.hibernate.SQL: DEBUG
+#    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 # Application-specific configuration
 loyalty:
@@ -104,3 +104,27 @@ Point Earning Events:
   - User Referral: +100 points (referrer)
   - Welcome Bonus: +50 points (new user)
   - Birthday: Tier-based bonus points
+
+eureka:
+  instance:
+    preferIpAddress: true
+    instanceId: ${spring.application.name}:${server.port}
+    hostname: localhost
+    metadataMap:
+      instanceId: ${spring.application.name}:${server.port}
+
+# Logging Configuration
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.data.redis: DEBUG
+    org.springframework.web.cors: DEBUG
+    io.github.resilience4j: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
+    com.Ecommerce: DEBUG  # Your package
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
