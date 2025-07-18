@@ -87,7 +87,6 @@ public class LoyaltyRewardService {
         LoyaltyReward savedReward = rewardRepository.save(reward);
 
         // Direct Kafka event
-        kafkaService.publishRewardAdded(savedReward, "ADMIN");
 
         log.info("Added new reward: {}", savedReward.getName());
 

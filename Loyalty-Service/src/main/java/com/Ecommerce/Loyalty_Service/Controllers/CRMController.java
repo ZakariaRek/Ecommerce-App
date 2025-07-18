@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -16,6 +17,12 @@ import java.util.UUID;
 public class CRMController {
     @Autowired
     private CRMService crmService;
+
+
+    @GetMapping
+    public ResponseEntity<List<CRM>> getAllUsers() {
+        return ResponseEntity.ok(crmService.getAllUsers());
+    }
 
     @GetMapping("/{userId}")
     public ResponseEntity<CRM> getCRMByUserId(@PathVariable UUID userId) {

@@ -55,6 +55,10 @@ public class KafkaProducerConfig {
     public static final String TOPIC_ORDER_BATCH_REQUEST = "order.batch.request";
     public static final String TOPIC_ORDER_BATCH_RESPONSE = "order.batch.response";
     public static final String TOPIC_ORDER_BATCH_ERROR = "order.batch.error";
+
+
+    public static final String TOPIC_ORDER_COMPLETED = "order-completed";
+
     // Producer configuration
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
@@ -218,6 +222,14 @@ public class KafkaProducerConfig {
     @Bean
     public NewTopic orderBatchErrorTopic() {
         return TopicBuilder.name(TOPIC_ORDER_BATCH_ERROR)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic orderCompletedTopic() {
+        return TopicBuilder.name(TOPIC_ORDER_COMPLETED)
                 .partitions(3)
                 .replicas(1)
                 .build();
