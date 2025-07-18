@@ -381,12 +381,12 @@ resilience4j:
         minimumNumberOfCalls: 8
         failureRateThreshold: 55
         waitDurationInOpenState: 30s
-      saved4later-bff-cb:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
+#      saved4later-bff-cb:
+#        slidingWindowSize: 10
+#        minimumNumberOfCalls: 5
+#        failureRateThreshold: 50
+#        waitDurationInOpenState: 30s
+#        permittedNumberOfCallsInHalfOpenState: 3
       loyalty-cb:
         base-config: default
         slidingWindowSize: 15
@@ -440,8 +440,8 @@ resilience4j:
         timeoutDuration: 30s
       cart-cb:
         base-config: default
-      saved4later-bff-cb:
-        timeoutDuration: 10s
+#      saved4later-bff-cb:
+#        timeoutDuration: 10s
       loyalty-cb:
         base-config: default
       notification-cb:
