@@ -248,10 +248,190 @@ graph TB
 - **Async Request-Response** patterns with correlation IDs
 - **Error Handling Topics** for failure scenarios
 
-#### **Data Storage Strategy**
-- **PostgreSQL** for transactional data (Orders, Products, Payments)
-- **MongoDB** for document-based data (Users, Cart, Notifications)  
-- **Redis** for high-speed caching and session management
+### 🌐 **Service Communication Matrix**
+
+This diagram shows the actual communication patterns, ports, and protocols used in your implementation:
+
+```mermaid
+graph LR
+    subgraph "Client Layer"
+        CLIENT[Client Applications<br/>Web/Mobile/API]
+    end
+
+    subgraph "Gateway Layer - :8099"
+        GATEWAY[API Gateway<br/>Spring Cloud Gateway]
+        
+        subgraph "Gateway Features"
+            AUTH[JWT Authentication<br/>gateway1.jwt.secret]
+            RATE_LIMIT[Rate Limiting<br/>Redis-backed<br/>5-300 req/min]
+            CIRCUIT[Circuit Breakers<br/>Resilience4j<br/>50% failure threshold]
+            BFF[BFF Aggregation<br/>Async Kafka</br>Correlation IDs]
+        end
+    end
+
+    subgraph "Infrastructure - Discovery & Config"
+        EUREKA[Eureka Server<br/>:8761<br/>Service Registry]
+        CONFIG_SRV[Config Server<br/>:8888<br/>http://localhost:8888]
+        REDIS[Redis<br/>:6379<br/>Cache & Rate Limiting]
+    end
+
+    subgraph "Message Bus"
+        KAFKA_BROKER[Apache Kafka<br/>:9092<br/>Event Streaming]
+        
+        subgraph "Topic Ecosystem"
+            CART_T[cart.request/response/error]
+            PRODUCT_T[product.batch.request/response]
+            ORDER_T[order.request/response<br/>order.ids.request/response]
+            SAVED_T[saved4later.request/response]
+        end
+    end
+
+    subgraph "Core Services"
+        USER[User Service<br/>lb://user-service<br/>MongoDB + JWT + OAuth2]
+        PRODUCT[Product Service<br/>lb://product-service<br/>PostgreSQL + Batch API]
+        CART[Cart Service<br/>lb://cart-service<br/>Go + MongoDB + Redis]
+        ORDER[Order Service<br/>lb://order-service<br/>PostgreSQL + Spring Boot]
+    end
+
+    subgraph "Business Services"
+        PAYMENT[Payment Service<br/>lb://PAYMENT-SERVICE<br/>Go + PostgreSQL<br/>Token Bucket: 3/5min]
+        SHIPPING[Shipping Service<br/>lb://SHIPPING-SERVICE<br/>Go + PostgreSQL]
+        LOYALTY[Loyalty Service<br/>lb://LOYALTY-SERVICE<br/>PostgreSQL + Spring Boot]
+        NOTIFICATION[Notification Service<br/>lb://NOTIFICATION-SERVICE<br/>MongoDB + Spring Boot]
+    end
+
+    subgraph "Observability"
+        ZIPKIN[Zipkin<br/>:9411<br/>Distributed Tracing]
+        ELK[ELK Stack<br/>Centralized Logging]
+        ACTUATOR[Spring Actuator<br/>Health & Metrics]
+    end
+
+    %% Client to Gateway
+    CLIENT -->|HTTPS<br/>JWT Bearer| GATEWAY
+
+    %% Gateway Internal Processing
+    GATEWAY --> AUTH
+    AUTH --> RATE_LIMIT
+    RATE_LIMIT --> CIRCUIT
+    CIRCUIT --> BFF
+
+    %% Gateway to Infrastructure
+    GATEWAY -.->|Service Discovery| EUREKA
+    GATEWAY -.->|Configuration| CONFIG_SRV
+    GATEWAY -.->|Rate Limiting| REDIS
+
+    %% BFF to Kafka (Async Communication)
+    BFF -->|Async Request<br/>Correlation ID| KAFKA_BROKER
+    KAFKA_BROKER --> CART_T
+    KAFKA_BROKER --> PRODUCT_T
+    KAFKA_BROKER --> ORDER_T
+    KAFKA_BROKER --> SAVED_T
+
+    %% Services to Kafka
+    CART -.->|Consume/Produce| CART_T
+    PRODUCT -.->|Batch Processing| PRODUCT_T
+    ORDER -.->|Order Processing| ORDER_T
+    CART -.->|Saved Items| SAVED_T
+
+    %% Gateway Routes (Load Balanced)
+    GATEWAY -->|lb://user-service<br/>Authentication Routes| USER
+    GATEWAY -->|lb://product-service<br/>Catalog Routes| PRODUCT
+    GATEWAY -->|lb://cart-service<br/>Cart Routes| CART
+    GATEWAY -->|lb://order-service<br/>Order Routes| ORDER
+    GATEWAY -->|lb://PAYMENT-SERVICE<br/>Payment Routes| PAYMENT
+    GATEWAY -->|lb://SHIPPING-SERVICE<br/>Shipping Routes| SHIPPING
+    GATEWAY -->|lb://LOYALTY-SERVICE<br/>Loyalty Routes| LOYALTY
+    GATEWAY -->|lb://NOTIFICATION-SERVICE<br/>Notification Routes| NOTIFICATION
+
+    %% Services to Infrastructure
+    USER -.->|Register| EUREKA
+    PRODUCT -.->|Register| EUREKA
+    CART -.->|Register| EUREKA
+    ORDER -.->|Register| EUREKA
+    PAYMENT -.->|Register| EUREKA
+    SHIPPING -.->|Register| EUREKA
+    LOYALTY -.->|Register| EUREKA
+    NOTIFICATION -.->|Register| EUREKA
+
+    %% Observability
+    GATEWAY -.->|Tracing| ZIPKIN
+    USER -.->|Tracing| ZIPKIN
+    PRODUCT -.->|Tracing| ZIPKIN
+    CART -.->|Tracing| ZIPKIN
+    ORDER -.->|Tracing| ZIPKIN
+
+    GATEWAY -.->|Logs| ELK
+    USER -.->|Logs| ELK
+    PRODUCT -.->|Logs| ELK
+    CART -.->|Logs| ELK
+    ORDER -.->|Logs| ELK
+
+    GATEWAY -.->|Health| ACTUATOR
+    USER -.->|Health| ACTUATOR
+    PRODUCT -.->|Health| ACTUATOR
+
+    %% Styling
+    classDef gatewayClass fill:#1976d2,color:#fff,stroke:#0d47a1
+    classDef serviceClass fill:#388e3c,color:#fff,stroke:#1b5e20
+    classDef infraClass fill:#f57c00,color:#fff,stroke:#e65100
+    classDef kafkaClass fill:#7b1fa2,color:#fff,stroke:#4a148c
+    classDef observeClass fill:#d32f2f,color:#fff,stroke:#b71c1c
+
+    class GATEWAY,AUTH,RATE_LIMIT,CIRCUIT,BFF gatewayClass
+    class USER,PRODUCT,CART,ORDER,PAYMENT,SHIPPING,LOYALTY,NOTIFICATION serviceClass
+    class EUREKA,CONFIG_SRV,REDIS infraClass
+    class KAFKA_BROKER,CART_T,PRODUCT_T,ORDER_T,SAVED_T kafkaClass
+    class ZIPKIN,ELK,ACTUATOR observeClass
+```
+
+### 🛡️ **Security & Resilience Features**
+
+```mermaid
+flowchart TD
+    REQUEST[Incoming Request] --> JWT_CHECK{JWT Valid?}
+    
+    JWT_CHECK -->|No| REJECT[401 Unauthorized]
+    JWT_CHECK -->|Yes| RATE_CHECK{Rate Limit OK?}
+    
+    RATE_CHECK -->|No| RATE_REJECT[429 Too Many Requests<br/>X-RateLimit-Remaining: 0]
+    RATE_CHECK -->|Yes| CIRCUIT_CHECK{Circuit Open?}
+    
+    CIRCUIT_CHECK -->|Yes| FALLBACK[Circuit Open<br/>Return Fallback Response]
+    CIRCUIT_CHECK -->|No| ROUTE[Route to Service]
+    
+    ROUTE --> SERVICE_CALL[Service Call]
+    SERVICE_CALL --> SUCCESS{Success?}
+    
+    SUCCESS -->|Yes| RECORD_SUCCESS[Record Success<br/>Update Circuit Metrics]
+    SUCCESS -->|No| RECORD_FAILURE[Record Failure<br/>Check Threshold]
+    
+    RECORD_FAILURE --> THRESHOLD{Failure Rate > 50%?}
+    THRESHOLD -->|Yes| OPEN_CIRCUIT[Open Circuit<br/>30s Wait Period]
+    THRESHOLD -->|No| CONTINUE[Continue Normal Operation]
+    
+    RECORD_SUCCESS --> RESPONSE[Return Response]
+    CONTINUE --> RESPONSE
+    OPEN_CIRCUIT --> FALLBACK
+    
+    subgraph "Rate Limiting Configuration"
+        AUTH_RATE["/api/users/auth/**<br/>5 requests/60s<br/>IP-based"]
+        PAYMENT_RATE["/api/payments/**<br/>3 requests/300s<br/>User-based<br/>Token Bucket"]
+        PUBLIC_RATE["/api/products/** (GET)<br/>300 requests/60s<br/>IP-based"]
+        CART_RATE["/api/cart/**<br/>50 requests/60s<br/>User-based"]
+    end
+    
+    subgraph "Circuit Breaker Thresholds"
+        CB_AUTH["auth-cb: 50% failure<br/>10 calls window"]
+        CB_PAYMENT["payment-cb: 30% failure<br/>5 calls window<br/>60s wait"]
+        CB_PRODUCT["product-read-cb: 60% failure<br/>20 calls window"]
+    end
+
+    style REQUEST fill:#e3f2fd
+    style REJECT fill:#ffcdd2
+    style RATE_REJECT fill:#fff3e0
+    style FALLBACK fill:#f3e5f5
+    style RESPONSE fill:#e8f5e8
+```
 
 ## 🎯 Backend for Frontend (BFF) Pattern with Async Communication
 
