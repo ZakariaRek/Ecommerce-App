@@ -5,7 +5,6 @@ import com.Ecommerce.Loyalty_Service.Entities.DiscountType;
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CouponDiscountDetail;
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CouponValidationResponse;
 import com.Ecommerce.Loyalty_Service.Repositories.CouponRepository;
-import com.Ecommerce.Loyalty_Service.Repositories.CouponUsageHistoryRepository;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,6 @@ import java.util.UUID;
 public class CouponValidationService {
 
     private  final CouponRepository couponRepository;
-    private  final CouponUsageHistoryRepository usageHistoryRepository;
 
     public CouponValidationResponse validateAndCalculateDiscount(
             List<String> couponCodes, UUID userId, BigDecimal amount) {
@@ -107,18 +105,7 @@ public class CouponValidationService {
                     coupon.getMinPurchaseAmount() + " not met");
         }
 
-        // Check user-specific usage limits
-        if (coupon.getMaxUsagePerUser() != null) {
-            long usageCount = usageHistoryRepository.countByUserIdAndCouponId(userId, coupon.getId());
-            if (usageCount >= coupon.getMaxUsagePerUser()) {
-                return ValidationResult.invalid("User has exceeded usage limit");
-            }
-        }
 
-        // Check overall usage limit
-        if (coupon.getUsageLimit() > 0 && coupon.getUsageCount() >= coupon.getUsageLimit()) {
-            return ValidationResult.invalid("Coupon usage limit exceeded");
-        }
 
         return ValidationResult.valid();
     }

@@ -18,6 +18,5 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     @Query("SELECT s FROM Supplier s LEFT JOIN FETCH s.products WHERE s.id = :id")
     Optional<Supplier> findByIdWithProducts(@Param("id") UUID id);
 
-    @Query("SELECT s FROM Supplier s LEFT JOIN FETCH s.products")
-    List<Supplier> findAllWithProducts();
+
 }

@@ -2,7 +2,6 @@ package com.Ecommerce.Loyalty_Service.Services;
 
 import com.Ecommerce.Loyalty_Service.Entities.Coupon;
 import com.Ecommerce.Loyalty_Service.Entities.DiscountType;
-import com.Ecommerce.Loyalty_Service.Listeners.CouponMongoListener;
 import com.Ecommerce.Loyalty_Service.Repositories.CouponRepository;
 import com.Ecommerce.Loyalty_Service.Services.Kafka.CouponKafkaService;
 import jakarta.transaction.Transactional;
@@ -23,7 +22,6 @@ import java.util.UUID;
 public class CouponService {
     private final CouponRepository couponRepository;
     private final CouponKafkaService kafkaService;
-    private final CouponMongoListener couponMongoListener;
 
     public String generateCouponCode() {
         // Generate a random alphanumeric code
@@ -129,8 +127,6 @@ public class CouponService {
 
         Coupon coupon = couponRepository.findByCode(couponCode).get();
 
-        // Store state before save for Mongo listener
-        couponMongoListener.storeStateBeforeSave(coupon);
 
         BigDecimal discountAmount;
         if (coupon.getDiscountType() == DiscountType.PERCENTAGE) {

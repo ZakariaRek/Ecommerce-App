@@ -53,26 +53,6 @@ public class SavedForLaterEvents {
         }
     }
 
-    /**
-     * Event fired when a saved item is moved to cart
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SavedItemMovedToCartEvent extends SavedForLaterEvent {
-        private UUID savedItemId;
-        private UUID userId;
-        private UUID productId;
-
-        public SavedItemMovedToCartEvent(SavedForLater savedItem) {
-            super("SAVED_ITEM_MOVED_TO_CART");
-            this.savedItemId = savedItem.getId();
-            this.userId = savedItem.getUserId();
-            this.productId = savedItem.getProductId();
-
-        }
-    }
 
     /**
      * Event fired when a saved item is removed

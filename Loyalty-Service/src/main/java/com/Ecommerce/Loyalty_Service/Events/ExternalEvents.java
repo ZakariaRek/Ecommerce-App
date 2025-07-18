@@ -67,21 +67,6 @@ public class ExternalEvents {
         private UUID orderId;
     }
 
-    /**
-     * Event fired when a user profile is updated
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class UserProfileUpdatedEvent {
-        private UUID eventId;
-        private LocalDateTime timestamp;
-        private UUID userId;
-        private String fieldUpdated;
-        private String oldValue;
-        private String newValue;
-    }
 
     /**
      * Event fired when a cart is abandoned
@@ -98,21 +83,5 @@ public class ExternalEvents {
         private BigDecimal cartTotal;
         private int itemCount;
         private LocalDateTime lastActivityTime;
-    }
-
-    /**
-     * Event fired when a user refers another user who signs up
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class UserReferralCompletedEvent {
-        private UUID eventId;
-        private LocalDateTime timestamp;
-        private UUID referrerId;
-        private UUID newUserId;
-        private String referralCode;
-        private LocalDateTime referralDate;
     }
 }

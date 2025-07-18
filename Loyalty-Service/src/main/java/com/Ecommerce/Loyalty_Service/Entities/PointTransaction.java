@@ -1,6 +1,5 @@
 package com.Ecommerce.Loyalty_Service.Entities;
 
-import com.Ecommerce.Loyalty_Service.Listeners.PointTransactionMongoListener;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,7 +15,6 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(PointTransactionMongoListener.class)
 public class PointTransaction {
     @Id
     @GeneratedValue
@@ -42,14 +40,9 @@ public class PointTransaction {
 
     private UUID relatedCouponId;
 
-    @Column(columnDefinition = "TEXT")
-    private String transactionMetadata; // JSON for additional context
-
     private LocalDateTime expirationDate; // When points expire
 
     @Column(precision = 10, scale = 2)
     private BigDecimal orderAmount; // Related order amount for context
 
-    @Column(length = 20)
-    private String campaignCode; // If points were earned through a campaign
 }

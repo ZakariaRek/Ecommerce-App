@@ -78,14 +78,5 @@ public class CartItemKafkaService {
         log.info("Published cart item out of stock event: {}", event);
     }
 
-    /**
-     * Publish an event when a discount is applied to a cart item
-     */
-    public void publishCartItemDiscountApplied(CartItem cartItem, UUID discountId, String discountType,
-                                               BigDecimal originalPrice, BigDecimal discountAmount, BigDecimal discountPercentage) {
-        CartItemEvents.CartItemDiscountAppliedEvent event = new CartItemEvents.CartItemDiscountAppliedEvent(
-                cartItem, discountId, discountType, originalPrice, discountAmount, discountPercentage);
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_CART_ITEM_UPDATED, cartItem.getCartId().toString(), event);
-        log.info("Published cart item discount applied event: {}", event);
-    }
+
 }

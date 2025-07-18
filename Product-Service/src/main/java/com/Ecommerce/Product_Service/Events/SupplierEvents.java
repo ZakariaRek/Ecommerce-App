@@ -55,40 +55,7 @@ public class SupplierEvents {
         private LocalDateTime deletedAt;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SupplierRatingChangedEvent {
-        private UUID supplierId;
-        private String name;
-        private BigDecimal previousRating;
-        private BigDecimal newRating;
-        private LocalDateTime updatedAt;
-    }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SupplierContractUpdatedEvent {
-        private UUID supplierId;
-        private String name;
-        private Map<String, Object> previousContractDetails;
-        private Map<String, Object> newContractDetails;
-        private LocalDateTime updatedAt;
-    }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SupplierProductAssociationEvent {
-        private UUID supplierId;
-        private String supplierName;
-        private UUID productId;
-        private String productName;
-        private boolean associated; // true if associated, false if dissociated
-        private LocalDateTime timestamp;
-    }
+
 }

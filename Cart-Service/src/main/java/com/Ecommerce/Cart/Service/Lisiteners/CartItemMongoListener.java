@@ -120,15 +120,6 @@ public class CartItemMongoListener extends AbstractMongoEventListener<CartItem> 
         log.debug("MongoDB listener triggered for cart item update: {}", cartItem.getId());
     }
 
-    /**
-     * Store state before save for later comparison in afterSave
-     * This should be called by the service layer before saving changes
-     */
-    public void storeStateBeforeSave(CartItem cartItem) {
-        String key = getEntityKey(cartItem);
-        entityStateMap.put(key, new EntityState(cartItem.getQuantity(), cartItem.getPrice()));
-        log.debug("Stored state before cart item save: {}", cartItem.getId());
-    }
 
     /**
      * Generate a unique key for the entity

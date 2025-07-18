@@ -259,41 +259,20 @@ public class RateLimitController {
             this.isLimited = isLimited;
         }
 
-        // Getters and setters
-        public String getEndpoint() { return endpoint; }
-        public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
-
-        public int getCurrentCount() { return currentCount; }
-        public void setCurrentCount(int currentCount) { this.currentCount = currentCount; }
-
-        public int getLimit() { return limit; }
-        public void setLimit(int limit) { this.limit = limit; }
-
-        public int getRemainingTtl() { return remainingTtl; }
-        public void setRemainingTtl(int remainingTtl) { this.remainingTtl = remainingTtl; }
-
-        public boolean isLimited() { return isLimited; }
-        public void setLimited(boolean limited) { isLimited = limited; }
     }
 
     // Schema classes for Swagger documentation
     public static class RateLimitConfigResponse {
         public LocalDateTime timestamp;
-        public int totalEndpoints;
         public List<RateLimitEndpointConfig> endpoints;
     }
 
     public static class RateLimitStatusResponse {
-        public String identifier;
-        public String keyType;
         public LocalDateTime timestamp;
         public Map<String, RateLimitStatus> endpointStatuses;
     }
 
     public static class RateLimitStatsResponse {
         public LocalDateTime timestamp;
-        public int totalActiveRateLimits;
-        public Map<String, Integer> endpointBreakdown;
-        public Map<String, Integer> keyTypeBreakdown;
     }
 }

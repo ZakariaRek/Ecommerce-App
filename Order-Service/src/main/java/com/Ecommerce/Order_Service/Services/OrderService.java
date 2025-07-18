@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -65,7 +66,7 @@ public class OrderService {
         // This ensures the same ObjectId always maps to the same UUID
         try {
             // Use a hash-based approach to convert ObjectId to UUID
-            byte[] bytes = objectId.getBytes("UTF-8");
+            byte[] bytes = objectId.getBytes(StandardCharsets.UTF_8);
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
             byte[] hash = md.digest(bytes);
 

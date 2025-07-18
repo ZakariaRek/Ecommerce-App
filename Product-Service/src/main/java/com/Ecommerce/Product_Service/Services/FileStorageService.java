@@ -133,12 +133,6 @@ public class FileStorageService {
         }
     }
 
-    /**
-     * Delete multiple files
-     */
-    public void deleteFiles(List<String> fileNames) {
-        fileNames.forEach(this::deleteFile);
-    }
 
     /**
      * Get file URL for web access

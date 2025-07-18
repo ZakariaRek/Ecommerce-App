@@ -16,16 +16,4 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findByStatus(ProductStatus status);
 
-    List<Product> findByPriceBetween(BigDecimal min, BigDecimal max);
-    List<Product> findByNameContainingIgnoreCase(String name);
-    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.suppliers WHERE p.id IN :productIds")
-    List<Product> findAllByIdWithSuppliers(@Param("productIds") List<UUID> productIds);
-
-    @Query("SELECT p FROM Product p JOIN p.suppliers s WHERE s.id = :supplierId")
-    List<Product> findBySupplier(@Param("supplierId") UUID supplierId);
-
-    @Modifying
-    @Query("DELETE FROM Product p WHERE p.id IN (SELECT ps.id FROM Product ps JOIN ps.suppliers s WHERE s.id = :supplierId AND ps.id IN :productIds)")
-    void removeSupplierFromProducts(@Param("supplierId") UUID supplierId, @Param("productIds") List<UUID> productIds);
-    List<Product> findByInventoryIsNull();
 }

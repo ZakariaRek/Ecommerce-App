@@ -4,7 +4,6 @@ package com.Ecommerce.Loyalty_Service.Services;
 import com.Ecommerce.Loyalty_Service.Entities.CRM;
 import com.Ecommerce.Loyalty_Service.Entities.LoyaltyReward;
 import com.Ecommerce.Loyalty_Service.Entities.TransactionType;
-import com.Ecommerce.Loyalty_Service.Listeners.LoyaltyRewardMongoListener;
 import com.Ecommerce.Loyalty_Service.Repositories.LoyaltyRewardRepository;
 import com.Ecommerce.Loyalty_Service.Services.Kafka.RewardKafkaService;
 import jakarta.transaction.Transactional;
@@ -23,7 +22,6 @@ public class LoyaltyRewardService {
     private final PointTransactionService transactionService;
     private final CRMService crmService;
     private final RewardKafkaService kafkaService;
-    private final LoyaltyRewardMongoListener rewardMongoListener;
 
     public List<LoyaltyReward> getActiveRewards() {
         return rewardRepository.findByIsActiveTrue();
@@ -105,8 +103,7 @@ public class LoyaltyRewardService {
         LoyaltyReward reward = rewardRepository.findById(rewardId)
                 .orElseThrow(() -> new RuntimeException("Reward not found"));
 
-        // Store state before save for Mongo listener
-        rewardMongoListener.storeStateBeforeSave(reward);
+
 
         // Update fields
         reward.setName(name);
@@ -135,8 +132,6 @@ public class LoyaltyRewardService {
             return; // Already inactive
         }
 
-        // Store state before save for Mongo listener
-        rewardMongoListener.storeStateBeforeSave(reward);
 
         // Deactivate
         reward.setActive(false);
