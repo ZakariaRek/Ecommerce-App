@@ -2,7 +2,6 @@ package com.Ecommerce.Loyalty_Service.Services;
 
 import com.Ecommerce.Loyalty_Service.Entities.CRM;
 import com.Ecommerce.Loyalty_Service.Entities.MembershipTier;
-import com.Ecommerce.Loyalty_Service.Listeners.CRMMongoListener;
 import com.Ecommerce.Loyalty_Service.Repositories.CRMRepository;
 import com.Ecommerce.Loyalty_Service.Services.Kafka.CRMKafkaService;
 import jakarta.transaction.Transactional;
@@ -20,7 +19,6 @@ import java.util.UUID;
 public class CRMService {
     private final CRMRepository crmRepository;
     private final CRMKafkaService kafkaService;
-    private final CRMMongoListener crmMongoListener;
 
     public CRM getByUserId(UUID userId) {
         return crmRepository.findByUserId(userId)
@@ -35,8 +33,6 @@ public class CRMService {
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-        // Store state before save for Mongo listener
-        crmMongoListener.storeStateBeforeSave(crm);
 
         // Update points and last activity
         crm.setTotalPoints(previousPoints + points);
@@ -85,8 +81,7 @@ public class CRMService {
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-        // Store state before save for Mongo listener
-        crmMongoListener.storeStateBeforeSave(crm);
+
 
         // Update points and last activity
         crm.setTotalPoints(previousPoints - points);
@@ -165,8 +160,6 @@ public class CRMService {
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-        // Store state before save for Mongo listener
-        crmMongoListener.storeStateBeforeSave(crm);
 
         // Update points
         crm.setTotalPoints(previousPoints + pointsAdjustment);

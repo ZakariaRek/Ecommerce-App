@@ -2,7 +2,6 @@ package com.Ecommerce.Loyalty_Service.Services;
 
 import com.Ecommerce.Loyalty_Service.Entities.PointTransaction;
 import com.Ecommerce.Loyalty_Service.Entities.TransactionType;
-import com.Ecommerce.Loyalty_Service.Listeners.PointTransactionMongoListener;
 import com.Ecommerce.Loyalty_Service.Repositories.PointTransactionRepository;
 import com.Ecommerce.Loyalty_Service.Services.Kafka.TransactionKafkaService;
 import jakarta.transaction.Transactional;
@@ -21,7 +20,6 @@ public class PointTransactionService {
     private final PointTransactionRepository transactionRepository;
     private final CRMService crmService;
     private final TransactionKafkaService kafkaService;
-    private final PointTransactionMongoListener transactionMongoListener;
 
     @Transactional
     public PointTransaction recordTransaction(UUID userId, TransactionType type, int points, String source) {

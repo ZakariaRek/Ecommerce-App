@@ -110,26 +110,8 @@ public class ReviewEventService {
         }
     }
 
-    public void publishReviewRatingChangedEvent(Review review, Integer previousRating) {
-        try {
-            ReviewEvents.ReviewRatingChangedEvent event = ReviewEvents.ReviewRatingChangedEvent.builder()
-                    .reviewId(review.getId())
-                    .userId(review.getUserId())
-                    .productId(review.getProduct() != null ? review.getProduct().getId() : null)
-                    .productName(review.getProduct() != null ? review.getProduct().getName() : null)
-                    .previousRating(previousRating)
-                    .newRating(review.getRating())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
 
-            log.info("Publishing review rating changed event: {}", event);
-            kafkaTemplate.send(KafkaProducerConfig.TOPIC_REVIEW_RATING_CHANGED, review.getId().toString(), event);
-            log.info("Review rating changed event published successfully for review ID: {}", review.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish review rating changed event: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to publish review rating changed event", e);
-        }
-    }
+
 
 
 }

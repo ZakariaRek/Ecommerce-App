@@ -39,34 +39,5 @@ public interface CartItemRepository extends MongoRepository<CartItem, UUID> {
      */
     List<CartItem> findByProductId(UUID productId);
 
-    /**
-     * Count the number of cart items in a specific cart
-     *
-     * @param cartId the cart identifier
-     * @return the count of items
-     */
-    long countByCartId(UUID cartId);
 
-    /**
-     * Find cart items containing a specific product with quantity above threshold
-     *
-     * @param productId the product identifier
-     * @param quantityThreshold the minimum quantity
-     * @return a list of cart items
-     */
-    List<CartItem> findByProductIdAndQuantityGreaterThan(UUID productId, int quantityThreshold);
-
-    /**
-     * Delete all cart items belonging to a specific cart
-     *
-     * @param cartId the cart identifier
-     */
-    void deleteByCartId(UUID cartId);
-
-    /**
-     * Delete all cart items containing a specific product
-     *
-     * @param productId the product identifier
-     */
-    void deleteByProductId(UUID productId);
 }

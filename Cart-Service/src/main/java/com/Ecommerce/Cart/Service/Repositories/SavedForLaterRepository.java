@@ -16,11 +16,6 @@ public interface SavedForLaterRepository extends MongoRepository<SavedForLater, 
 //    List<SavedForLater> findByUserId(UUID userId);
 
     /**
-     * Find a specific saved item by user and product
-     */
-    SavedForLater findByUserIdAndProductId(UUID userId, UUID productId);
-
-    /**
      * Delete a specific saved item by user and product
      */
 //    void deleteByUserIdAndProductId(UUID userId, UUID productId);

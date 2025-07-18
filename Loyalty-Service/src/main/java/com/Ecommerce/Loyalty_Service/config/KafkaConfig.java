@@ -51,14 +51,6 @@ public class KafkaConfig {
     public static final String TOPIC_REWARD_REDEEMED = "loyalty-reward-redeemed";
     public static final String TOPIC_REWARD_UPDATED = "loyalty-reward-updated";
 
-    // External Topics (consumed by Loyalty Service)
-    public static final String TOPIC_ORDER_COMPLETED = "order-completed";
-    public static final String TOPIC_USER_REGISTERED = "user-registered";
-    public static final String TOPIC_PRODUCT_REVIEWED = "product-reviewed";
-    public static final String TOPIC_USER_PROFILE_UPDATED = "user-profile-updated";
-    public static final String TOPIC_CART_ABANDONED = "cart-abandoned";
-    public static final String TOPIC_USER_REFERRAL_COMPLETED = "user-referral-completed";
-
     /**
      * Producer configuration
      */
@@ -218,28 +210,5 @@ public class KafkaConfig {
                 .build();
     }
 
-    // External Topics (consumed) - Define them for auto-creation if they don't exist
-    @Bean
-    public NewTopic cartAbandonedTopic() {
-        return TopicBuilder.name(TOPIC_CART_ABANDONED)
-                .partitions(3)
-                 .replicas(1)
-                .build();
-    }
 
-    @Bean
-    public NewTopic productReviewedTopic() {
-        return TopicBuilder.name(TOPIC_PRODUCT_REVIEWED)
-                .partitions(3)
-                 .replicas(1)
-                .build();
-    }
-
-    @Bean
-    public NewTopic userReferralCompletedTopic() {
-        return TopicBuilder.name(TOPIC_USER_REFERRAL_COMPLETED)
-                .partitions(3)
-                 .replicas(1)
-                .build();
-    }
 }

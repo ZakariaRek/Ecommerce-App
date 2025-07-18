@@ -58,44 +58,5 @@ public class ShoppingCartKafkaService {
         log.info("Published cart abandoned event: {}", event);
     }
 
-    /**
-     * Publish an event when an abandoned shopping cart is recovered
-     */
-    public void publishCartRecovered(ShoppingCart cart, LocalDateTime abandonedAt, String recoveryMethod) {
-        ShoppingCartEvents.CartRecoveredEvent event = new ShoppingCartEvents.CartRecoveredEvent(cart, abandonedAt, recoveryMethod);
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_CART_RECOVERED, cart.getUserId().toString(), event);
-        log.info("Published cart recovered event: {}", event);
-    }
 
-    /**
-     * Publish an event when a shopping cart is checked out
-     */
-    public void publishCartCheckedOut(ShoppingCart cart, UUID orderId, BigDecimal tax,
-                                      BigDecimal shipping, BigDecimal discount, String paymentMethod) {
-        ShoppingCartEvents.CartCheckedOutEvent event = new ShoppingCartEvents.CartCheckedOutEvent(
-                cart, orderId, tax, shipping, discount, paymentMethod);
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_CART_CHECKED_OUT, cart.getUserId().toString(), event);
-        log.info("Published cart checked out event: {}", event);
-    }
-
-    /**
-     * Publish an event when a coupon is applied to a cart
-     */
-    public void publishCouponApplied(ShoppingCart cart, String couponCode,
-                                     BigDecimal discountAmount, BigDecimal originalTotal) {
-        ShoppingCartEvents.CouponAppliedEvent event = new ShoppingCartEvents.CouponAppliedEvent(
-                cart, couponCode, discountAmount, originalTotal);
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_COUPON_APPLIED, cart.getUserId().toString(), event);
-        log.info("Published coupon applied event: {}", event);
-    }
-
-    /**
-     * Publish an event when a coupon is removed from a cart
-     */
-    public void publishCouponRemoved(ShoppingCart cart, String couponCode, BigDecimal discountAmount) {
-        ShoppingCartEvents.CouponRemovedEvent event = new ShoppingCartEvents.CouponRemovedEvent(
-                cart, couponCode, discountAmount);
-        kafkaTemplate.send(KafkaProducerConfig.TOPIC_COUPON_REMOVED, cart.getUserId().toString(), event);
-        log.info("Published coupon removed event: {}", event);
-    }
 }

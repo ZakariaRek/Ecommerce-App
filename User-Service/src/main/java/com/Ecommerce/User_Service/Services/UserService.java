@@ -32,11 +32,7 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
-    public User createUser(User user) {
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(user);
-    }
+
 
     public User updateUser(User user) {
         user.setUpdatedAt(LocalDateTime.now());
@@ -47,11 +43,5 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
-    public boolean existsByUsername(String username) {
-        return userRepository.existsByUsername(username);
-    }
 
-    public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email);
-    }
 }

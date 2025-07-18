@@ -64,12 +64,6 @@ public class SavedForLaterService {
         return saved;
     }
 
-    /**
-     * Overloaded method for SaveForLaterRequest
-     */
-    public SavedForLater saveForLater(UUID userId, SaveForLaterRequest request) {
-        return saveForLater(userId, request.getProductId());
-    }
 
     /**
      * Move an item to cart and remove from saved items

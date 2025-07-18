@@ -120,15 +120,7 @@ public class SavedForLaterMongoListener extends AbstractMongoEventListener<Saved
         log.debug("MongoDB listener triggered for saved-for-later item update: {}", savedItem.getId());
     }
 
-    /**
-     * Store state before save for later comparison in afterSave
-     * This should be called by the service layer before saving changes
-     */
-    public void storeStateBeforeSave(SavedForLater savedItem) {
-        String key = getEntityKey(savedItem);
-        entityStateMap.put(key, new EntityState(savedItem.getSavedAt()));
-        log.debug("Stored state before saved-for-later save: {}", savedItem.getId());
-    }
+
 
     /**
      * Generate a unique key for the entity

@@ -35,15 +35,5 @@ public class Review {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    public void addReview() {
-        // Implementation logic here
-    }
 
-    public void updateReview() {
-        // Implementation logic here
-    }
-
-    public void verifyReview() {
-        // Implementation logic here
-    }
 }

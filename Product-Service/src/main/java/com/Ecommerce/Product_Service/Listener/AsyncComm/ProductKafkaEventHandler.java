@@ -208,44 +208,9 @@ public class ProductKafkaEventHandler {
         }
     }
 
-    /**
-     * ✅ Helper methods
-     */
-    private String getImagePath(Product product) {
-        try {
-            return product.getImages().get(0);
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
-    private Boolean getInStock(Product product) {
-        try {
-            return product.getStock() > 0;
-        } catch (Exception e) {
-            return true;
-        }
-    }
 
-    private Integer getAvailableQuantity(Product product) {
-        try {
-            return product.getStock();
-        } catch (Exception e) {
-            return 999; // Default high value
-        }
-    }
 
-    private String getCategoryName(Product product) {
-        try {
-            if (product.getCategories() != null && !product.getCategories().isEmpty()) {
-                return product.getCategories().get(0).getName();
-            }
-            return null;
-        } catch (Exception e) {
-            log.debug("Could not access categories for product {}: {}", product.getId(), e.getMessage());
-            return null;
-        }
-    }
     /**
      * ✅ Convert productIds to UUID list
      */
