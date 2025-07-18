@@ -4,10 +4,11 @@ package com.Ecommerce.Order_Service.Payload.Request.OrderItem;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.util.UUID;
-
+@Builder
 @Data
 public class CreateOrderItemRequestDto {
     @NotNull(message = "Product ID is required")
