@@ -24,8 +24,8 @@ import java.util.UUID;
 @Slf4j
 public class CouponValidationService {
 
-    private  CouponRepository couponRepository;
-    private  CouponUsageHistoryRepository usageHistoryRepository;
+    private  final CouponRepository couponRepository;
+    private  final CouponUsageHistoryRepository usageHistoryRepository;
 
     public CouponValidationResponse validateAndCalculateDiscount(
             List<String> couponCodes, UUID userId, BigDecimal amount) {
