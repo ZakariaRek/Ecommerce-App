@@ -327,17 +327,17 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(40, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("loyalty-cb")))
-                        .uri("lb://LOYALTY-SERVICE"))
+                        .uri("lb://loyalty-service"))
 
                 .route("loyalty-service-swagger-ui", r -> r
                         .path("/loyalty-service/swagger-ui/**")
                         .filters(f -> f.rewritePath("/loyalty-service/swagger-ui/(?<segment>.*)", "/swagger-ui/${segment}"))
-                        .uri("lb://LOYALTY-SERVICE"))
+                        .uri("lb://loyalty-service"))
 
                 .route("loyalty-service-api-docs", r -> r
                         .path("/loyalty-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/loyalty-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
-                        .uri("lb://LOYALTY-SERVICE"))
+                        .uri("lb://loyalty-service"))
 
                 // Notification Service Routes
                 .route("notification-service-api", r -> r

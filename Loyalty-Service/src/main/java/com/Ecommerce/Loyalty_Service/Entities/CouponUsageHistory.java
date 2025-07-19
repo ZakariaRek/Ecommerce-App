@@ -42,7 +42,4 @@ public class CouponUsageHistory {
 
     @CreationTimestamp
     private LocalDateTime usedAt;
-
-    @Column(columnDefinition = "TEXT")
-    private String metadata; // JSON for additional context
 }

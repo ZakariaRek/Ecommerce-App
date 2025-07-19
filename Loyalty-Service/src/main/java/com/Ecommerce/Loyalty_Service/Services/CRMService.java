@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -196,37 +197,7 @@ public class CRMService {
         }
     }
 
-    /**
-     * Process point expirations (scheduled task)
-     */
-    @Transactional
-    public void processPointExpirations() {
-        LocalDateTime expirationCutoff = LocalDateTime.now().minusDays(365); // Points expire after 1 year
-
-        // In a real implementation, you would query for users with points about to expire
-        // For this example, we'll leave this as a placeholder
-
-        log.info("Processing point expirations for inactive users since: {}", expirationCutoff);
-
-        // For each user, expire points and publish event
-        // Example code:
-        /*
-        for (CRM crm : usersWithExpiringPoints) {
-            int pointsToExpire = calculatePointsToExpire(crm);
-            if (pointsToExpire > 0) {
-                // Store state before save
-                crmMongoListener.storeStateBeforeSave(crm);
-
-                // Update points
-                crm.setTotalPoints(crm.getTotalPoints() - pointsToExpire);
-
-                // Save changes
-                crmRepository.save(crm);
-
-                // Publish event
-                kafkaService.publishPointsExpired(crm, pointsToExpire);
-            }
-        }
-        */
+    public List<CRM> getAllUsers() {
+        return crmRepository.findAll();
     }
 }

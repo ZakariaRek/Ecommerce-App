@@ -12,6 +12,8 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
@@ -51,54 +53,81 @@ public class KafkaConfig {
     public static final String TOPIC_REWARD_REDEEMED = "loyalty-reward-redeemed";
     public static final String TOPIC_REWARD_UPDATED = "loyalty-reward-updated";
 
-    /**
-     * Producer configuration
-     */
+
+    public static final String TOPIC_ORDER_COMPLETED = "order-completed";
+    public static final String TOPIC_USER_REGISTERED = "user-registered";
+    public static final String TOPIC_PRODUCT_REVIEWED = "product-reviewed";
+    public static final String TOPIC_USER_PROFILE_UPDATED = "user-profile-updated";
+    public static final String TOPIC_CART_ABANDONED = "cart-abandoned";
+    public static final String TOPIC_USER_REFERRAL_COMPLETED = "user-referral-completed";
+
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+        // Add additional producer properties for reliability
         configProps.put(ProducerConfig.ACKS_CONFIG, "all");
         configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
-    /**
-     * Kafka template for sending messages
-     */
     @Bean
     public KafkaTemplate<String, Object> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 
-    /**
-     * Consumer configuration
-     */
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.Ecommerce.*");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        // Use ErrorHandlingDeserializer to handle deserialization errors
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+
+        // Configure the actual deserializers
+        props.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
+        props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
+
+        // JsonDeserializer configuration
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, true);
+
+        // Map producer class names to consumer class names
+        props.put(JsonDeserializer.TYPE_MAPPINGS,
+                "com.Ecommerce.Order_Service.Events.OrderEvents$OrderCompletedEvent:com.Ecommerce.Loyalty_Service.Events.ExternalEvents$OrderCompletedEvent," +
+                        "com.Ecommerce.User_Service.Events.UserEvents$UserRegisteredEvent:com.Ecommerce.Loyalty_Service.Events.ExternalEvents$UserRegisteredEvent," +
+                        "com.Ecommerce.Product_Service.Events.ProductEvents$ProductReviewedEvent:com.Ecommerce.Loyalty_Service.Events.ExternalEvents$ProductReviewedEvent," +
+                        "com.Ecommerce.Cart_Service.Events.CartEvents$CartAbandonedEvent:com.Ecommerce.Loyalty_Service.Events.ExternalEvents$CartAbandonedEvent");
+
+        // Consumer reliability settings
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
+
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
-    /**
-     * Kafka listener container factory
-     */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
-        factory.setConcurrency(3);
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+
+        // Configure container properties
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setPollTimeout(3000);
+
+        // Add error handler for deserialization errors
+        factory.setCommonErrorHandler(new DefaultErrorHandler((record, exception) -> {
+
+        }));
+
         return factory;
     }
 
@@ -209,6 +238,29 @@ public class KafkaConfig {
                  .replicas(1)
                 .build();
     }
+    // External Topics (consumed) - Define them for auto-creation if they don't exist
+    @Bean
+    public NewTopic cartAbandonedTopic() {
+        return TopicBuilder.name(TOPIC_CART_ABANDONED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
 
+    @Bean
+    public NewTopic productReviewedTopic() {
+        return TopicBuilder.name(TOPIC_PRODUCT_REVIEWED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic userReferralCompletedTopic() {
+        return TopicBuilder.name(TOPIC_USER_REFERRAL_COMPLETED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
 
 }
