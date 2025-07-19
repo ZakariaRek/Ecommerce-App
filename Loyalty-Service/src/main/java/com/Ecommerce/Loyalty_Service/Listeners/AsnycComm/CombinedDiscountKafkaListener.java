@@ -28,10 +28,12 @@ public class CombinedDiscountKafkaListener {
      * This replaces separate coupon-validation-request and tier-discount-request listeners
      */
     @KafkaListener(topics = "combined-discount-request", groupId = "loyalty-service-group")
-    public void handleCombinedDiscountRequest(ConsumerRecord<String, Object> record) {
+    public void handleCombinedDiscountRequest(ConsumerRecord<String, String> record) {
         try {
-            CombinedDiscountRequest request = objectMapper.convertValue(
-                    record.value(), CombinedDiscountRequest.class);
+            log.info("💎 LOYALTY SERVICE: Raw message received: {}", record.value());
+
+            // Deserialize the JSON string to CombinedDiscountRequest
+            CombinedDiscountRequest request = objectMapper.readValue(record.value(), CombinedDiscountRequest.class);
 
             log.info("💎 LOYALTY SERVICE: Received combined discount request for user {} with correlation {}",
                     request.getUserId(), request.getCorrelationId());
@@ -95,7 +97,6 @@ public class CombinedDiscountKafkaListener {
             }
         }
     }
-
     /**
      * Optional: Keep the existing separate listeners for backward compatibility
      * You can remove these if you want to force all requests to use the new combined flow

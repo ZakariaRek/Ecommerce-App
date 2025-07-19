@@ -58,3 +58,18 @@ eureka:
     hostname: localhost
     metadataMap:
       instanceId: ${spring.application.name}:${server.port}
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.data.redis: DEBUG
+    org.springframework.web.cors: DEBUG
+    io.github.resilience4j: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
+    com.Ecommerce: DEBUG  # Your package
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
