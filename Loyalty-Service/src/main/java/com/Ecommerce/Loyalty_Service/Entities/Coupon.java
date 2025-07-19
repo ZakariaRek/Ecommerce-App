@@ -52,8 +52,6 @@ public class Coupon {
     @Column(nullable = false)
     private Integer priorityLevel = 1; // Lower number = higher priority
 
-
-
     @CreationTimestamp
     private LocalDateTime createdAt;
 

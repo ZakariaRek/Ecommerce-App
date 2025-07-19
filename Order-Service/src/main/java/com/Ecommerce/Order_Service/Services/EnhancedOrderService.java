@@ -5,12 +5,12 @@ import com.Ecommerce.Order_Service.Entities.DiscountType;
 import com.Ecommerce.Order_Service.Entities.Order;
 import com.Ecommerce.Order_Service.Entities.OrderItem;
 import com.Ecommerce.Order_Service.Payload.Kafka.CouponUsageNotification;
-import com.Ecommerce.Order_Service.Payload.Kafka.OrderItemDto;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountBreakdown;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
+import com.Ecommerce.Order_Service.Services.Kafka.DiscountCalculationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +36,7 @@ public class EnhancedOrderService extends OrderService {
     @Autowired
     private OrderRepository orderRepository;
 
-    private  DiscountCalculationService discountCalculationService;
+    private DiscountCalculationService discountCalculationService;
     private DiscountApplicationRepository discountApplicationRepository;
     private  KafkaTemplate<String, Object> kafkaTemplate;
     private  ObjectMapper objectMapper;

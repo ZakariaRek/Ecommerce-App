@@ -1,4 +1,4 @@
-package com.Ecommerce.Order_Service.Services;
+package com.Ecommerce.Order_Service.Services.Kafka;
 
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.CouponValidationRequest;
@@ -67,7 +67,7 @@ public class DiscountCalculationService {
                 requestCouponValidation(request, afterOrderDiscount, productDiscount, orderDiscount);
             } else {
                 log.info("🛒 ORDER SERVICE: No coupons provided, proceeding to tier discount");
-                requestTierDiscount(request, afterOrderDiscount, productDiscount, orderDiscount, BigDecimal.ZERO);
+                requestTierDiscount(request, afterOrderDiscount, BigDecimal.ZERO);
             }
 
         } catch (Exception e) {
@@ -105,8 +105,6 @@ public class DiscountCalculationService {
 
     private void requestTierDiscount(DiscountCalculationRequest request,
                                      BigDecimal afterOrderDiscount,
-                                     BigDecimal productDiscount,
-                                     BigDecimal orderDiscount,
                                      BigDecimal couponDiscount) {
 
         BigDecimal afterCouponDiscount = afterOrderDiscount.subtract(couponDiscount);

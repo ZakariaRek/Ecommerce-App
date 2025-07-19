@@ -78,7 +78,6 @@ public class DiscountResponseListener {
             log.info("🛒 ORDER SERVICE: Received tier discount response for correlation: {}", correlationId);
 
             DiscountCalculationContext context = getContext(correlationId);
-
             if (context == null) {
                 log.warn("🛒 ORDER SERVICE: No context found for correlation ID: {}", correlationId);
                 return;
