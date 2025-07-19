@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Service to listen for external Kafka events that impact the loyalty system
+ * IMPORTANT: All these listeners handle JSON events, so they use jsonKafkaListenerContainerFactory
  */
 @Service
 @RequiredArgsConstructor
@@ -32,10 +33,12 @@ public class KafkaOrderPointsListener {
 
     /**
      * Listen for completed orders to award loyalty points and check CRM registration
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @KafkaListener(
             topics = KafkaConfig.TOPIC_ORDER_COMPLETED,
-            containerFactory = "kafkaListenerContainerFactory")
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory")
     public void handleOrderCompletedEvent(@Payload ExternalEvents.OrderCompletedEvent event) {
         log.info("🎯 LOYALTY SERVICE: Received order completed event for order: {}, user: {}, amount: ${}",
                 event.getOrderId(), event.getUserId(), event.getOrderTotal());
@@ -106,10 +109,12 @@ public class KafkaOrderPointsListener {
 
     /**
      * Listen for user registration events to create loyalty profiles
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @KafkaListener(
             topics = KafkaConfig.TOPIC_USER_REGISTERED,
-            containerFactory = "kafkaListenerContainerFactory")
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory")
     public void handleUserRegisteredEvent(@Payload ExternalEvents.UserRegisteredEvent event, Acknowledgment ack) {
         log.info("👤 LOYALTY SERVICE: Received user registered event for user: {}", event.getUserId());
 
@@ -137,10 +142,12 @@ public class KafkaOrderPointsListener {
 
     /**
      * Listen for product review events to award points for reviews
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @KafkaListener(
             topics = KafkaConfig.TOPIC_PRODUCT_REVIEWED,
-            containerFactory = "kafkaListenerContainerFactory")
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory")
     public void handleProductReviewedEvent(@Payload ExternalEvents.ProductReviewedEvent event, Acknowledgment ack) {
         log.info("📝 LOYALTY SERVICE: Received product reviewed event from user: {}", event.getUserId());
 
@@ -170,10 +177,12 @@ public class KafkaOrderPointsListener {
 
     /**
      * Listen for cart abandoned events to potentially send targeted offers
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @KafkaListener(
             topics = KafkaConfig.TOPIC_CART_ABANDONED,
-            containerFactory = "kafkaListenerContainerFactory")
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory")
     public void handleCartAbandonedEvent(@Payload ExternalEvents.CartAbandonedEvent event, Acknowledgment ack) {
         log.info("🛒 LOYALTY SERVICE: Received cart abandoned event for user: {}", event.getUserId());
 

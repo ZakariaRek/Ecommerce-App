@@ -5,13 +5,13 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -19,6 +19,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(exclude = {"items", "discountApplications"}) // Exclude collections to prevent circular reference
 @EntityListeners(OrderEntityListener.class)
 public class Order {
     @Id
@@ -139,5 +140,19 @@ public class Order {
 
     public String generateInvoice() {
         return "Invoice for Order " + this.id;
+    }
+
+    // Custom toString to avoid circular reference in logging
+    @Override
+    public String toString() {
+        return "Order{" +
+                "id=" + id +
+                ", userId=" + userId +
+                ", cartId=" + cartId +
+                ", status=" + status +
+                ", totalAmount=" + totalAmount +
+                ", createdAt=" + createdAt +
+                ", itemCount=" + (items != null ? items.size() : 0) +
+                '}';
     }
 }

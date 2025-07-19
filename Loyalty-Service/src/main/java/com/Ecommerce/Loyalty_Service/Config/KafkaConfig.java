@@ -57,6 +57,7 @@ public class KafkaConfig {
     public static final String TOPIC_COMBINED_DISCOUNT_REQUEST = "combined-discount-request";
     public static final String TOPIC_COMBINED_DISCOUNT_RESPONSE = "combined-discount-response";
 
+    // External Event Topics
     public static final String TOPIC_ORDER_COMPLETED = "order-completed";
     public static final String TOPIC_USER_REGISTERED = "user-registered";
     public static final String TOPIC_PRODUCT_REVIEWED = "product-reviewed";
@@ -64,6 +65,9 @@ public class KafkaConfig {
     public static final String TOPIC_CART_ABANDONED = "cart-abandoned";
     public static final String TOPIC_USER_REFERRAL_COMPLETED = "user-referral-completed";
 
+    /**
+     * Producer Factory - Used for sending messages
+     */
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
@@ -84,13 +88,16 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
+    /**
+     * String Consumer Factory - For string-based messages (like combined discount requests)
+     */
     @Bean
-    public ConsumerFactory<String, Object> consumerFactory() {
+    public ConsumerFactory<String, Object> stringConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId + "-string");
 
-        // Use String deserializer for combined discount requests
+        // Use String deserializer for string-based messages
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
@@ -102,11 +109,14 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
+    /**
+     * JSON Consumer Factory - For JSON-based event messages
+     */
     @Bean
     public ConsumerFactory<String, Object> jsonConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId + "-json");
 
         // Use ErrorHandlingDeserializer to handle deserialization errors
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
@@ -135,23 +145,34 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
+    /**
+     * String Kafka Listener Container Factory - For string-based messages
+     * Use containerFactory = "stringKafkaListenerContainerFactory" in @KafkaListener
+     */
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
+    public ConcurrentKafkaListenerContainerFactory<String, Object> stringKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory());
+        factory.setConsumerFactory(stringConsumerFactory());
 
         // Configure container properties
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
         factory.getContainerProperties().setPollTimeout(3000);
 
-        // Add error handler for deserialization errors
+        // Add error handler
         factory.setCommonErrorHandler(new DefaultErrorHandler((record, exception) -> {
-            // Log error handling
+            System.err.println("💎 STRING LISTENER ERROR: " + exception.getMessage());
+            System.err.println("💎 Topic: " + record.topic() + ", Partition: " + record.partition() +
+                    ", Offset: " + record.offset());
+            System.err.println("💎 Message: " + record.value());
         }));
 
         return factory;
     }
 
+    /**
+     * JSON Kafka Listener Container Factory - For JSON-based event messages
+     * Use containerFactory = "jsonKafkaListenerContainerFactory" in @KafkaListener
+     */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> jsonKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
@@ -163,11 +184,27 @@ public class KafkaConfig {
 
         // Add error handler for deserialization errors
         factory.setCommonErrorHandler(new DefaultErrorHandler((record, exception) -> {
-            // Log error handling
+            System.err.println("💳 JSON LISTENER ERROR: " + exception.getMessage());
+            System.err.println("💳 Topic: " + record.topic() + ", Partition: " + record.partition() +
+                    ", Offset: " + record.offset());
+            System.err.println("💳 Message: " + record.value());
         }));
 
         return factory;
     }
+
+    /**
+     * Default Kafka Listener Container Factory - Points to JSON factory for backward compatibility
+     */
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
+        // Return the JSON factory as default to maintain backward compatibility
+        return jsonKafkaListenerContainerFactory();
+    }
+
+    // ===============================
+    // TOPIC DEFINITIONS
+    // ===============================
 
     // Combined Discount Topics
     @Bean

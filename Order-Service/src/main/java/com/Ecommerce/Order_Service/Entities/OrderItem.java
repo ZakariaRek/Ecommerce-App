@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(exclude = {"order"}) // Exclude the parent order to prevent circular reference
 @EntityListeners(OrderItemEntityListener.class)
 public class OrderItem {
     @Id
@@ -56,5 +58,18 @@ public class OrderItem {
             throw new IllegalArgumentException("Quantity must be positive");
         }
         this.quantity = newQuantity;
+    }
+
+    // Custom toString to avoid circular reference in logging
+    @Override
+    public String toString() {
+        return "OrderItem{" +
+                "id=" + id +
+                ", productId=" + productId +
+                ", quantity=" + quantity +
+                ", priceAtPurchase=" + priceAtPurchase +
+                ", discount=" + discount +
+                ", orderId=" + (order != null ? order.getId() : null) +
+                '}';
     }
 }
