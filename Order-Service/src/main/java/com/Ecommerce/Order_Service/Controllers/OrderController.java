@@ -8,11 +8,13 @@ import com.Ecommerce.Order_Service.Payload.OrderMapper;
 import com.Ecommerce.Order_Service.Payload.Request.OrderItem.CreateOrderItemRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.OrderItem.UpdateOrderItemQuantityRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.order.CreateOrderRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.order.CreateOrderWithDiscountsRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.order.UpdateOrderStatusRequestDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.InvoiceResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.OrderResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.OrderTotalResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
+import com.Ecommerce.Order_Service.Services.EnhancedOrderService;
 import com.Ecommerce.Order_Service.Services.OrderService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
@@ -40,7 +42,41 @@ public class OrderController {
 
     @Autowired
     private OrderMapper orderMapper;
+    @Autowired
+    private EnhancedOrderService enhancedOrderService;
 
+
+
+    @PostMapping("/with-discounts")
+    public ResponseEntity<OrderResponseDto> createOrderWithDiscounts(
+            @Valid @RequestBody CreateOrderWithDiscountsRequestDto orderRequest) {
+        try {
+            Order newOrder = enhancedOrderService.createOrderWithDiscounts(
+                    orderRequest.getUserId(),
+                    orderRequest.getCartId(),
+                    orderRequest.getBillingAddressId(),
+                    orderRequest.getShippingAddressId(),
+                    orderRequest.getCouponCodes()
+            );
+
+            // Add items if provided in the request
+            if (orderRequest.getItems() != null && !orderRequest.getItems().isEmpty()) {
+                List<OrderItem> items = orderMapper.toOrderItemList(orderRequest.getItems());
+                for (OrderItem item : items) {
+                    enhancedOrderService.addOrderItem(newOrder.getId(), item);
+                }
+                // Refresh the order to get updated items and total
+                newOrder = enhancedOrderService.getOrderById(newOrder.getId());
+            }
+
+            OrderResponseDto responseDto = orderMapper.toOrderResponseDto(newOrder);
+            return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request data: " + e.getMessage());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error creating order with discounts: " + e.getMessage());
+        }
+    }
 
     /**
      * Get an orders list
