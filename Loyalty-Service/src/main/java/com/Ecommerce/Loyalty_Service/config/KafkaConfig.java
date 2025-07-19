@@ -53,6 +53,9 @@ public class KafkaConfig {
     public static final String TOPIC_REWARD_REDEEMED = "loyalty-reward-redeemed";
     public static final String TOPIC_REWARD_UPDATED = "loyalty-reward-updated";
 
+    // Combined Discount Topics
+    public static final String TOPIC_COMBINED_DISCOUNT_REQUEST = "combined-discount-request";
+    public static final String TOPIC_COMBINED_DISCOUNT_RESPONSE = "combined-discount-response";
 
     public static final String TOPIC_ORDER_COMPLETED = "order-completed";
     public static final String TOPIC_USER_REGISTERED = "user-registered";
@@ -83,6 +86,24 @@ public class KafkaConfig {
 
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+
+        // Use String deserializer for combined discount requests
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        // Consumer reliability settings
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
+
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public ConsumerFactory<String, Object> jsonConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -125,10 +146,44 @@ public class KafkaConfig {
 
         // Add error handler for deserialization errors
         factory.setCommonErrorHandler(new DefaultErrorHandler((record, exception) -> {
-
+            // Log error handling
         }));
 
         return factory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object> jsonKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(jsonConsumerFactory());
+
+        // Configure container properties
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setPollTimeout(3000);
+
+        // Add error handler for deserialization errors
+        factory.setCommonErrorHandler(new DefaultErrorHandler((record, exception) -> {
+            // Log error handling
+        }));
+
+        return factory;
+    }
+
+    // Combined Discount Topics
+    @Bean
+    public NewTopic combinedDiscountRequestTopic() {
+        return TopicBuilder.name(TOPIC_COMBINED_DISCOUNT_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic combinedDiscountResponseTopic() {
+        return TopicBuilder.name(TOPIC_COMBINED_DISCOUNT_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
     }
 
     // Points Topics
@@ -136,7 +191,7 @@ public class KafkaConfig {
     public NewTopic pointsEarnedTopic() {
         return TopicBuilder.name(TOPIC_POINTS_EARNED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -144,7 +199,7 @@ public class KafkaConfig {
     public NewTopic pointsRedeemedTopic() {
         return TopicBuilder.name(TOPIC_POINTS_REDEEMED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -152,7 +207,7 @@ public class KafkaConfig {
     public NewTopic pointsExpiredTopic() {
         return TopicBuilder.name(TOPIC_POINTS_EXPIRED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -160,7 +215,7 @@ public class KafkaConfig {
     public NewTopic pointsAdjustedTopic() {
         return TopicBuilder.name(TOPIC_POINTS_ADJUSTED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -169,7 +224,7 @@ public class KafkaConfig {
     public NewTopic membershipChangedTopic() {
         return TopicBuilder.name(TOPIC_MEMBERSHIP_CHANGED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -177,7 +232,7 @@ public class KafkaConfig {
     public NewTopic membershipBenefitsUpdatedTopic() {
         return TopicBuilder.name(TOPIC_MEMBERSHIP_BENEFITS_UPDATED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -186,7 +241,7 @@ public class KafkaConfig {
     public NewTopic couponGeneratedTopic() {
         return TopicBuilder.name(TOPIC_COUPON_GENERATED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -194,7 +249,7 @@ public class KafkaConfig {
     public NewTopic couponRedeemedTopic() {
         return TopicBuilder.name(TOPIC_COUPON_REDEEMED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -202,7 +257,7 @@ public class KafkaConfig {
     public NewTopic couponExpiredTopic() {
         return TopicBuilder.name(TOPIC_COUPON_EXPIRED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -210,7 +265,7 @@ public class KafkaConfig {
     public NewTopic couponValidatedTopic() {
         return TopicBuilder.name(TOPIC_COUPON_VALIDATED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -219,7 +274,7 @@ public class KafkaConfig {
     public NewTopic rewardAddedTopic() {
         return TopicBuilder.name(TOPIC_REWARD_ADDED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -227,7 +282,7 @@ public class KafkaConfig {
     public NewTopic rewardRedeemedTopic() {
         return TopicBuilder.name(TOPIC_REWARD_REDEEMED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
 
@@ -235,9 +290,10 @@ public class KafkaConfig {
     public NewTopic rewardUpdatedTopic() {
         return TopicBuilder.name(TOPIC_REWARD_UPDATED)
                 .partitions(3)
-                 .replicas(1)
+                .replicas(1)
                 .build();
     }
+
     // External Topics (consumed) - Define them for auto-creation if they don't exist
     @Bean
     public NewTopic cartAbandonedTopic() {
@@ -262,5 +318,4 @@ public class KafkaConfig {
                 .replicas(1)
                 .build();
     }
-
 }

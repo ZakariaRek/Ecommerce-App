@@ -1,6 +1,7 @@
 package com.Ecommerce.Order_Service.Entities;
 
 import com.Ecommerce.Order_Service.Listeners.OrderEntityListener;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -81,10 +82,12 @@ public class Order {
     private UUID shippingAddressId;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<OrderItem> items = new ArrayList<>();
 
     // NEW: Relationship to discount applications
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<DiscountApplication> discountApplications = new ArrayList<>();
 
     @PrePersist

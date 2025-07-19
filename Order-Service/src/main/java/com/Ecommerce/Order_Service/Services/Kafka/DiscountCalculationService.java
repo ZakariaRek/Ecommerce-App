@@ -55,6 +55,7 @@ public class DiscountCalculationService {
             // Step 1: Calculate product-level discounts
             BigDecimal productDiscount = calculateProductDiscounts(request.getItems());
             log.info("🛒 ORDER SERVICE: Product discount calculated: {}", productDiscount);
+            log.info("🛒 ORDER SERVICE: cOUPONS : {}", request.getCouponCodes());
 
             // Step 2: Calculate order-level discounts (bulk, minimum purchase, etc.)
             BigDecimal orderDiscount = calculateOrderLevelDiscounts(request);
@@ -80,6 +81,10 @@ public class DiscountCalculationService {
                                                  BigDecimal productDiscount,
                                                  BigDecimal orderDiscount) {
         try {
+            // Add logging to debug coupon codes
+            log.info("🛒 ORDER SERVICE: Original request coupon codes: {}", originalRequest.getCouponCodes());
+            log.info("🛒 ORDER SERVICE: Building combined request for order: {}", originalRequest.getOrderId());
+
             // Create combined request that includes both coupon and tier discount requirements
             CombinedDiscountRequest combinedRequest = CombinedDiscountRequest.builder()
                     .correlationId(originalRequest.getCorrelationId())
@@ -92,6 +97,9 @@ public class DiscountCalculationService {
                     .couponCodes(originalRequest.getCouponCodes()) // Can be null or empty
                     .totalItems(originalRequest.getTotalItems())
                     .build();
+
+            // Log the built request to verify coupon codes
+            log.info("🛒 ORDER SERVICE: Combined request coupon codes: {}", combinedRequest.getCouponCodes());
 
             // Store context for response processing
             DiscountCalculationContext context = DiscountCalculationContext.builder()

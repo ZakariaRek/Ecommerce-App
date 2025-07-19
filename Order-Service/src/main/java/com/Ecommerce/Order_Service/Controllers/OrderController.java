@@ -18,6 +18,7 @@ import com.Ecommerce.Order_Service.Services.EnhancedOrderService;
 import com.Ecommerce.Order_Service.Services.OrderService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,7 @@ import java.util.UUID;
 /**
  * REST controller for order operations using DTOs
  */
+@Slf4j
 @RestController
 @RequestMapping("/order")
 @Validated
@@ -58,7 +60,7 @@ public class OrderController {
                     orderRequest.getShippingAddressId(),
                     orderRequest.getCouponCodes()
             );
-
+         log.info("Creating order with discounts for user: {}", orderRequest.getCouponCodes());
             // Add items if provided in the request
             if (orderRequest.getItems() != null && !orderRequest.getItems().isEmpty()) {
                 List<OrderItem> items = orderMapper.toOrderItemList(orderRequest.getItems());
