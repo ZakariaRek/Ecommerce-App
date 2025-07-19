@@ -1,4 +1,4 @@
-// Loyalty-Service: Combined Discount Kafka Listener
+// Loyalty-Service: Fixed Combined Discount Kafka Listener
 package com.Ecommerce.Loyalty_Service.Listeners.AsnycComm;
 
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Request.CombinedDiscountRequest;
@@ -26,8 +26,13 @@ public class CombinedDiscountKafkaListener {
     /**
      * Handle combined discount requests from Order Service
      * This replaces separate coupon-validation-request and tier-discount-request listeners
+     * IMPORTANT: Using stringKafkaListenerContainerFactory for string-based messages
      */
-    @KafkaListener(topics = "combined-discount-request", groupId = "loyalty-service-group")
+    @KafkaListener(
+            topics = "combined-discount-request",
+            groupId = "loyalty-service-string",
+            containerFactory = "stringKafkaListenerContainerFactory"
+    )
     public void handleCombinedDiscountRequest(ConsumerRecord<String, String> record) {
         try {
             log.info("💎 LOYALTY SERVICE: Raw message received: {}", record.value());
@@ -97,12 +102,18 @@ public class CombinedDiscountKafkaListener {
             }
         }
     }
+
     /**
      * Optional: Keep the existing separate listeners for backward compatibility
      * You can remove these if you want to force all requests to use the new combined flow
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @Deprecated
-    @KafkaListener(topics = "coupon-validation-request", groupId = "loyalty-service-group")
+    @KafkaListener(
+            topics = "coupon-validation-request",
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory"
+    )
     public void handleLegacyCouponValidationRequest(ConsumerRecord<String, Object> record) {
         log.warn("💎 LOYALTY SERVICE: Received legacy coupon validation request. " +
                 "Consider migrating to combined-discount-request for better performance.");
@@ -117,7 +128,11 @@ public class CombinedDiscountKafkaListener {
     }
 
     @Deprecated
-    @KafkaListener(topics = "tier-discount-request", groupId = "loyalty-service-group")
+    @KafkaListener(
+            topics = "tier-discount-request",
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory"
+    )
     public void handleLegacyTierDiscountRequest(ConsumerRecord<String, Object> record) {
         log.warn("💎 LOYALTY SERVICE: Received legacy tier discount request. " +
                 "Consider migrating to combined-discount-request for better performance.");

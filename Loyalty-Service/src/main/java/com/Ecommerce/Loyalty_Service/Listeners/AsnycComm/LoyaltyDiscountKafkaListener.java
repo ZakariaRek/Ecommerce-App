@@ -35,7 +35,15 @@ public class LoyaltyDiscountKafkaListener {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "tier-discount-request", groupId = "loyalty-service-group")
+    /**
+     * Handle tier discount requests
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
+     */
+    @KafkaListener(
+            topics = "tier-discount-request",
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory"
+    )
     public void handleTierDiscountRequest(ConsumerRecord<String, Object> record) {
         try {
             TierDiscountRequest request = objectMapper.convertValue(
@@ -57,7 +65,15 @@ public class LoyaltyDiscountKafkaListener {
         }
     }
 
-    @KafkaListener(topics = "coupon-validation-request", groupId = "loyalty-service-group")
+    /**
+     * Handle coupon validation requests
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
+     */
+    @KafkaListener(
+            topics = "coupon-validation-request",
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory"
+    )
     public void handleCouponValidationRequest(ConsumerRecord<String, Object> record) {
         try {
             CouponValidationRequest request = objectMapper.convertValue(
@@ -84,7 +100,15 @@ public class LoyaltyDiscountKafkaListener {
         }
     }
 
-    @KafkaListener(topics = "coupon-usage-notification", groupId = "loyalty-service-group")
+    /**
+     * Handle coupon usage notifications
+     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
+     */
+    @KafkaListener(
+            topics = "coupon-usage-notification",
+            groupId = "loyalty-service-json",
+            containerFactory = "jsonKafkaListenerContainerFactory"
+    )
     public void handleCouponUsageNotification(ConsumerRecord<String, Object> record) {
         try {
             CouponUsageNotification notification = objectMapper.convertValue(
