@@ -1,5 +1,4 @@
-// Replace the existing EnhancedOrderService.java with this fixed version:
-
+// Fixed EnhancedOrderService.java
 package com.Ecommerce.Order_Service.Services;
 
 import com.Ecommerce.Order_Service.Entities.DiscountApplication;
@@ -14,6 +13,7 @@ import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
 import com.Ecommerce.Order_Service.Services.Kafka.DiscountCalculationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public class EnhancedOrderService extends OrderService {
     private final DiscountApplicationRepository discountApplicationRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
+
     @Autowired
     private OrderRepository orderRepository;
 
@@ -59,17 +61,30 @@ public class EnhancedOrderService extends OrderService {
                                           UUID billingAddressId, UUID shippingAddressId,
                                           List<String> couponCodes) {
 
-        log.info("🛒 ORDER SERVICE: Creating order with discounts for user: {}", userId);
+        log.info("🛒 ORDER SERVICE: Creating order with discounts for user: {}, coupon codes: {}", userId, couponCodes);
 
         // Create basic order first
         Order order = super.createOrder(userId, cartId, billingAddressId, shippingAddressId);
 
-        // If no items yet, set basic totals and return (items will be added separately)
-        if (order.getItems() == null || order.getItems().isEmpty()) {
-            order.setTotalAmount(BigDecimal.ZERO);
-            return orderRepository.save(order);
+        // ALWAYS store coupon codes in the order, even if no items yet
+        if (couponCodes != null && !couponCodes.isEmpty()) {
+            try {
+                order.setAppliedCouponCodes(objectMapper.writeValueAsString(couponCodes));
+                order = orderRepository.save(order);
+                log.info("🛒 ORDER SERVICE: Stored coupon codes {} in order {}", couponCodes, order.getId());
+            } catch (JsonProcessingException e) {
+                log.error("🛒 ORDER SERVICE: Failed to serialize coupon codes", e);
+            }
         }
 
+        // If no items yet, return order with stored coupon codes (items will be added separately)
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            order.setTotalAmount(BigDecimal.ZERO);
+            log.info("🛒 ORDER SERVICE: Order created without items, coupon codes stored for later application");
+            return order;
+        }
+
+        // If items exist, apply discounts immediately
         return applyDiscountsToOrder(order, couponCodes);
     }
 
@@ -79,7 +94,8 @@ public class EnhancedOrderService extends OrderService {
         BigDecimal subtotal = calculateOrderTotal(order.getId());
         order.setTotalAmount(subtotal);
 
-        log.info("🛒 ORDER SERVICE: Applying discounts to order ID: {}, subtotal: {}", order.getId(), subtotal);
+        log.info("🛒 ORDER SERVICE: Applying discounts to order ID: {}, subtotal: {}, coupon codes: {}, coupon codes null: {}",
+                order.getId(), subtotal, couponCodes, couponCodes == null);
 
         // If subtotal is zero, no discounts to apply
         if (subtotal.compareTo(BigDecimal.ZERO) == 0) {
@@ -223,27 +239,51 @@ public class EnhancedOrderService extends OrderService {
                 .collect(Collectors.toList());
     }
 
-    // Override addOrderItem to trigger discount recalculation
+    // Override addOrderItem to trigger discount recalculation when first item is added
     @Override
     public OrderItem addOrderItem(UUID orderId, OrderItem orderItem) {
         OrderItem addedItem = super.addOrderItem(orderId, orderItem);
 
-        // If this was the first item added, apply discounts
+        // Get the updated order with all items
         Order order = getOrderById(orderId);
-        if (order.getItems().size() == 1) {
-            // Try to get coupon codes from order if they were stored
-            List<String> couponCodes = null;
-            try {
-                if (order.getAppliedCouponCodes() != null && !order.getAppliedCouponCodes().isEmpty()) {
-                    couponCodes = objectMapper.readValue(order.getAppliedCouponCodes(), List.class);
-                }
-            } catch (Exception e) {
-                log.warn("🛒 ORDER SERVICE: Could not parse coupon codes from order");
-            }
 
+        log.info("🛒 ORDER SERVICE: Added item to order {}, total items now: {}", orderId, order.getItems().size());
+
+        // If this was the first item added and we have stored coupon codes, apply discounts
+        if (order.getItems().size() == 1) {
+            List<String> couponCodes = getStoredCouponCodes(order);
+            if (couponCodes != null && !couponCodes.isEmpty()) {
+                log.info("🛒 ORDER SERVICE: First item added, applying stored coupon codes: {}", couponCodes);
+                applyDiscountsToOrder(order, couponCodes);
+            } else {
+                log.info("🛒 ORDER SERVICE: First item added, no coupon codes to apply");
+                // Still apply order-level discounts even without coupons
+                applyDiscountsToOrder(order, null);
+            }
+        } else if (order.getItems().size() > 1) {
+            // Recalculate discounts for additional items
+            List<String> couponCodes = getStoredCouponCodes(order);
+            log.info("🛒 ORDER SERVICE: Additional item added, recalculating discounts with coupon codes: {}", couponCodes);
             applyDiscountsToOrder(order, couponCodes);
         }
 
         return addedItem;
+    }
+
+    /**
+     * Helper method to retrieve stored coupon codes from order
+     */
+    private List<String> getStoredCouponCodes(Order order) {
+        try {
+            if (order.getAppliedCouponCodes() != null && !order.getAppliedCouponCodes().isEmpty()) {
+                TypeReference<List<String>> typeRef = new TypeReference<List<String>>() {};
+                List<String> couponCodes = objectMapper.readValue(order.getAppliedCouponCodes(), typeRef);
+                log.debug("🛒 ORDER SERVICE: Retrieved stored coupon codes: {}", couponCodes);
+                return couponCodes;
+            }
+        } catch (Exception e) {
+            log.warn("🛒 ORDER SERVICE: Could not parse coupon codes from order: {}", e.getMessage());
+        }
+        return null;
     }
 }
