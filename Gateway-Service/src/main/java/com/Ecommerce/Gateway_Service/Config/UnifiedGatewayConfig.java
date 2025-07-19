@@ -302,13 +302,13 @@ public class UnifiedGatewayConfig {
                                 .circuitBreaker(config -> config.setName("cart-cb")))
                         .uri("lb://cart-service"))
                     // saved for  later service
-                .route("saved4later-bff", r -> r
-                        .path("/api/saved4later/**")
-                        .filters(f -> f
-                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
-                                .filter(customRateLimitFilterFactory.apply(createConfig(40, 60, CustomRateLimitFilterFactory.KeyType.USER)))
-                                .circuitBreaker(config -> config.setName("saved4later-bff-cb")))
-                        .uri("forward:/"))
+//                .route("saved4later-bff", r -> r
+//                        .path("/api/saved4later/**")
+//                        .filters(f -> f
+//                                .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
+//                                .filter(customRateLimitFilterFactory.apply(createConfig(40, 60, CustomRateLimitFilterFactory.KeyType.USER)))
+//                                .circuitBreaker(config -> config.setName("saved4later-bff-cb")))
+//                        .uri("forward:/"))
 
                 .route("cart-service-swagger-ui", r -> r
                         .path("/cart-service/swagger-ui/**")

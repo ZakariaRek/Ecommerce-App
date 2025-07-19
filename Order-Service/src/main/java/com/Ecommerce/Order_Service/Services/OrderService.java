@@ -51,10 +51,8 @@ public class OrderService {
             // If not a UUID, assume it's a MongoDB ObjectId and convert it
             userUuid = convertObjectIdToUuid(userId);
         }
-
         Order order = Order.createOrder(userUuid, cartId, billingAddressId, shippingAddressId);
         Order savedOrder = orderRepository.save(order);
-
         // Publish event to Kafka
         kafkaService.publishOrderCreated(savedOrder);
 

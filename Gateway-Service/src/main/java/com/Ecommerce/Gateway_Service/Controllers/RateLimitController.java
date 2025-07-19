@@ -47,7 +47,6 @@ public class RateLimitController {
                 new RateLimitEndpointConfig("public-read", "/api/products/**", 200, 60, "IP", "Higher limit for public read operations"),
                 new RateLimitEndpointConfig("user-operations", "Various user endpoints", 50, 60, "USER", "Standard limit for authenticated user operations"),
                 new RateLimitEndpointConfig("cart", "/api/cart/**", 50, 60, "USER", "High limits for frequent operations"),
-                new RateLimitEndpointConfig("saved4later", "/api/saved4later/**", 50, 60, "USER", "High limits for frequent operations"),
 
                 new RateLimitEndpointConfig("order", "/api/orders/**", 30, 60, "USER", "Moderate limits for order operations"),
                 new RateLimitEndpointConfig("loyalty", "/api/loyalty/**", 40, 60, "USER", "Moderate limits for loyalty operations"),
@@ -82,7 +81,7 @@ public class RateLimitController {
         Map<String, Object> status = new HashMap<>();
 
         // Check different rate limit buckets for this identifier
-        String[] endpoints = {"auth", "payment", "admin", "public-read", "user-operations", "cart","saved4later", "order", "loyalty", "notification", "shipping"};
+        String[] endpoints = {"auth", "payment", "admin", "public-read", "user-operations", "cart", "order", "loyalty", "notification", "shipping"};
 
         Map<String, RateLimitStatus> endpointStatuses = new HashMap<>();
 
@@ -129,7 +128,7 @@ public class RateLimitController {
             @PathVariable String identifier) {
 
         // Reset rate limits for all endpoints for this identifier
-        String[] endpoints = {"auth", "payment", "admin", "public-read", "user-operations", "cart","saved4later", "order", "loyalty", "notification", "shipping"};
+        String[] endpoints = {"auth", "payment", "admin", "public-read", "user-operations", "cart", "order", "loyalty", "notification", "shipping"};
 
         int resetCount = 0;
         for (String endpoint : endpoints) {
@@ -197,7 +196,6 @@ public class RateLimitController {
             case "public-read": return 200;
             case "user-operations": return 50;
             case "cart": return 50;
-            case "saved4later": return 50;
             case "order": return 30;
             case "loyalty": return 40;
             case "notification": return 30;
