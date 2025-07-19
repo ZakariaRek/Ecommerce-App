@@ -1,4 +1,4 @@
-package com.Ecommerce.Loyalty_Service.Services.Kafka;
+package com.Ecommerce.Loyalty_Service.Listeners.AsnycComm;
 
 import com.Ecommerce.Loyalty_Service.Config.KafkaConfig;
 
@@ -6,7 +6,6 @@ import com.Ecommerce.Loyalty_Service.Entities.PointTransaction;
 import com.Ecommerce.Loyalty_Service.Entities.TransactionType;
 import com.Ecommerce.Loyalty_Service.Events.ExternalEvents;
 import com.Ecommerce.Loyalty_Service.Repositories.CRMRepository;
-import com.Ecommerce.Loyalty_Service.Services.CRMService;
 import com.Ecommerce.Loyalty_Service.Services.PointTransactionService;
 import com.Ecommerce.Loyalty_Service.Services.UserSpendingTrackingService;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +16,6 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -27,7 +24,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class KafkaListenerService {
+public class KafkaOrderPointsListener {
 
     private final PointTransactionService transactionService;
     private final CRMRepository crmRepository;

@@ -33,7 +33,7 @@
         <appender-ref ref="CUSTOM_CONSOLE"/>
     </logger>
 
-    <logger name="com.Ecommerce.Loyalty_Service.Services.Kafka.KafkaListenerService" level="DEBUG" additivity="false">
+    <logger name="com.Ecommerce.Loyalty_Service.Listeners.AsnycComm.KafkaListenerService" level="DEBUG" additivity="false">
         <appender-ref ref="CUSTOM_CONSOLE"/>
     </logger>
 
