@@ -4,8 +4,10 @@ import com.Ecommerce.Loyalty_Service.Entities.Coupon;
 import com.Ecommerce.Loyalty_Service.Mappers.CouponMapper;
 import com.Ecommerce.Loyalty_Service.Payload.Request.Coupon.CouponApplyRequestDto;
 import com.Ecommerce.Loyalty_Service.Payload.Request.Coupon.CouponGenerateRequestDto;
+import com.Ecommerce.Loyalty_Service.Payload.Request.Coupon.CouponPointsPurchaseRequestDto;
 import com.Ecommerce.Loyalty_Service.Payload.Request.Coupon.CouponValidationRequestDto;
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponApplyResponseDto;
+import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponPackageResponseDto;
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponResponseDto;
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponValidationResponseDto;
 import com.Ecommerce.Loyalty_Service.Services.CouponService;
@@ -29,25 +31,128 @@ import java.util.stream.Collectors;
 @RequestMapping("/coupons")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Coupon Management", description = "Coupon generation, validation, and redemption operations")
+@Tag(name = "Coupon Management", description = "Enhanced coupon generation, validation, and redemption operations")
 public class CouponController {
 
     private final CouponService couponService;
     private final CouponMapper couponMapper;
 
     @Operation(
-            summary = "Generate a new coupon",
-            description = "Create a new discount coupon for a user"
+            summary = "Generate a coupon using points",
+            description = "Create a new discount coupon by spending loyalty points"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Coupon generated successfully"),
+            @ApiResponse(responseCode = "400", description = "Insufficient points or invalid request data"),
+            @ApiResponse(responseCode = "404", description = "User not found in loyalty system"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @PostMapping("/purchase")
+    public ResponseEntity<CouponResponseDto> purchaseCouponWithPoints(
+            @Valid @RequestBody CouponPointsPurchaseRequestDto request) {
+        log.info("Purchasing coupon with points for user: {} costing {} points",
+                request.getUserId(), request.getPointsCost());
+
+        Coupon coupon = couponService.generateCouponForPoints(
+                request.getUserId(),
+                request.getDiscountType(),
+                request.getDiscountValue(),
+                request.getPointsCost(),
+                request.getMinPurchaseAmount(),
+                request.getMaxDiscountAmount(),
+                request.getExpirationDate(),
+                request.getUsageLimit()
+        );
+
+        CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
+        return ResponseEntity.ok(responseDto);
+    }
+
+    @Operation(
+            summary = "Generate coupon from predefined package",
+            description = "Purchase a coupon from predefined packages with set point costs"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Coupon package purchased successfully"),
+            @ApiResponse(responseCode = "400", description = "Insufficient points or invalid package"),
+            @ApiResponse(responseCode = "404", description = "User not found in loyalty system"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @PostMapping("/purchase-package")
+    public ResponseEntity<CouponResponseDto> purchaseCouponPackage(
+            @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174001")
+            @RequestParam UUID userId,
+            @Parameter(description = "Package type", example = "STANDARD_10_PERCENT")
+            @RequestParam CouponService.CouponPackage packageType) {
+
+        log.info("Purchasing coupon package {} for user: {}", packageType, userId);
+
+        Coupon coupon = couponService.generateCouponFromPackage(userId, packageType);
+        CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
+
+        return ResponseEntity.ok(responseDto);
+    }
+
+    @Operation(
+            summary = "Get available coupon packages",
+            description = "Retrieve coupon packages that the user can afford with their current points"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved available packages"),
+            @ApiResponse(responseCode = "404", description = "User not found in loyalty system"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/packages/{userId}")
+    public ResponseEntity<List<CouponPackageResponseDto>> getAvailableCouponPackages(
+            @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174001")
+            @PathVariable UUID userId) {
+
+        log.info("Retrieving available coupon packages for user: {}", userId);
+
+        List<CouponService.CouponPackage> availablePackages =
+                couponService.getAvailableCouponPackages(userId);
+
+        List<CouponPackageResponseDto> packageDtos = availablePackages.stream()
+                .map(this::mapPackageToDto)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(packageDtos);
+    }
+
+    @Operation(
+            summary = "Get all coupon packages",
+            description = "Retrieve all available coupon packages with their point costs"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved all packages"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/packages")
+    public ResponseEntity<List<CouponPackageResponseDto>> getAllCouponPackages() {
+        log.info("Retrieving all coupon packages");
+
+        List<CouponPackageResponseDto> packageDtos = java.util.Arrays.stream(CouponService.CouponPackage.values())
+                .map(this::mapPackageToDto)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(packageDtos);
+    }
+
+    // Keep existing endpoints for backward compatibility
+
+    @Operation(
+            summary = "Generate a promotional coupon (FREE)",
+            description = "Create a new discount coupon for promotional purposes (admin use)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Promotional coupon generated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid request data"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
-    @PostMapping
-    public ResponseEntity<CouponResponseDto> generateCoupon(
+    @PostMapping("/promotional")
+    public ResponseEntity<CouponResponseDto> generatePromotionalCoupon(
             @Valid @RequestBody CouponGenerateRequestDto request) {
-        log.info("Generating coupon for user: {} with discount: {}",
+        log.info("Generating promotional coupon for user: {} with discount: {}",
                 request.getUserId(), request.getDiscountValue());
 
         Coupon coupon = couponService.generateCoupon(
@@ -85,7 +190,6 @@ public class CouponController {
                 request.getPurchaseAmount()
         );
 
-        // Calculate expected discount if valid
         BigDecimal expectedDiscount = BigDecimal.ZERO;
         String message = isValid ? "Coupon is valid and ready to use" : "Coupon is not valid";
 
@@ -154,4 +258,31 @@ public class CouponController {
 
         return ResponseEntity.ok(couponDtos);
     }
+
+    // Helper method to map package to DTO
+    private CouponPackageResponseDto mapPackageToDto(CouponService.CouponPackage packageType) {
+        return CouponPackageResponseDto.builder()
+                .packageName(packageType.name())
+                .pointsCost(packageType.getPointsCost())
+                .discountType(packageType.getDiscountType())
+                .discountValue(packageType.getDiscountValue())
+                .minPurchaseAmount(packageType.getMinPurchaseAmount())
+                .maxDiscountAmount(packageType.getMaxDiscountAmount())
+                .description(generatePackageDescription(packageType))
+                .build();
+    }
+
+    private String generatePackageDescription(CouponService.CouponPackage packageType) {
+        if (packageType.getDiscountType().name().equals("PERCENTAGE")) {
+            return String.format("%.0f%% discount (min purchase: $%.0f, max discount: $%.0f)",
+                    packageType.getDiscountValue(),
+                    packageType.getMinPurchaseAmount(),
+                    packageType.getMaxDiscountAmount());
+        } else {
+            return String.format("$%.0f off (min purchase: $%.0f)",
+                    packageType.getDiscountValue(),
+                    packageType.getMinPurchaseAmount());
+        }
+    }
 }
+
