@@ -3,10 +3,7 @@ package com.Ecommerce.Order_Service.Listeners.AsyncComm;
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
-import com.Ecommerce.Order_Service.Payload.Kafka.Response.CouponValidationResponse;
-import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountBreakdown;
-import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
-import com.Ecommerce.Order_Service.Payload.Kafka.Response.TierDiscountResponse;
+import com.Ecommerce.Order_Service.Payload.Kafka.Response.*;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +31,57 @@ public class DiscountResponseListener {
     // In-memory storage instead of Redis
     private final Map<String, DiscountCalculationContext> contextStore = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<DiscountCalculationResponse>> futureStore = new ConcurrentHashMap<>();
+
+    @KafkaListener(topics = "combined-discount-response", groupId = "order-service-group")
+    public void handleCombinedDiscountResponse(ConsumerRecord<String, Object> record) {
+        try {
+            CombinedDiscountResponse response = objectMapper.convertValue(
+                    record.value(), CombinedDiscountResponse.class);
+
+            String correlationId = response.getCorrelationId();
+            log.info("🛒 ORDER SERVICE: Received combined discount response for correlation: {}", correlationId);
+
+            DiscountCalculationContext context = getContext(correlationId);
+            if (context == null) {
+                log.warn("🛒 ORDER SERVICE: No context found for correlation ID: {}", correlationId);
+                return;
+            }
+
+            if (response.isSuccess()) {
+                log.info("🛒 ORDER SERVICE: Combined discount calculation successful - " +
+                                "Coupon discount: {}, Tier discount: {}, Total discount: {}, Final amount: {}",
+                        response.getCouponDiscount(),
+                        response.getTierDiscount(),
+                        response.getTotalDiscount(),
+                        response.getFinalAmount());
+
+                // Create final discount calculation response
+                DiscountCalculationResponse finalResponse = DiscountCalculationResponse.builder()
+                        .correlationId(correlationId)
+                        .orderId(response.getOrderId())
+                        .originalAmount(response.getOriginalAmount())
+                        .productDiscount(response.getProductDiscount())
+                        .orderLevelDiscount(response.getOrderLevelDiscount())
+                        .couponDiscount(response.getCouponDiscount())
+                        .tierDiscount(response.getTierDiscount())
+                        .finalAmount(response.getFinalAmount())
+                        .breakdown(response.getBreakdown())
+                        .success(true)
+                        .build();
+
+                // Complete the discount calculation
+                completeDiscountCalculation(correlationId, finalResponse);
+
+            } else {
+                log.error("🛒 ORDER SERVICE: Combined discount calculation failed: {}", response.getErrorMessage());
+//                completeWithError(correlationId, response.getErrorMessage());
+            }
+
+        } catch (Exception e) {
+            log.error("🛒 ORDER SERVICE: Error processing combined discount response", e);
+        }
+    }
+
 
     @KafkaListener(topics = "coupon-validation-response", groupId = "order-service-group")
     public void handleCouponValidationResponse(ConsumerRecord<String, Object> record) {

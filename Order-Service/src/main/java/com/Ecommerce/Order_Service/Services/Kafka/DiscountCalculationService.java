@@ -1,6 +1,7 @@
 package com.Ecommerce.Order_Service.Services.Kafka;
 
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
+import com.Ecommerce.Order_Service.Payload.Kafka.Request.CombinedDiscountRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.CouponValidationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
@@ -47,34 +48,108 @@ public class DiscountCalculationService {
 
         return future;
     }
-
     private void processDiscountCalculation(DiscountCalculationRequest request) {
         try {
-            log.info("🛒 ORDER SERVICE: Processing discount calculation for order {}", request.getOrderId());
+            log.info("🛒 ORDER SERVICE: Processing optimized discount calculation for order {}", request.getOrderId());
 
+            // Step 1: Calculate product-level discounts
             BigDecimal productDiscount = calculateProductDiscounts(request.getItems());
             log.info("🛒 ORDER SERVICE: Product discount calculated: {}", productDiscount);
 
+            // Step 2: Calculate order-level discounts (bulk, minimum purchase, etc.)
             BigDecimal orderDiscount = calculateOrderLevelDiscounts(request);
             log.info("🛒 ORDER SERVICE: Order-level discount calculated: {}", orderDiscount);
 
+            // Step 3: Calculate amount after order discounts (base for coupon + tier calculations)
             BigDecimal afterOrderDiscount = request.getSubtotal()
                     .subtract(productDiscount)
                     .subtract(orderDiscount);
 
-            if (request.getCouponCodes() != null && !request.getCouponCodes().isEmpty()) {
-                log.info("🛒 ORDER SERVICE: Requesting coupon validation for codes: {}", request.getCouponCodes());
-                requestCouponValidation(request, afterOrderDiscount, productDiscount, orderDiscount);
-            } else {
-                log.info("🛒 ORDER SERVICE: No coupons provided, proceeding to tier discount");
-                requestTierDiscount(request, afterOrderDiscount, BigDecimal.ZERO);
-            }
+            log.info("🛒 ORDER SERVICE: Amount after order discounts: {}", afterOrderDiscount);
+
+            // Step 4: Send single combined request for both coupon and tier discounts
+            requestCombinedLoyaltyDiscounts(request, afterOrderDiscount, productDiscount, orderDiscount);
 
         } catch (Exception e) {
-            log.error("🛒 ORDER SERVICE: Error in discount calculation process", e);
+            log.error("🛒 ORDER SERVICE: Error in optimized discount calculation process", e);
             completeWithError(request.getCorrelationId(), "Discount calculation failed: " + e.getMessage());
         }
     }
+    private void requestCombinedLoyaltyDiscounts(DiscountCalculationRequest originalRequest,
+                                                 BigDecimal afterOrderDiscount,
+                                                 BigDecimal productDiscount,
+                                                 BigDecimal orderDiscount) {
+        try {
+            // Create combined request that includes both coupon and tier discount requirements
+            CombinedDiscountRequest combinedRequest = CombinedDiscountRequest.builder()
+                    .correlationId(originalRequest.getCorrelationId())
+                    .userId(originalRequest.getUserId())
+                    .orderId(originalRequest.getOrderId())
+                    .originalAmount(originalRequest.getSubtotal())
+                    .productDiscount(productDiscount)
+                    .orderLevelDiscount(orderDiscount)
+                    .amountAfterOrderDiscounts(afterOrderDiscount)
+                    .couponCodes(originalRequest.getCouponCodes()) // Can be null or empty
+                    .totalItems(originalRequest.getTotalItems())
+                    .build();
+
+            // Store context for response processing
+            DiscountCalculationContext context = DiscountCalculationContext.builder()
+                    .originalRequest(originalRequest)
+                    .productDiscount(productDiscount)
+                    .orderDiscount(orderDiscount)
+                    .amountAfterOrderDiscount(afterOrderDiscount)
+                    .build();
+
+//            storeContext(originalRequest.getCorrelationId(), context);
+
+            // Send single request to Loyalty Service
+            log.info("🛒 ORDER SERVICE: Sending combined discount request for order {} with coupons: {} and amount: {}",
+                    originalRequest.getOrderId(),
+                    originalRequest.getCouponCodes(),
+                    afterOrderDiscount);
+
+            kafkaTemplate.send("combined-discount-request",
+                    originalRequest.getCorrelationId(),
+                    combinedRequest);
+
+            log.info("🛒 ORDER SERVICE: Combined discount request sent successfully");
+
+        } catch (Exception e) {
+            log.error("🛒 ORDER SERVICE: Error sending combined discount request", e);
+            completeWithError(originalRequest.getCorrelationId(),
+                    "Failed to request combined discounts: " + e.getMessage());
+        }
+    }
+
+
+//    private void processDiscountCalculation(DiscountCalculationRequest request) {
+//        try {
+//            log.info("🛒 ORDER SERVICE: Processing discount calculation for order {}", request.getOrderId());
+//
+//            BigDecimal productDiscount = calculateProductDiscounts(request.getItems());
+//            log.info("🛒 ORDER SERVICE: Product discount calculated: {}", productDiscount);
+//
+//            BigDecimal orderDiscount = calculateOrderLevelDiscounts(request);
+//            log.info("🛒 ORDER SERVICE: Order-level discount calculated: {}", orderDiscount);
+//
+//            BigDecimal afterOrderDiscount = request.getSubtotal()
+//                    .subtract(productDiscount)
+//                    .subtract(orderDiscount);
+//
+//            if (request.getCouponCodes() != null && !request.getCouponCodes().isEmpty()) {
+//                log.info("🛒 ORDER SERVICE: Requesting coupon validation for codes: {}", request.getCouponCodes());
+//                requestCouponValidation(request, afterOrderDiscount, productDiscount, orderDiscount);
+//            } else {
+//                log.info("🛒 ORDER SERVICE: No coupons provided, proceeding to tier discount");
+//                requestTierDiscount(request, afterOrderDiscount, BigDecimal.ZERO);
+//            }
+//
+//        } catch (Exception e) {
+//            log.error("🛒 ORDER SERVICE: Error in discount calculation process", e);
+//            completeWithError(request.getCorrelationId(), "Discount calculation failed: " + e.getMessage());
+//        }
+//    }
 
     private void requestCouponValidation(DiscountCalculationRequest request,
                                          BigDecimal afterOrderDiscount,
