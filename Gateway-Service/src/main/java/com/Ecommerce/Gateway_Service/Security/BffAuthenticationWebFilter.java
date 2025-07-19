@@ -66,10 +66,10 @@ public class BffAuthenticationWebFilter implements WebFilter {
                 path.matches("/api/order/user/[^/]+") ||
                 path.matches("/api/order/batch") ||
                 path.matches("/api/order/user/[^/]+/all")
-//                ||
-//                path.matches("/api/saved4later/[^/]+/enriched") ||
-//                path.matches("/api/saved4later/[^/]+/basic") ||
-//                path.matches("/api/saved4later/[^/]+/availability-summary")
+                ||
+                path.matches("/api/saved4later/[^/]+/enriched") ||
+                path.matches("/api/saved4later/[^/]+/basic") ||
+                path.matches("/api/saved4later/[^/]+/availability-summary")
                 ;
     }
     private String extractToken(ServerHttpRequest request) {

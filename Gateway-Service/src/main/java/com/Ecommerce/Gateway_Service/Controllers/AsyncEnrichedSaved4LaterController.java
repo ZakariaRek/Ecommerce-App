@@ -22,7 +22,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "BFF Save4Later", description = "Backend for Frontend Save4Later operations with enriched product data")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class AsyncEnrichedSaved4LaterController {
 
     private final AsyncSaved4LaterBffService asyncSaved4LaterBffService;
