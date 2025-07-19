@@ -1,3 +1,5 @@
+// Replace the existing EnhancedOrderService.java with this fixed version:
+
 package com.Ecommerce.Order_Service.Services;
 
 import com.Ecommerce.Order_Service.Entities.DiscountApplication;
@@ -33,14 +35,25 @@ import java.util.stream.Collectors;
 @Transactional
 @Slf4j
 public class EnhancedOrderService extends OrderService {
+
+    private final DiscountCalculationService discountCalculationService;
+    private final DiscountApplicationRepository discountApplicationRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper;
     @Autowired
     private OrderRepository orderRepository;
 
-    private DiscountCalculationService discountCalculationService;
-    private DiscountApplicationRepository discountApplicationRepository;
-    private  KafkaTemplate<String, Object> kafkaTemplate;
-    private  ObjectMapper objectMapper;
-
+    // Proper constructor injection
+    public EnhancedOrderService(
+            DiscountCalculationService discountCalculationService,
+            DiscountApplicationRepository discountApplicationRepository,
+            KafkaTemplate<String, Object> kafkaTemplate,
+            ObjectMapper objectMapper) {
+        this.discountCalculationService = discountCalculationService;
+        this.discountApplicationRepository = discountApplicationRepository;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     public Order createOrderWithDiscounts(String userId, UUID cartId,
                                           UUID billingAddressId, UUID shippingAddressId,
@@ -51,16 +64,32 @@ public class EnhancedOrderService extends OrderService {
         // Create basic order first
         Order order = super.createOrder(userId, cartId, billingAddressId, shippingAddressId);
 
+        // If no items yet, set basic totals and return (items will be added separately)
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            order.setTotalAmount(BigDecimal.ZERO);
+            return orderRepository.save(order);
+        }
+
+        return applyDiscountsToOrder(order, couponCodes);
+    }
+
+    @Transactional
+    public Order applyDiscountsToOrder(Order order, List<String> couponCodes) {
         // Calculate initial subtotal
         BigDecimal subtotal = calculateOrderTotal(order.getId());
         order.setTotalAmount(subtotal);
 
-        log.info("🛒 ORDER SERVICE: Order created with ID: {}, subtotal: {}", order.getId(), subtotal);
+        log.info("🛒 ORDER SERVICE: Applying discounts to order ID: {}, subtotal: {}", order.getId(), subtotal);
+
+        // If subtotal is zero, no discounts to apply
+        if (subtotal.compareTo(BigDecimal.ZERO) == 0) {
+            return orderRepository.save(order);
+        }
 
         // Prepare discount calculation request
         DiscountCalculationRequest discountRequest = DiscountCalculationRequest.builder()
                 .correlationId(UUID.randomUUID().toString())
-                .userId(UUID.fromString(userId))
+                .userId(UUID.fromString(order.getUserId().toString()))
                 .orderId(order.getId())
                 .subtotal(subtotal)
                 .totalItems(order.getItems().size())
@@ -75,23 +104,28 @@ public class EnhancedOrderService extends OrderService {
 
             // Wait for discount calculation (with timeout)
             DiscountCalculationResponse discountResponse =
-                    discountFuture.get(10, TimeUnit.SECONDS);
+                    discountFuture.get(15, TimeUnit.SECONDS); // Increased timeout
 
             if (discountResponse.isSuccess()) {
                 log.info("🛒 ORDER SERVICE: Discount calculation successful for order: {}", order.getId());
 
                 // Apply discounts to order
-                order.setProductDiscount(discountResponse.getProductDiscount());
-                order.setOrderLevelDiscount(discountResponse.getOrderLevelDiscount());
-                order.setLoyaltyCouponDiscount(discountResponse.getCouponDiscount());
-                order.setTierBenefitDiscount(discountResponse.getTierDiscount());
-                order.setTotalAmount(discountResponse.getFinalAmount());
+                order.setProductDiscount(discountResponse.getProductDiscount() != null ?
+                        discountResponse.getProductDiscount() : BigDecimal.ZERO);
+                order.setOrderLevelDiscount(discountResponse.getOrderLevelDiscount() != null ?
+                        discountResponse.getOrderLevelDiscount() : BigDecimal.ZERO);
+                order.setLoyaltyCouponDiscount(discountResponse.getCouponDiscount() != null ?
+                        discountResponse.getCouponDiscount() : BigDecimal.ZERO);
+                order.setTierBenefitDiscount(discountResponse.getTierDiscount() != null ?
+                        discountResponse.getTierDiscount() : BigDecimal.ZERO);
+                order.setTotalAmount(discountResponse.getFinalAmount() != null ?
+                        discountResponse.getFinalAmount() : subtotal);
 
                 // Calculate total discount
-                BigDecimal totalDiscount = discountResponse.getProductDiscount()
-                        .add(discountResponse.getOrderLevelDiscount())
-                        .add(discountResponse.getCouponDiscount())
-                        .add(discountResponse.getTierDiscount());
+                BigDecimal totalDiscount = order.getProductDiscount()
+                        .add(order.getOrderLevelDiscount())
+                        .add(order.getLoyaltyCouponDiscount())
+                        .add(order.getTierBenefitDiscount());
                 order.setDiscount(totalDiscount);
 
                 // Store applied coupon codes and breakdown
@@ -99,8 +133,10 @@ public class EnhancedOrderService extends OrderService {
                     order.setAppliedCouponCodes(objectMapper.writeValueAsString(couponCodes));
                 }
 
-                order.setDiscountBreakdown(objectMapper.writeValueAsString(
-                        discountResponse.getBreakdown()));
+                if (discountResponse.getBreakdown() != null) {
+                    order.setDiscountBreakdown(objectMapper.writeValueAsString(
+                            discountResponse.getBreakdown()));
+                }
 
                 Order savedOrder = orderRepository.save(order);
 
@@ -109,8 +145,8 @@ public class EnhancedOrderService extends OrderService {
 
                 // Mark coupons as used
                 if (couponCodes != null && !couponCodes.isEmpty() &&
-                        discountResponse.getCouponDiscount().compareTo(BigDecimal.ZERO) > 0) {
-                    markCouponsAsUsed(couponCodes, order.getId(), UUID.fromString(userId));
+                        order.getLoyaltyCouponDiscount().compareTo(BigDecimal.ZERO) > 0) {
+                    markCouponsAsUsed(couponCodes, order.getId(), order.getUserId());
                 }
 
                 log.info("🛒 ORDER SERVICE: Order saved with final amount: {} (discount: {})",
@@ -132,24 +168,34 @@ public class EnhancedOrderService extends OrderService {
     }
 
     private void saveDiscountApplications(Order order, DiscountCalculationResponse response) throws JsonProcessingException {
+        if (response.getBreakdown() == null || response.getBreakdown().isEmpty()) {
+            return;
+        }
+
         List<DiscountApplication> applications = new ArrayList<>();
 
         for (DiscountBreakdown breakdown : response.getBreakdown()) {
-            DiscountApplication application = DiscountApplication.builder()
-                    .order(order)
-                    .discountType(DiscountType.valueOf(breakdown.getDiscountType()))
-                    .discountSource(breakdown.getSource())
-                    .originalAmount(response.getOriginalAmount())
-                    .discountAmount(breakdown.getAmount())
-                    .finalAmount(response.getFinalAmount())
-                    .build();
+            try {
+                DiscountApplication application = DiscountApplication.builder()
+                        .order(order)
+                        .discountType(DiscountType.valueOf(breakdown.getDiscountType()))
+                        .discountSource(breakdown.getSource())
+                        .originalAmount(response.getOriginalAmount())
+                        .discountAmount(breakdown.getAmount())
+                        .finalAmount(response.getFinalAmount())
+                        .build();
 
-            applications.add(application);
+                applications.add(application);
+            } catch (IllegalArgumentException e) {
+                log.warn("🛒 ORDER SERVICE: Unknown discount type: {}", breakdown.getDiscountType());
+            }
         }
 
-        discountApplicationRepository.saveAll(applications);
-        log.info("🛒 ORDER SERVICE: Saved {} discount applications for order {}",
-                applications.size(), order.getId());
+        if (!applications.isEmpty()) {
+            discountApplicationRepository.saveAll(applications);
+            log.info("🛒 ORDER SERVICE: Saved {} discount applications for order {}",
+                    applications.size(), order.getId());
+        }
     }
 
     private void markCouponsAsUsed(List<String> couponCodes, UUID orderId, UUID userId) {
@@ -167,11 +213,37 @@ public class EnhancedOrderService extends OrderService {
     private List<OrderItemResponseDto> convertToOrderItemDtos(List<OrderItem> items) {
         return items.stream()
                 .map(item -> OrderItemResponseDto.builder()
+                        .id(item.getId())
                         .productId(item.getProductId())
                         .quantity(item.getQuantity())
                         .priceAtPurchase(item.getPriceAtPurchase())
                         .discount(item.getDiscount())
+                        .total(item.getTotal())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    // Override addOrderItem to trigger discount recalculation
+    @Override
+    public OrderItem addOrderItem(UUID orderId, OrderItem orderItem) {
+        OrderItem addedItem = super.addOrderItem(orderId, orderItem);
+
+        // If this was the first item added, apply discounts
+        Order order = getOrderById(orderId);
+        if (order.getItems().size() == 1) {
+            // Try to get coupon codes from order if they were stored
+            List<String> couponCodes = null;
+            try {
+                if (order.getAppliedCouponCodes() != null && !order.getAppliedCouponCodes().isEmpty()) {
+                    couponCodes = objectMapper.readValue(order.getAppliedCouponCodes(), List.class);
+                }
+            } catch (Exception e) {
+                log.warn("🛒 ORDER SERVICE: Could not parse coupon codes from order");
+            }
+
+            applyDiscountsToOrder(order, couponCodes);
+        }
+
+        return addedItem;
     }
 }
