@@ -71,40 +71,32 @@ spring:
 #    org.hibernate.SQL: DEBUG
 #    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-# Application-specific configuration
 loyalty:
+  tier:
+    # Tier thresholds (points required to reach each tier)
+    bronze-threshold: 0       # 0-499 points
+    silver-threshold: 500     # 500-1999 points
+    gold-threshold: 2000      # 2000-4999 points
+    platinum-threshold: 5000  # 5000-9999 points
+    diamond-threshold: 10000  # 10,000+ points
+
+  # Point earning rates
   points:
-    # Points expiration in days (0 = never expire)
-    expiration-days: 365
-    # Minimum points for redemption
-    min-redemption: 100
-  membership:
-    tiers:
-      bronze:
-        min-points: 0
-        benefits: "Basic customer support"
-      silver:
-        min-points: 500
-        benefits: "Priority customer support, Birthday reward"
-      gold:
-        min-points: 2000
-        benefits: "VIP customer support, Birthday reward, Quarterly bonus"
-      platinum:
-        min-points: 5000
-        benefits: "Dedicated account manager, Enhanced rewards, Special events"
-      diamond:
-        min-points: 10000
-        benefits: "All benefits plus exclusive access and personalized offers"
+    order-rate: 1.0           # Points per dollar spent
+    review-points: 10         # Points for product review
+    signup-bonus: 100         # Welcome bonus points
+    first-order-bonus: 100    # First order bonus points
+    referral-bonus: 200       # Referral bonus points
 
-Point Earning Events:
-  - Order Completion: 1 point per $1 spent
-  - First Order Bonus: +100 points
-  - Credit Card Payment: +10 points
-  - Product Review: +10 points (verified purchases only)
-  - User Referral: +100 points (referrer)
-  - Welcome Bonus: +50 points (new user)
-  - Birthday: Tier-based bonus points
+  # Coupon configuration
+  coupons:
+    default-validity-months: 3  # Default coupon validity
+    max-stacking: 3            # Maximum coupons that can be stacked
 
+  # Factory settings
+  factory:
+    create-default-data: true
+    create-test-data: false
 eureka:
   instance:
     preferIpAddress: true

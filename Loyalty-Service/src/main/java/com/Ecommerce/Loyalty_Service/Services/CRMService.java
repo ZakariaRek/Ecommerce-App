@@ -1,7 +1,9 @@
 package com.Ecommerce.Loyalty_Service.Services;
 
+import com.Ecommerce.Loyalty_Service.Config.TierThresholdConfig;
 import com.Ecommerce.Loyalty_Service.Entities.CRM;
 import com.Ecommerce.Loyalty_Service.Entities.MembershipTier;
+import com.Ecommerce.Loyalty_Service.Payload.Request.Transaction.TierProgressInfo;
 import com.Ecommerce.Loyalty_Service.Repositories.CRMRepository;
 import com.Ecommerce.Loyalty_Service.Services.Kafka.CRMKafkaService;
 import jakarta.transaction.Transactional;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class CRMService {
     private final CRMRepository crmRepository;
     private final CRMKafkaService kafkaService;
+    private final TierThresholdConfig tierConfig;
 
     public CRM getByUserId(UUID userId) {
         return crmRepository.findByUserId(userId)
@@ -30,33 +33,25 @@ public class CRMService {
     public void earnPoints(UUID userId, int points, String source) {
         CRM crm = getByUserId(userId);
 
-        // Store previous state for comparison
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-
-        // Update points and last activity
         crm.setTotalPoints(previousPoints + points);
         crm.setLastActivity(LocalDateTime.now());
 
-        // Check if tier should be upgraded
         upgradeMembership(crm);
 
-        // Save the updated CRM record
         CRM updatedCrm = crmRepository.save(crm);
 
-        // Direct Kafka event - for cases when the MongoDB listener might not trigger
-        // or when we need to include additional context (like source ID)
         kafkaService.publishPointsEarned(
                 userId,
                 points,
                 updatedCrm.getTotalPoints(),
                 source,
-                null, // No specific source ID
+                null,
                 updatedCrm.getMembershipLevel()
         );
 
-        // If membership tier changed, send that event too
         if (previousTier != updatedCrm.getMembershipLevel()) {
             kafkaService.publishMembershipTierChanged(
                     userId,
@@ -66,7 +61,7 @@ public class CRMService {
                     "POINTS_INCREASE"
             );
 
-            log.info("User {} upgraded from {} to {}",
+            log.info("🎉 User {} upgraded from {} to {}",
                     userId, previousTier, updatedCrm.getMembershipLevel());
         }
     }
@@ -78,33 +73,25 @@ public class CRMService {
             throw new RuntimeException("Insufficient points balance");
         }
 
-        // Store previous state for comparison
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-
-
-        // Update points and last activity
         crm.setTotalPoints(previousPoints - points);
         crm.setLastActivity(LocalDateTime.now());
 
-        // Check if tier should be updated
         upgradeMembership(crm);
 
-        // Save the updated CRM record
         CRM updatedCrm = crmRepository.save(crm);
 
-        // Direct Kafka event
         kafkaService.publishPointsRedeemed(
                 userId,
                 points,
                 updatedCrm.getTotalPoints(),
                 "POINTS_REDEMPTION",
-                null, // No specific purpose ID
+                null,
                 updatedCrm.getMembershipLevel()
         );
 
-        // If membership tier changed, send that event too
         if (previousTier != updatedCrm.getMembershipLevel()) {
             kafkaService.publishMembershipTierChanged(
                     userId,
@@ -114,65 +101,128 @@ public class CRMService {
                     "POINTS_DECREASE"
             );
 
-            log.info("User {} downgraded from {} to {}",
+            log.info("⬇️ User {} tier changed from {} to {} due to point redemption",
                     userId, previousTier, updatedCrm.getMembershipLevel());
         }
     }
 
+    /**
+     * Enhanced tier upgrade logic with configurable thresholds
+     */
     private void upgradeMembership(CRM crm) {
         int points = crm.getTotalPoints();
         MembershipTier previousTier = crm.getMembershipLevel();
 
-        if (points >= 10000) {
+        if (points >= tierConfig.getDiamondThreshold()) {
             crm.setMembershipLevel(MembershipTier.DIAMOND);
-        } else if (points >= 5000) {
+        } else if (points >= tierConfig.getPlatinumThreshold()) {
             crm.setMembershipLevel(MembershipTier.PLATINUM);
-        } else if (points >= 2000) {
+        } else if (points >= tierConfig.getGoldThreshold()) {
             crm.setMembershipLevel(MembershipTier.GOLD);
-        } else if (points >= 500) {
+        } else if (points >= tierConfig.getSilverThreshold()) {
             crm.setMembershipLevel(MembershipTier.SILVER);
         } else {
             crm.setMembershipLevel(MembershipTier.BRONZE);
         }
     }
 
+    /**
+     * Get points needed for next tier
+     */
+    public int getPointsNeededForNextTier(UUID userId) {
+        CRM crm = getByUserId(userId);
+        int currentPoints = crm.getTotalPoints();
+        MembershipTier currentTier = crm.getMembershipLevel();
+
+        return switch (currentTier) {
+            case BRONZE -> Math.max(0, tierConfig.getSilverThreshold() - currentPoints);
+            case SILVER -> Math.max(0, tierConfig.getGoldThreshold() - currentPoints);
+            case GOLD -> Math.max(0, tierConfig.getPlatinumThreshold() - currentPoints);
+            case PLATINUM -> Math.max(0, tierConfig.getDiamondThreshold() - currentPoints);
+            case DIAMOND -> 0; // Already at highest tier
+        };
+    }
+
+    /**
+     * Get next tier information
+     */
+    public MembershipTier getNextTier(UUID userId) {
+        CRM crm = getByUserId(userId);
+        MembershipTier currentTier = crm.getMembershipLevel();
+
+        return switch (currentTier) {
+            case BRONZE -> MembershipTier.SILVER;
+            case SILVER -> MembershipTier.GOLD;
+            case GOLD -> MembershipTier.PLATINUM;
+            case PLATINUM -> MembershipTier.DIAMOND;
+            case DIAMOND -> MembershipTier.DIAMOND; // Already at highest
+        };
+    }
+
+    /**
+     * Get tier progress information
+     */
+    public TierProgressInfo getTierProgress(UUID userId) {
+        CRM crm = getByUserId(userId);
+        int currentPoints = crm.getTotalPoints();
+        MembershipTier currentTier = crm.getMembershipLevel();
+
+        int tierStartPoints = switch (currentTier) {
+            case BRONZE -> tierConfig.getBronzeThreshold();
+            case SILVER -> tierConfig.getSilverThreshold();
+            case GOLD -> tierConfig.getGoldThreshold();
+            case PLATINUM -> tierConfig.getPlatinumThreshold();
+            case DIAMOND -> tierConfig.getDiamondThreshold();
+        };
+
+        int nextTierPoints = switch (currentTier) {
+            case BRONZE -> tierConfig.getSilverThreshold();
+            case SILVER -> tierConfig.getGoldThreshold();
+            case GOLD -> tierConfig.getPlatinumThreshold();
+            case PLATINUM -> tierConfig.getDiamondThreshold();
+            case DIAMOND -> tierConfig.getDiamondThreshold(); // Max tier
+        };
+
+        int pointsInCurrentTier = currentPoints - tierStartPoints;
+        int pointsNeededForTier = nextTierPoints - tierStartPoints;
+        double progressPercentage = currentTier == MembershipTier.DIAMOND ? 100.0 :
+                (double) pointsInCurrentTier / pointsNeededForTier * 100.0;
+
+        return TierProgressInfo.builder()
+                .currentTier(currentTier)
+                .currentPoints(currentPoints)
+                .pointsInCurrentTier(pointsInCurrentTier)
+                .pointsNeededForNextTier(getPointsNeededForNextTier(userId))
+                .nextTier(getNextTier(userId))
+                .progressPercentage(progressPercentage)
+                .tierStartPoints(tierStartPoints)
+                .nextTierPoints(nextTierPoints)
+                .build();
+    }
+
     public double calculateLoyaltyScore(UUID userId) {
         CRM crm = getByUserId(userId);
-
-        // Calculate days between dates without using ChronoUnit
         LocalDateTime now = LocalDateTime.now();
         long membershipDays = Duration.between(crm.getJoinDate(), now).toDays();
-
-        // Calculate activity score
         long daysSinceLastActivity = Duration.between(crm.getLastActivity(), now).toDays();
         double activityScore = daysSinceLastActivity <= 30 ? 1.0 : 0.5;
 
         return (crm.getTotalPoints() / 100.0) * (Math.log10(membershipDays + 1)) * activityScore;
     }
 
-    /**
-     * Adjust points for a user (admin function)
-     */
     @Transactional
     public void adjustPoints(UUID userId, int pointsAdjustment, String reason, String adjustedBy) {
         CRM crm = getByUserId(userId);
-
-        // Store previous state for comparison
         MembershipTier previousTier = crm.getMembershipLevel();
         int previousPoints = crm.getTotalPoints();
 
-
-        // Update points
         crm.setTotalPoints(previousPoints + pointsAdjustment);
         crm.setLastActivity(LocalDateTime.now());
 
-        // Check if tier should be updated
         upgradeMembership(crm);
 
-        // Save the updated CRM record
         CRM updatedCrm = crmRepository.save(crm);
 
-        // Direct Kafka event
         kafkaService.publishPointsAdjusted(
                 userId,
                 pointsAdjustment,
@@ -182,7 +232,6 @@ public class CRMService {
                 updatedCrm.getMembershipLevel()
         );
 
-        // If membership tier changed, send that event too
         if (previousTier != updatedCrm.getMembershipLevel()) {
             kafkaService.publishMembershipTierChanged(
                     userId,
