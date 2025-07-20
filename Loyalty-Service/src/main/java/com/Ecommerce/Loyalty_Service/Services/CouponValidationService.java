@@ -61,7 +61,7 @@ public class CouponValidationService {
 
                 validCoupons.add(CouponDiscountDetail.builder()
                         .couponCode(couponCode)
-                        .discountType(coupon.getDiscountType())
+                        .discountType(String.valueOf(coupon.getDiscountType()))
                         .discountValue(coupon.getDiscountValue())
                         .calculatedDiscount(discount)
                         .build());

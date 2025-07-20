@@ -1,4 +1,4 @@
-// Loyalty-Service: Fixed Combined Discount Kafka Listener
+// Debug version - Loyalty-Service: Fixed Combined Discount Kafka Listener
 package com.Ecommerce.Loyalty_Service.Listeners.AsnycComm;
 
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Request.CombinedDiscountRequest;
@@ -25,8 +25,6 @@ public class CombinedDiscountKafkaListener {
 
     /**
      * Handle combined discount requests from Order Service
-     * This replaces separate coupon-validation-request and tier-discount-request listeners
-     * IMPORTANT: Using stringKafkaListenerContainerFactory for string-based messages
      */
     @KafkaListener(
             topics = "combined-discount-request",
@@ -36,6 +34,7 @@ public class CombinedDiscountKafkaListener {
     public void handleCombinedDiscountRequest(ConsumerRecord<String, String> record) {
         try {
             log.info("💎 LOYALTY SERVICE: Raw message received: {}", record.value());
+            log.info("💎 LOYALTY SERVICE: Message key: {}", record.key());
 
             // Deserialize the JSON string to CombinedDiscountRequest
             CombinedDiscountRequest request = objectMapper.readValue(record.value(), CombinedDiscountRequest.class);
@@ -67,17 +66,20 @@ public class CombinedDiscountKafkaListener {
                 log.error("💎 LOYALTY SERVICE: Combined discount calculation failed: {}", response.getErrorMessage());
             }
 
-            // Send response back to Order Service
-            log.info("💎 LOYALTY SERVICE: Sending combined discount response for correlation: {}",
-                    request.getCorrelationId());
+            // FIX: Add detailed logging before sending
+            log.info("💎 LOYALTY SERVICE: Preparing to send response with correlation: {}", request.getCorrelationId());
+            log.info("💎 LOYALTY SERVICE: Response success: {}, couponDiscount: {}, tierDiscount: {}",
+                    response.isSuccess(), response.getCouponDiscount(), response.getTierDiscount());
 
+            // Send response back to Order Service
             kafkaTemplate.send("combined-discount-response",
                             request.getCorrelationId(), response)
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
                             log.error("💎 LOYALTY SERVICE: Failed to send combined discount response", ex);
                         } else {
-                            log.info("💎 LOYALTY SERVICE: Successfully sent combined discount response");
+                            log.info("💎 LOYALTY SERVICE: Successfully sent combined discount response to topic: combined-discount-response");
+                            log.info("💎 LOYALTY SERVICE: Message metadata: {}", result.getRecordMetadata());
                         }
                     });
 
@@ -96,6 +98,7 @@ public class CombinedDiscountKafkaListener {
                         .totalDiscount(BigDecimal.ZERO)
                         .build();
 
+                log.error("💎 LOYALTY SERVICE: Sending error response with correlation: {}", correlationId);
                 kafkaTemplate.send("combined-discount-response", correlationId, errorResponse);
             } catch (Exception sendError) {
                 log.error("💎 LOYALTY SERVICE: Failed to send error response", sendError);
@@ -105,8 +108,6 @@ public class CombinedDiscountKafkaListener {
 
     /**
      * Optional: Keep the existing separate listeners for backward compatibility
-     * You can remove these if you want to force all requests to use the new combined flow
-     * IMPORTANT: Using jsonKafkaListenerContainerFactory for JSON-based messages
      */
     @Deprecated
     @KafkaListener(
@@ -117,14 +118,7 @@ public class CombinedDiscountKafkaListener {
     public void handleLegacyCouponValidationRequest(ConsumerRecord<String, Object> record) {
         log.warn("💎 LOYALTY SERVICE: Received legacy coupon validation request. " +
                 "Consider migrating to combined-discount-request for better performance.");
-
-        // You could either:
-        // 1. Process it normally (backward compatibility)
-        // 2. Convert it to a combined request and process
-        // 3. Return an error encouraging migration
-
         log.info("💎 LOYALTY SERVICE: Processing legacy request with fallback to separate flows");
-        // For now, just log and ignore - you can implement fallback logic if needed
     }
 
     @Deprecated
@@ -136,8 +130,6 @@ public class CombinedDiscountKafkaListener {
     public void handleLegacyTierDiscountRequest(ConsumerRecord<String, Object> record) {
         log.warn("💎 LOYALTY SERVICE: Received legacy tier discount request. " +
                 "Consider migrating to combined-discount-request for better performance.");
-
         log.info("💎 LOYALTY SERVICE: Processing legacy request with fallback to separate flows");
-        // For now, just log and ignore - you can implement fallback logic if needed
     }
 }

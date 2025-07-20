@@ -1,5 +1,5 @@
 package com.Ecommerce.Loyalty_Service.Payload.Kafka.Response;
-import com.Ecommerce.Loyalty_Service.Entities.DiscountType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,9 +13,11 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class CouponDiscountDetail {
     private String couponCode;
-    private DiscountType discountType;
+
+    // FIX: Use String instead of enum for cross-service communication
+    // This avoids Jackson deserialization issues between different enum definitions
+    private String discountType;
+
     private BigDecimal discountValue;
     private BigDecimal calculatedDiscount;
-
-
 }

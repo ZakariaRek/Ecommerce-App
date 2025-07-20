@@ -1,3 +1,4 @@
+// Fixed Order-Service: DiscountResponseListener.java
 package com.Ecommerce.Order_Service.Listeners.AsyncComm;
 
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
@@ -5,6 +6,7 @@ import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequ
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.*;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
+import com.Ecommerce.Order_Service.Services.Kafka.DiscountCalculationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,12 +15,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
@@ -27,23 +25,31 @@ public class DiscountResponseListener {
 
     private final ObjectMapper objectMapper;
     private final DiscountApplicationRepository discountApplicationRepository;
-
-    // In-memory storage instead of Redis
-    private final Map<String, DiscountCalculationContext> contextStore = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<DiscountCalculationResponse>> futureStore = new ConcurrentHashMap<>();
+    private final DiscountCalculationService discountCalculationService; // FIX: Add dependency
 
     @KafkaListener(topics = "combined-discount-response", groupId = "order-service-group")
     public void handleCombinedDiscountResponse(ConsumerRecord<String, Object> record) {
         try {
+            log.info("🛒 ORDER SERVICE: Received raw message: {}", record.value());
+
+            // FIX: Handle both null payload and actual response
+            if (record.value() == null || "KafkaNull".equals(record.value().getClass().getSimpleName())) {
+                log.warn("🛒 ORDER SERVICE: Received null payload for correlation: {}", record.key());
+                return;
+            }
+
             CombinedDiscountResponse response = objectMapper.convertValue(
                     record.value(), CombinedDiscountResponse.class);
 
             String correlationId = response.getCorrelationId();
             log.info("🛒 ORDER SERVICE: Received combined discount response for correlation: {}", correlationId);
 
-            DiscountCalculationContext context = getContext(correlationId);
+            // FIX: Get context from DiscountCalculationService
+            DiscountCalculationContext context = discountCalculationService.getContext(correlationId);
             if (context == null) {
                 log.warn("🛒 ORDER SERVICE: No context found for correlation ID: {}", correlationId);
+                log.warn("🛒 ORDER SERVICE: Available contexts: {}",
+                        discountCalculationService.getAvailableContextKeys());
                 return;
             }
 
@@ -69,19 +75,39 @@ public class DiscountResponseListener {
                         .success(true)
                         .build();
 
-                // Complete the discount calculation
-                completeDiscountCalculation(correlationId, finalResponse);
+                // FIX: Complete the discount calculation using DiscountCalculationService
+                discountCalculationService.completePendingCalculation(correlationId, finalResponse);
 
             } else {
                 log.error("🛒 ORDER SERVICE: Combined discount calculation failed: {}", response.getErrorMessage());
-//                completeWithError(correlationId, response.getErrorMessage());
+
+                // Create error response
+                DiscountCalculationResponse errorResponse = DiscountCalculationResponse.builder()
+                        .correlationId(correlationId)
+                        .orderId(response.getOrderId())
+                        .success(false)
+                        .errorMessage(response.getErrorMessage())
+                        .build();
+
+                discountCalculationService.completePendingCalculation(correlationId, errorResponse);
             }
 
         } catch (Exception e) {
             log.error("🛒 ORDER SERVICE: Error processing combined discount response", e);
+
+            // Try to complete with error if we have correlation ID
+            String correlationId = record.key();
+            if (correlationId != null) {
+                DiscountCalculationResponse errorResponse = DiscountCalculationResponse.builder()
+                        .correlationId(correlationId)
+                        .success(false)
+                        .errorMessage("Error processing response: " + e.getMessage())
+                        .build();
+
+                discountCalculationService.completePendingCalculation(correlationId, errorResponse);
+            }
         }
     }
-
 
     @KafkaListener(topics = "coupon-validation-response", groupId = "order-service-group")
     public void handleCouponValidationResponse(ConsumerRecord<String, Object> record) {
@@ -92,7 +118,7 @@ public class DiscountResponseListener {
             String correlationId = response.getCorrelationId();
             log.info("🛒 ORDER SERVICE: Received coupon validation response for correlation: {}", correlationId);
 
-            DiscountCalculationContext context = getContext(correlationId);
+            DiscountCalculationContext context = discountCalculationService.getContext(correlationId);
 
             if (context == null) {
                 log.warn("🛒 ORDER SERVICE: No context found for correlation ID: {}", correlationId);
@@ -125,13 +151,13 @@ public class DiscountResponseListener {
             String correlationId = response.getCorrelationId();
             log.info("🛒 ORDER SERVICE: Received tier discount response for correlation: {}", correlationId);
 
-            DiscountCalculationContext context = getContext(correlationId);
+            DiscountCalculationContext context = discountCalculationService.getContext(correlationId);
             if (context == null) {
                 log.warn("🛒 ORDER SERVICE: No context found for correlation ID: {}", correlationId);
                 return;
             }
 
-            // Final calculation - assuming TierDiscountResponse has getDiscountAmount() method
+            // Final calculation
             BigDecimal tierDiscount = response.getTierDiscount();
             BigDecimal finalAmount = context.getAmountAfterCouponDiscount().subtract(tierDiscount);
 
@@ -154,7 +180,7 @@ public class DiscountResponseListener {
                     .build();
 
             // Complete the original future
-            completeDiscountCalculation(correlationId, finalResponse);
+            discountCalculationService.completePendingCalculation(correlationId, finalResponse);
 
         } catch (Exception e) {
             log.error("🛒 ORDER SERVICE: Error processing tier discount response", e);
@@ -174,9 +200,6 @@ public class DiscountResponseListener {
         // Update context
         context.setCouponDiscount(couponDiscount);
         context.setAmountAfterCouponDiscount(afterCouponDiscount);
-
-        // Store in memory instead of Redis
-        contextStore.put(originalRequest.getCorrelationId(), context);
 
         log.info("🛒 ORDER SERVICE: Requesting tier discount for amount: {}", afterCouponDiscount);
     }
@@ -223,24 +246,5 @@ public class DiscountResponseListener {
         }
 
         return breakdown;
-    }
-
-    private DiscountCalculationContext getContext(String correlationId) {
-        return contextStore.get("discount-context:" + correlationId);
-    }
-
-    private void completeDiscountCalculation(String correlationId,
-                                             DiscountCalculationResponse response) {
-        CompletableFuture<DiscountCalculationResponse> future =
-                futureStore.get("discount-calculation:" + correlationId);
-
-        if (future != null) {
-            future.complete(response);
-            log.info("🛒 ORDER SERVICE: Discount calculation completed for correlation: {}", correlationId);
-
-            // Clean up memory
-            futureStore.remove("discount-calculation:" + correlationId);
-            contextStore.remove("discount-context:" + correlationId);
-        }
     }
 }
