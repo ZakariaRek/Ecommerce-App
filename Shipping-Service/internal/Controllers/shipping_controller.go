@@ -1,3 +1,4 @@
+// internal/controller/shipping_controller.go
 package controller
 
 import (
@@ -31,11 +32,17 @@ func (c *ShippingController) SetupRoutes() *mux.Router {
 	// Add CORS middleware
 	router.Use(c.corsMiddleware)
 
-	// Setup API routes
+	// Setup all routes
 	c.setupShippingRoutes(router)
 	c.setupHealthRoutes(router)
 
 	return router
+}
+
+// RegisterRoutes registers shipping routes on an existing router
+func (c *ShippingController) RegisterRoutes(router *mux.Router) {
+	// Setup shipping routes on the provided router
+	c.setupShippingRoutes(router)
 }
 
 // setupShippingRoutes configures shipping-related routes
