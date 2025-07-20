@@ -39,6 +39,51 @@ public class CouponController {
     private final CouponService couponService;
     private final CouponMapper couponMapper;
     private final CRMService crmService;
+
+    @GetMapping
+    @Operation(
+            summary = "Get all coupons",
+            description = "Retrieve all available coupons in the system"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved all coupons"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<List<CouponResponseDto>> getAllCoupons() {
+        log.info("Retrieving all coupons");
+        List<Coupon> coupons = couponService.getAllCoupons();
+        List<CouponResponseDto> couponDtos = coupons.stream()
+                .map(couponMapper::toResponseDto)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(couponDtos);
+    }
+
+    @GetMapping("valid/{couponCode}")
+    @Operation(
+            summary = "Check coupon validity",
+            description = "Check if a coupon is valid for use"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Coupon is valid"),
+            @ApiResponse(responseCode = "404", description = "Coupon not found or invalid"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<CouponResponseDto> checkCouponValidity(
+            @Parameter(description = "Coupon code to validate", example = "COUPON123")
+            @PathVariable String couponCode) {
+        log.info("Checking validity for coupon: {}", couponCode);
+
+        Coupon coupon = couponService.getCouponByCode(couponCode);
+        if (coupon == null) {
+            log.warn("Coupon not found or invalid: {}", couponCode);
+            return ResponseEntity.notFound().build();
+        }
+
+        CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
+        return ResponseEntity.ok(responseDto);
+    }
+
+
     @Operation(
             summary = "Generate a coupon using points",
             description = "Create a new discount coupon by spending loyalty points"
@@ -87,6 +132,7 @@ public class CouponController {
             ));
         }
     }
+
     @Operation(
             summary = "Generate coupon from predefined package",
             description = "Purchase a coupon from predefined packages with set point costs"
@@ -268,15 +314,44 @@ public class CouponController {
     @GetMapping("/{userId}")
     public ResponseEntity<List<CouponResponseDto>> getUserCoupons(
             @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174001")
-            @PathVariable UUID userId) {
+            @PathVariable String userId) {
         log.info("Retrieving active coupons for user: {}", userId);
-        List<Coupon> coupons = couponService.getUserActiveCoupons(userId);
+//        UUID parsedUserId = (userId);
+//        String userId
+        UUID parsedUserId = parseUUID(userId);
+
+        List<Coupon> coupons = couponService.getUserActiveCoupons(parsedUserId);
         List<CouponResponseDto> couponDtos = coupons.stream()
                 .map(couponMapper::toResponseDto)
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(couponDtos);
     }
+    private UUID parseUUID(String uuidString) {
+        // Remove any existing hyphens
+        String cleanUuid = uuidString.replaceAll("-", "");
+
+        // Handle MongoDB ObjectId (24 characters) by padding to UUID format
+        if (cleanUuid.length() == 24 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Pad with zeros to make it 32 characters
+            cleanUuid = cleanUuid + "00000000";
+        }
+
+        // Check if it's exactly 32 hex characters
+        if (cleanUuid.length() == 32 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Insert hyphens at correct positions: 8-4-4-4-12
+            String formattedUuid = cleanUuid.substring(0, 8) + "-" +
+                    cleanUuid.substring(8, 12) + "-" +
+                    cleanUuid.substring(12, 16) + "-" +
+                    cleanUuid.substring(16, 20) + "-" +
+                    cleanUuid.substring(20, 32);
+            return UUID.fromString(formattedUuid);
+        }
+
+        // Try parsing as-is (in case it's already properly formatted)
+        return UUID.fromString(uuidString);
+    }
+
 
     // Helper method to map package to DTO
     private CouponPackageResponseDto mapPackageToDto(CouponService.CouponPackage packageType) {

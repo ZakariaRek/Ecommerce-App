@@ -32,6 +32,37 @@ public class CouponService {
     private final PointTransactionService pointTransactionService;
     private final CRMService crmService;
 
+
+    /**
+     * Get all coupons from the repository
+     */
+
+    public List<Coupon> getAllCoupons() {
+        return couponRepository.findAll();
+    }
+
+    /**
+     * Get a coupon by its code
+     */
+    public Coupon getCouponByCode(String code) {
+        return couponRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Coupon not found with code: " + code));
+    }
+    /**
+     * validatea coupon if it exists and is not used or expired
+     *
+     */
+    public boolean validateCoupon(String code) {
+        Coupon coupon = couponRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Coupon not found with code: " + code));
+
+        boolean isValid = !coupon.isUsed() &&
+                !coupon.getExpirationDate().isBefore(LocalDateTime.now());
+
+        log.info("Coupon {} validation result: {}", code, isValid);
+        return isValid;
+    }
+
     /**
      * Enhanced coupon generation that costs points with proper error handling
      */

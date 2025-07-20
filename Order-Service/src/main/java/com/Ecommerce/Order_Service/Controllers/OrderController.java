@@ -302,4 +302,28 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
     }
+    private UUID parseUUID(String uuidString) {
+        // Remove any existing hyphens
+        String cleanUuid = uuidString.replaceAll("-", "");
+
+        // Handle MongoDB ObjectId (24 characters) by padding to UUID format
+        if (cleanUuid.length() == 24 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Pad with zeros to make it 32 characters
+            cleanUuid = cleanUuid + "00000000";
+        }
+
+        // Check if it's exactly 32 hex characters
+        if (cleanUuid.length() == 32 && cleanUuid.matches("[0-9a-fA-F]+")) {
+            // Insert hyphens at correct positions: 8-4-4-4-12
+            String formattedUuid = cleanUuid.substring(0, 8) + "-" +
+                    cleanUuid.substring(8, 12) + "-" +
+                    cleanUuid.substring(12, 16) + "-" +
+                    cleanUuid.substring(16, 20) + "-" +
+                    cleanUuid.substring(20, 32);
+            return UUID.fromString(formattedUuid);
+        }
+
+        // Try parsing as-is (in case it's already properly formatted)
+        return UUID.fromString(uuidString);
+    }
 }
