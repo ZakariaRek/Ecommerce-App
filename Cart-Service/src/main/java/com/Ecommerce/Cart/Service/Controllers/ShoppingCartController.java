@@ -417,22 +417,6 @@ public class ShoppingCartController {
                     .body(com.Ecommerce.Cart.Service.Payload.Response.ApiResponse.error("Failed to save items for later"));
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Helper methods for mapping entities to DTOs
     private ShoppingCartResponse mapToCartResponse(ShoppingCart cart) {
         return ShoppingCartResponse.builder()
@@ -461,7 +445,6 @@ public class ShoppingCartController {
                 .savedAt(savedItem.getSavedAt())
                 .build();
     }
-
 
 @PostMapping("/{userId}/sync")
 @Operation(summary = "Sync localStorage cart with server",
