@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,13 +14,12 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/gorilla/mux"
 	"github.com/hudl/fargo"
 
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/config"
+	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/controllers"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/database"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/events"
-	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/handler"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/listeners"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/repository"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/service"
@@ -32,12 +32,6 @@ const (
 	EventUpdated = "updated"
 	EventChanged = "changed"
 	EventDeleted = "deleted"
-)
-
-// Constants for Kafka entity types
-const (
-	EntityShipping = "shipping"
-	EntityTracking = "tracking"
 )
 
 // Helper functions for getting environment values
@@ -112,7 +106,7 @@ func main() {
 	log.Printf("Enable Consumer: %t", enableConsumer)
 	log.Printf("Topics to consume: %s", strings.Join(consumerTopics, ", "))
 
-	// Create Kafka producer
+	// Initialize Kafka producer and services
 	producerConfig := sarama.NewConfig()
 	producerConfig.Producer.RequiredAcks = sarama.WaitForLocal
 	producerConfig.Producer.Compression = sarama.CompressionSnappy
@@ -168,31 +162,14 @@ func main() {
 	// Initialize services
 	shippingService := service.NewShippingService(shippingRepo, trackingRepo)
 
-	// Initialize handlers
-	shippingHandler := handler.NewShippingHandler(shippingService)
-
-	// Create router
-	router := mux.NewRouter()
-
-	// Register routes
-	router.HandleFunc("/api/shipping", shippingHandler.CreateShipping).Methods("POST")
-	router.HandleFunc("/api/shipping/{id}", shippingHandler.GetShipping).Methods("GET")
-	router.HandleFunc("/api/shipping/order/{order_id}", shippingHandler.GetShippingByOrder).Methods("GET")
-	router.HandleFunc("/api/shipping", shippingHandler.GetAllShippings).Methods("GET")
-	router.HandleFunc("/api/shipping/{id}", shippingHandler.UpdateShipping).Methods("PUT")
-	router.HandleFunc("/api/shipping/{id}/status", shippingHandler.UpdateStatus).Methods("PATCH")
-	router.HandleFunc("/api/shipping/{id}/track", shippingHandler.TrackOrder).Methods("GET")
-
-	// Health check endpoint for Eureka
-	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	// Initialize controller and setup routes
+	shippingController := controller.NewShippingController(shippingService)
+	httpRouter := shippingController.SetupRoutes()
 
 	// Configure server
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
-		Handler:      router,
+		Handler:      httpRouter,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -212,6 +189,22 @@ func main() {
 	// Start server
 	go func() {
 		log.Printf("Starting shipping service on port %s", cfg.ServerPort)
+		log.Println("Available endpoints:")
+		log.Println("  API Endpoints:")
+		log.Println("    POST   /api/shipping                    # Create shipping")
+		log.Println("    GET    /api/shipping                    # Get all shippings")
+		log.Println("    GET    /api/shipping/{id}               # Get shipping by ID")
+		log.Println("    PUT    /api/shipping/{id}               # Update shipping")
+		log.Println("    PATCH  /api/shipping/{id}/status        # Update status")
+		log.Println("    GET    /api/shipping/{id}/track         # Track shipment")
+		log.Println("    GET    /api/shipping/{id}/cost          # Get shipping cost")
+		log.Println("    GET    /api/shipping/order/{order_id}   # Get by order ID")
+		log.Println("  Health & Monitoring:")
+		log.Println("    GET    /health                          # Health check")
+		log.Println("    GET    /health/live                     # Liveness probe")
+		log.Println("    GET    /health/ready                    # Readiness probe")
+		log.Println("    GET    /info                            # Service info")
+
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Error starting server: %v", err)
 		}
@@ -245,7 +238,7 @@ func main() {
 	log.Println("Server stopped")
 }
 
-// connectToEureka registers the service with Eureka server
+// connectToEureka registers the service with Eureka server using Spring Boot style config
 func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 	// Create a new Eureka connection
 	eurekaConn := fargo.NewConn(cfg.EurekaURL)
@@ -256,19 +249,36 @@ func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 		portInt = 8082 // Default port if conversion fails
 	}
 
-	// Create Eureka instance info
+	// Determine the hostname and IP based on preferIpAddress setting
+	var instanceHostName string
+	var instanceIPAddr string
+
+	if cfg.EurekaPreferIpAddress {
+		// Use IP address as hostname when preferIpAddress is true
+		instanceHostName = cfg.IPAddress
+		instanceIPAddr = cfg.IPAddress
+	} else {
+		// Use configured hostname
+		instanceHostName = cfg.EurekaInstanceHostname
+		instanceIPAddr = cfg.IPAddress
+	}
+
+	// Create Eureka instance info with Spring Boot style configuration
 	instance := &fargo.Instance{
-		HostName:         cfg.HostName,
+		InstanceId:       cfg.EurekaInstanceId, // Spring Boot style instanceId
+		HostName:         instanceHostName,     // Use IP if preferIpAddress is true
 		Port:             portInt,
 		App:              cfg.AppName,
-		IPAddr:           cfg.IPAddress,
-		VipAddress:       "shipping-service",
-		SecureVipAddress: "shipping-service",
+		IPAddr:           instanceIPAddr,
+		VipAddress:       strings.ToLower(cfg.AppName), // Use app name in lowercase
+		SecureVipAddress: strings.ToLower(cfg.AppName),
 		DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
 		Status:           fargo.UP,
-		HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.HostName, cfg.ServerPort),
-		StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
-		HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
+
+		// URLs - use the appropriate host based on configuration
+		HomePageUrl:    fmt.Sprintf("http://%s:%s/", instanceHostName, cfg.ServerPort),
+		StatusPageUrl:  fmt.Sprintf("http://%s:%s/health", instanceHostName, cfg.ServerPort),
+		HealthCheckUrl: fmt.Sprintf("http://%s:%s/health", instanceHostName, cfg.ServerPort),
 	}
 
 	// Try to register with Eureka
@@ -276,6 +286,13 @@ func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to register with Eureka: %v", err)
 	}
+
+	log.Printf("Successfully registered with Eureka:")
+	log.Printf("  Instance ID: %s", cfg.EurekaInstanceId)
+	log.Printf("  Hostname: %s", instanceHostName)
+	log.Printf("  IP Address: %s", instanceIPAddr)
+	log.Printf("  Port: %d", portInt)
+	log.Printf("  Prefer IP Address: %t", cfg.EurekaPreferIpAddress)
 
 	return &eurekaConn, nil
 }
@@ -285,9 +302,11 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	// Prepare instance for heartbeat (minimal info needed)
 	instance := &fargo.Instance{
-		HostName: cfg.HostName,
-		App:      cfg.AppName,
+		InstanceId: cfg.EurekaInstanceId,
+		HostName:   cfg.EurekaInstanceHostname,
+		App:        cfg.AppName,
 	}
 
 	for {
@@ -297,33 +316,14 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 			log.Printf("Failed to send heartbeat to Eureka: %v", err)
 
 			// Try to re-register if heartbeat fails
-			portInt, convErr := strconv.Atoi(cfg.ServerPort)
-			if convErr != nil {
-				portInt = 8082 // Default port if conversion fails
-			}
-
-			newInstance := &fargo.Instance{
-				HostName:         cfg.HostName,
-				Port:             portInt,
-				App:              cfg.AppName,
-				IPAddr:           cfg.IPAddress,
-				VipAddress:       "shipping-service",
-				SecureVipAddress: "shipping-service",
-				DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
-				Status:           fargo.UP,
-				HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.HostName, cfg.ServerPort),
-				StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
-				HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
-			}
-
-			regErr := eurekaConn.RegisterInstance(newInstance)
+			_, regErr := connectToEureka(cfg)
 			if regErr != nil {
 				log.Printf("Failed to re-register with Eureka: %v", regErr)
 			} else {
 				log.Printf("Successfully re-registered with Eureka")
-				// Update our reference
-				instance = newInstance
 			}
+		} else {
+			log.Printf("Heartbeat sent successfully for instance: %s", cfg.EurekaInstanceId)
 		}
 	}
 }
@@ -331,8 +331,9 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 // deregisterFromEureka removes the service from Eureka registry
 func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config) error {
 	instance := &fargo.Instance{
-		HostName: cfg.HostName,
-		App:      cfg.AppName,
+		InstanceId: cfg.EurekaInstanceId,
+		HostName:   cfg.EurekaInstanceHostname,
+		App:        cfg.AppName,
 	}
 
 	err := eurekaConn.DeregisterInstance(instance)
@@ -340,5 +341,19 @@ func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config
 		return fmt.Errorf("failed to deregister from Eureka: %v", err)
 	}
 
+	log.Printf("Successfully deregistered instance: %s", cfg.EurekaInstanceId)
 	return nil
+}
+
+// Helper function to get actual outbound IP address
+func getOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Printf("Failed to get outbound IP: %v", err)
+		return "127.0.0.1" // Fallback to localhost
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }
