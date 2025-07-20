@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -21,10 +22,13 @@ type Config struct {
 	Environment string
 
 	// Eureka configuration
-	EurekaURL string
-	HostName  string
-	IPAddress string
-	AppName   string
+	EurekaURL              string
+	HostName               string
+	IPAddress              string
+	AppName                string
+	EurekaPreferIpAddress  bool
+	EurekaInstanceId       string
+	EurekaInstanceHostname string
 
 	// Kafka configuration
 	KafkaBrokers       []string
@@ -61,11 +65,12 @@ func LoadConfig() *Config {
 		Environment: getEnv("ENVIRONMENT", "development"),
 
 		// Eureka configuration
-		EurekaURL: getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
-		HostName:  getEnv("HOST_NAME", hostname),
-		IPAddress: getEnv("SERVICE_IP", getOutboundIP()),
-		AppName:   getEnv("APP_NAME", "SHIPPING-SERVICE"),
-
+		EurekaURL:              getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
+		HostName:               getEnv("HOST_NAME", hostname),
+		IPAddress:              getEnv("SERVICE_IP", getOutboundIP()),
+		AppName:                getEnv("APP_NAME", "SHIPPING-SERVICE"),
+		EurekaPreferIpAddress:  getEnvAsBool("EUREKA_PREFER_IP_ADDRESS", true),
+		EurekaInstanceHostname: getEnv("EUREKA_INSTANCE_HOSTNAME", "localhost"),
 		// Config Server settings
 		ConfigServerURL: getEnv("CONFIG_SERVER_URL", "http://localhost:8888"),
 		ConfigProfile:   getEnv("CONFIG_PROFILE", "development"),
@@ -74,6 +79,9 @@ func LoadConfig() *Config {
 		// Kafka configuration defaults
 		KafkaConsumerGroup: getEnv("KAFKA_CONSUMER_GROUP", "shipping-service-group"),
 	}
+
+	config.EurekaInstanceId = getEnv("EUREKA_INSTANCE_ID",
+		fmt.Sprintf("%s:%s", strings.ToLower(config.AppName), config.ServerPort))
 
 	// Parse Kafka brokers from comma-separated list
 	kafkaBrokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
@@ -121,11 +129,19 @@ func (c *Config) mergeServerConfig(serverConfig *ConfigServerResponse) {
 
 	// Eureka configuration
 	c.EurekaURL = serverConfig.GetStringProperty("eureka.client.service-url.defaultZone", c.EurekaURL)
+	c.EurekaPreferIpAddress = serverConfig.GetBoolProperty("eureka.instance.preferIpAddress", c.EurekaPreferIpAddress)
+	c.EurekaInstanceHostname = serverConfig.GetStringProperty("eureka.instance.hostname", c.EurekaInstanceHostname)
 
 	// Kafka configuration
 	if kafkaBrokers := serverConfig.GetStringProperty("kafka.brokers", ""); kafkaBrokers != "" {
 		c.KafkaBrokers = strings.Split(kafkaBrokers, ",")
 	}
+	if instanceId := serverConfig.GetStringProperty("eureka.instance.instanceId", ""); instanceId != "" {
+		c.EurekaInstanceId = instanceId
+	}
+	log.Printf("Configuration merged from Config Server for application: %s, profile: %s",
+		serverConfig.Name, strings.Join(serverConfig.Profiles, ","))
+
 	c.KafkaConsumerGroup = serverConfig.GetStringProperty("kafka.consumer.group", c.KafkaConsumerGroup)
 
 	log.Printf("Configuration merged from Config Server for application: %s, profile: %s",
