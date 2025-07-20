@@ -1,10 +1,7 @@
-// Loyalty-Service: Combined Discount Service
+// Fixed Loyalty-Service: Combined Discount Service
 package com.Ecommerce.Loyalty_Service.Services.Kafka;
 
-import com.Ecommerce.Loyalty_Service.Entities.BenefitType;
-import com.Ecommerce.Loyalty_Service.Entities.CRM;
-import com.Ecommerce.Loyalty_Service.Entities.MembershipTier;
-import com.Ecommerce.Loyalty_Service.Entities.TierBenefit;
+import com.Ecommerce.Loyalty_Service.Entities.*;
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Request.CombinedDiscountRequest;
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CombinedDiscountResponse;
 import com.Ecommerce.Loyalty_Service.Payload.Kafka.Response.CouponDiscountDetail;
@@ -20,6 +17,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -86,12 +84,51 @@ public class CombinedDiscountService {
                 request.getAmountAfterOrderDiscounts()
         );
 
+        // FIX: Map coupon discount details to Order Service expected format
+        List<CouponDiscountDetail> mappedCoupons = null;
+        if (couponResponse.getValidCoupons() != null) {
+            mappedCoupons = couponResponse.getValidCoupons().stream()
+                    .map(this::mapCouponDiscountDetail)
+                    .collect(Collectors.toList());
+        }
+
         return CouponDiscountResult.builder()
                 .totalDiscount(couponResponse.getTotalDiscount())
-                .validCoupons(couponResponse.getValidCoupons())
+                .validCoupons(mappedCoupons)
                 .errors(couponResponse.getErrors())
                 .success(couponResponse.isSuccess())
                 .build();
+    }
+
+    /**
+     * FIX: Map internal CouponDiscountDetail to Order Service expected format
+     */
+    private CouponDiscountDetail mapCouponDiscountDetail(CouponDiscountDetail internal) {
+        return CouponDiscountDetail.builder()
+                .couponCode(internal.getCouponCode())
+                .discountType(mapToOrderServiceDiscountType(DiscountType.valueOf(internal.getDiscountType()))) // Returns String
+                .discountValue(internal.getDiscountValue())
+                .calculatedDiscount(internal.getCalculatedDiscount())
+                .build();
+    }
+
+    /**
+     * FIX: Map Loyalty Service DiscountType to Order Service DiscountType STRING
+     */
+    private String mapToOrderServiceDiscountType(com.Ecommerce.Loyalty_Service.Entities.DiscountType loyaltyType) {
+        if (loyaltyType == null) {
+            return "LOYALTY_COUPON"; // Default fallback as string
+        }
+
+        // Map from Loyalty Service enum to Order Service enum VALUES AS STRINGS
+        switch (loyaltyType) {
+            case PERCENTAGE:
+            case FIXED_AMOUNT:
+                return "LOYALTY_COUPON";
+            default:
+                log.warn("💎 LOYALTY SERVICE: Unknown discount type: {}, defaulting to LOYALTY_COUPON", loyaltyType);
+                return "LOYALTY_COUPON";
+        }
     }
 
     /**
