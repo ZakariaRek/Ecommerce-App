@@ -10,6 +10,7 @@ import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponApplyResponse
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponPackageResponseDto;
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponResponseDto;
 import com.Ecommerce.Loyalty_Service.Payload.Response.Coupon.CouponValidationResponseDto;
+import com.Ecommerce.Loyalty_Service.Services.CRMService;
 import com.Ecommerce.Loyalty_Service.Services.CouponService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class CouponController {
 
     private final CouponService couponService;
     private final CouponMapper couponMapper;
+    private final CRMService crmService;
 
     @GetMapping
     @Operation(
@@ -92,24 +95,42 @@ public class CouponController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/purchase")
-    public ResponseEntity<CouponResponseDto> purchaseCouponWithPoints(
+    public ResponseEntity<?> purchaseCouponWithPoints(
             @Valid @RequestBody CouponPointsPurchaseRequestDto request) {
         log.info("Purchasing coupon with points for user: {} costing {} points",
                 request.getUserId(), request.getPointsCost());
 
-        Coupon coupon = couponService.generateCouponForPoints(
-                request.getUserId(),
-                request.getDiscountType(),
-                request.getDiscountValue(),
-                request.getPointsCost(),
-                request.getMinPurchaseAmount(),
-                request.getMaxDiscountAmount(),
-                request.getExpirationDate(),
-                request.getUsageLimit()
-        );
+        // Check if user is in loyalty program
+        if (!crmService.findByUserId(request.getUserId()).isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "USER_NOT_IN_LOYALTY_PROGRAM",
+                    "message", "You must spend $150+ to join the loyalty program and earn points.",
+                    "suggestion", "Make more purchases to unlock loyalty benefits!"
+            ));
+        }
 
-        CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
-        return ResponseEntity.ok(responseDto);
+        try {
+            Coupon coupon = couponService.generateCouponForPoints(
+                    request.getUserId(),
+                    request.getDiscountType(),
+                    request.getDiscountValue(),
+                    request.getPointsCost(),
+                    request.getMinPurchaseAmount(),
+                    request.getMaxDiscountAmount(),
+                    request.getExpirationDate(),
+                    request.getUsageLimit()
+            );
+
+            CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
+            return ResponseEntity.ok(responseDto);
+
+        } catch (Exception e) {
+            log.error("Error generating coupon: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", "COUPON_GENERATION_FAILED",
+                    "message", e.getMessage()
+            ));
+        }
     }
 
     @Operation(

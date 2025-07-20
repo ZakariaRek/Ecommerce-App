@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -27,6 +28,21 @@ public class CRMService {
     public CRM getByUserId(UUID userId) {
         return crmRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("User not found in loyalty system"));
+    }
+
+    public Optional<CRM> findByUserId(UUID userId) {
+        return crmRepository.findByUserId(userId);
+    }
+
+    public boolean isUserInLoyaltyProgram(UUID userId) {
+        return crmRepository.findByUserId(userId).isPresent();
+    }
+
+    public CRM getByUserIdWithContext(UUID userId) {
+        return crmRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException(
+                        String.format("User %s is not registered in the loyalty program. " +
+                                "You need to spend $150+ to join and earn points.", userId)));
     }
 
     @Transactional
