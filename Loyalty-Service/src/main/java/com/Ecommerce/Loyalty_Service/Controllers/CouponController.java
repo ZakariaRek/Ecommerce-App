@@ -24,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -146,17 +147,53 @@ public class CouponController {
     @PostMapping("/purchase-package")
     public ResponseEntity<CouponResponseDto> purchaseCouponPackage(
             @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174001")
-            @RequestParam UUID userId,
+            @RequestParam String userId,
             @Parameter(description = "Package type", example = "STANDARD_10_PERCENT")
             @RequestParam CouponService.CouponPackage packageType) {
 
         log.info("Purchasing coupon package {} for user: {}", packageType, userId);
-
-        Coupon coupon = couponService.generateCouponFromPackage(userId, packageType);
+        UUID userUuid = parseOrConvertToUUID(userId);
+        log.info(" ID format1111: {}", userUuid);
+        Coupon coupon = couponService.generateCouponFromPackage(userUuid, packageType);
         CouponResponseDto responseDto = couponMapper.toResponseDto(coupon);
 
         return ResponseEntity.ok(responseDto);
     }
+    private UUID parseOrConvertToUUID(String userId) {
+        try {
+            // Try to parse as UUID
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            // If not a UUID, convert from MongoDB ObjectId
+            return convertObjectIdToUuid(userId);
+        }
+    }
+    private UUID convertObjectIdToUuid(String objectId) {
+        // Convert MongoDB ObjectId to UUID using a deterministic approach
+        // This ensures the same ObjectId always maps to the same UUID
+        try {
+            // Use a hash-based approach to convert ObjectId to UUID
+            byte[] bytes = objectId.getBytes(StandardCharsets.UTF_8);
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(bytes);
+
+            // Create UUID from hash bytes
+            long mostSigBits = 0;
+            long leastSigBits = 0;
+
+            for (int i = 0; i < 8; i++) {
+                mostSigBits = (mostSigBits << 8) | (hash[i] & 0xff);
+            }
+            for (int i = 8; i < 16; i++) {
+                leastSigBits = (leastSigBits << 8) | (hash[i] & 0xff);
+            }
+
+            return new UUID(mostSigBits, leastSigBits);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid user ID format: " + objectId, e);
+        }
+    }
+
 
     @Operation(
             summary = "Get available coupon packages",
@@ -173,6 +210,8 @@ public class CouponController {
             @PathVariable UUID userId) {
 
         log.info("Retrieving available coupon packages for user: {}", userId);
+
+
 
         List<CouponService.CouponPackage> availablePackages =
                 couponService.getAvailableCouponPackages(userId);
@@ -318,9 +357,10 @@ public class CouponController {
         log.info("Retrieving active coupons for user: {}", userId);
 //        UUID parsedUserId = (userId);
 //        String userId
-        UUID parsedUserId = parseUUID(userId);
+//        UUID parsedUserId = parseUUID(userId);
+        UUID userUuid = parseOrConvertToUUID(userId);
 
-        List<Coupon> coupons = couponService.getUserActiveCoupons(parsedUserId);
+        List<Coupon> coupons = couponService.getUserActiveCoupons(userUuid);
         List<CouponResponseDto> couponDtos = coupons.stream()
                 .map(couponMapper::toResponseDto)
                 .collect(Collectors.toList());
