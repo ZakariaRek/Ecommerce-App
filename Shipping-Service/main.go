@@ -63,9 +63,16 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	// Seed default data
+	if err := database.SeedDefaultData(db); err != nil {
+		log.Printf("Warning: Failed to seed default data: %v", err)
+	}
+
 	// Initialize repositories
 	shippingRepo := repository.NewShippingRepository(db)
 	trackingRepo := repository.NewTrackingRepository(db)
+	addressRepo := repository.NewAddressRepository(db)
+	locationUpdateRepo := repository.NewLocationUpdateRepository(db)
 
 	// Initialize Kafka - Get Kafka configuration
 	brokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
@@ -160,12 +167,13 @@ func main() {
 		}
 	}
 
-	// Initialize services
-	shippingService := service.NewShippingService(shippingRepo, trackingRepo)
-	trackingService := service.NewTrackingService(trackingRepo, shippingRepo)
+	// Initialize services with all repositories
+	shippingService := service.NewShippingService(shippingRepo, trackingRepo, addressRepo, locationUpdateRepo)
+	trackingService := service.NewTrackingService(trackingRepo, shippingRepo, locationUpdateRepo)
+	addressService := service.NewAddressService(addressRepo)
 
-	// Initialize controllers
-	shippingController := controller.NewShippingController(shippingService)
+	// Initialize controllers with enhanced services
+	shippingController := controller.NewShippingController(shippingService, addressService)
 	trackingController := controller.NewTrackingController(trackingService)
 
 	// Setup router - Option 1: Combined approach
@@ -178,15 +186,15 @@ func main() {
 	if useShippingOnly {
 		// Option 1: Shipping service only
 		httpRouter = shippingController.SetupRoutes()
-		log.Println("Running as Shipping-only service")
+		log.Println("Running as Enhanced Shipping-only service")
 	} else if useTrackingOnly {
 		// Option 2: Tracking service only
 		httpRouter = trackingController.SetupRoutes()
-		log.Println("Running as Tracking-only service")
+		log.Println("Running as Enhanced Tracking-only service")
 	} else {
 		// Option 3: Combined service (default)
 		httpRouter = setupCombinedRoutes(shippingController, trackingController)
-		log.Println("Running as Combined Shipping-Tracking service")
+		log.Println("Running as Enhanced Combined Shipping-Tracking service")
 	}
 
 	// Configure server
@@ -211,7 +219,7 @@ func main() {
 
 	// Start server
 	go func() {
-		log.Printf("Starting service on port %s", cfg.ServerPort)
+		log.Printf("Starting enhanced service on port %s", cfg.ServerPort)
 		logAvailableEndpoints(useShippingOnly, useTrackingOnly)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -252,8 +260,6 @@ func setupCombinedRoutes(shippingController *controller.ShippingController, trac
 	// Create main router with global middleware
 	router := mux.NewRouter()
 
-	// Add global CORS middleware
-
 	// Register routes from both controllers
 	shippingController.RegisterRoutes(router)
 	trackingController.RegisterRoutes(router)
@@ -264,12 +270,14 @@ func setupCombinedRoutes(shippingController *controller.ShippingController, trac
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
 			"status": "UP",
-			"service": "shipping-tracking-service",
+			"service": "enhanced-shipping-tracking-service",
 			"checks": {
 				"database": "UP",
 				"kafka": "UP",
 				"shipping": "UP",
-				"tracking": "UP"
+				"tracking": "UP",
+				"addresses": "UP",
+				"location_updates": "UP"
 			}
 		}`))
 	}).Methods("GET")
@@ -278,10 +286,11 @@ func setupCombinedRoutes(shippingController *controller.ShippingController, trac
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
-			"service": "shipping-tracking-service",
-			"version": "1.0.0",
-			"description": "Combined shipping and tracking service for e-commerce platform",
-			"modules": ["shipping", "tracking"]
+			"service": "enhanced-shipping-tracking-service",
+			"version": "2.0.0",
+			"description": "Enhanced shipping and tracking service with GPS support, address management, and real-time location updates",
+			"modules": ["shipping", "tracking", "addresses", "location_updates"],
+			"features": ["gps_tracking", "real_time_location", "address_management", "enhanced_tracking"]
 		}`))
 	}).Methods("GET")
 
@@ -293,46 +302,94 @@ func logAvailableEndpoints(shippingOnly, trackingOnly bool) {
 	log.Println("Available endpoints:")
 
 	if shippingOnly {
-		log.Println("  📦 Shipping API:")
+		log.Println("  📦 Enhanced Shipping API:")
 		log.Println("    POST   /api/shipping")
+		log.Println("    POST   /api/shipping/with-address")
 		log.Println("    GET    /api/shipping")
 		log.Println("    GET    /api/shipping/{id}")
 		log.Println("    PUT    /api/shipping/{id}")
 		log.Println("    PATCH  /api/shipping/{id}/status")
+		log.Println("    PATCH  /api/shipping/{id}/status/gps")
 		log.Println("    GET    /api/shipping/{id}/track")
 		log.Println("    GET    /api/shipping/{id}/cost")
+		log.Println("    PATCH  /api/shipping/{id}/location")
+		log.Println("    POST   /api/shipping/{id}/location-update")
+		log.Println("    GET    /api/shipping/{id}/location-history")
 		log.Println("    GET    /api/shipping/order/{order_id}")
+		log.Println("    GET    /api/shipping/status/{status}")
+		log.Println("    GET    /api/shipping/in-transit")
+		log.Println("  🏠 Address API:")
+		log.Println("    POST   /api/addresses")
+		log.Println("    GET    /api/addresses")
+		log.Println("    GET    /api/addresses/{id}")
+		log.Println("    PUT    /api/addresses/{id}")
+		log.Println("    DELETE /api/addresses/{id}")
+		log.Println("    GET    /api/addresses/search")
+		log.Println("    GET    /api/addresses/default-origin")
 	} else if trackingOnly {
-		log.Println("  📍 Tracking API:")
-		log.Println("    POST   /api/tracking")
-		log.Println("    GET    /api/tracking/{id}")
-		log.Println("    PUT    /api/tracking/{id}")
-		log.Println("    DELETE /api/tracking/{id}")
-		log.Println("    PATCH  /api/tracking/{id}/location")
-		log.Println("    GET    /api/tracking/{id}/details")
-		log.Println("    GET    /api/tracking/shipping/{id}")
-		log.Println("    POST   /api/tracking/shipping/{id}")
-		log.Println("    GET    /api/tracking/shipping/{id}/latest")
+		log.Println("  📍 Enhanced Tracking API:")
+		log.Println("    POST   /api/shipping/tracking")
+		log.Println("    POST   /api/shipping/tracking/with-gps")
+		log.Println("    GET    /api/shipping/tracking/{id}")
+		log.Println("    PUT    /api/shipping/tracking/{id}")
+		log.Println("    DELETE /api/shipping/tracking/{id}")
+		log.Println("    PATCH  /api/shipping/tracking/{id}/location")
+		log.Println("    PATCH  /api/shipping/tracking/{id}/location/gps")
+		log.Println("    GET    /api/shipping/tracking/{id}/details")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}/gps")
+		log.Println("    POST   /api/shipping/tracking/shipping/{id}")
+		log.Println("    POST   /api/shipping/tracking/shipping/{id}/gps")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}/latest")
+		log.Println("    GET    /api/shipping/tracking/device/{device_id}")
+		log.Println("    GET    /api/shipping/tracking/driver/{driver_id}")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/latest")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/history")
 	} else {
-		log.Println("  📦 Shipping API:")
+		log.Println("  📦 Enhanced Shipping API:")
 		log.Println("    POST   /api/shipping")
+		log.Println("    POST   /api/shipping/with-address")
 		log.Println("    GET    /api/shipping")
 		log.Println("    GET    /api/shipping/{id}")
 		log.Println("    PUT    /api/shipping/{id}")
 		log.Println("    PATCH  /api/shipping/{id}/status")
+		log.Println("    PATCH  /api/shipping/{id}/status/gps")
 		log.Println("    GET    /api/shipping/{id}/track")
 		log.Println("    GET    /api/shipping/{id}/cost")
+		log.Println("    PATCH  /api/shipping/{id}/location")
+		log.Println("    POST   /api/shipping/{id}/location-update")
+		log.Println("    GET    /api/shipping/{id}/location-history")
 		log.Println("    GET    /api/shipping/order/{order_id}")
-		log.Println("  📍 Tracking API:")
-		log.Println("    POST   /api/tracking")
-		log.Println("    GET    /api/tracking/{id}")
-		log.Println("    PUT    /api/tracking/{id}")
-		log.Println("    DELETE /api/tracking/{id}")
-		log.Println("    PATCH  /api/tracking/{id}/location")
-		log.Println("    GET    /api/tracking/{id}/details")
-		log.Println("    GET    /api/tracking/shipping/{id}")
-		log.Println("    POST   /api/tracking/shipping/{id}")
-		log.Println("    GET    /api/tracking/shipping/{id}/latest")
+		log.Println("    GET    /api/shipping/status/{status}")
+		log.Println("    GET    /api/shipping/in-transit")
+		log.Println("  🏠 Address API:")
+		log.Println("    POST   /api/addresses")
+		log.Println("    GET    /api/addresses")
+		log.Println("    GET    /api/addresses/{id}")
+		log.Println("    PUT    /api/addresses/{id}")
+		log.Println("    DELETE /api/addresses/{id}")
+		log.Println("    GET    /api/addresses/search")
+		log.Println("    GET    /api/addresses/default-origin")
+		log.Println("  📍 Enhanced Tracking API:")
+		log.Println("    POST   /api/shipping/tracking")
+		log.Println("    POST   /api/shipping/tracking/with-gps")
+		log.Println("    GET    /api/shipping/tracking/{id}")
+		log.Println("    PUT    /api/shipping/tracking/{id}")
+		log.Println("    DELETE /api/shipping/tracking/{id}")
+		log.Println("    PATCH  /api/shipping/tracking/{id}/location")
+		log.Println("    PATCH  /api/shipping/tracking/{id}/location/gps")
+		log.Println("    GET    /api/shipping/tracking/{id}/details")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}/gps")
+		log.Println("    POST   /api/shipping/tracking/shipping/{id}")
+		log.Println("    POST   /api/shipping/tracking/shipping/{id}/gps")
+		log.Println("    GET    /api/shipping/tracking/shipping/{id}/latest")
+		log.Println("    GET    /api/shipping/tracking/device/{device_id}")
+		log.Println("    GET    /api/shipping/tracking/driver/{driver_id}")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/latest")
+		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/history")
 	}
 
 	log.Println("  🏥 Health & Monitoring:")
