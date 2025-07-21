@@ -12,44 +12,78 @@ import (
 
 // ShippingService provides business logic for shipping operations
 type ShippingService struct {
-	shippingRepo *repository.ShippingRepository
-	trackingRepo *repository.TrackingRepository
+	shippingRepo       *repository.ShippingRepository
+	trackingRepo       *repository.TrackingRepository
+	addressRepo        *repository.AddressRepository
+	locationUpdateRepo *repository.LocationUpdateRepository
 }
 
 // NewShippingService creates a new shipping service
 func NewShippingService(
 	shippingRepo *repository.ShippingRepository,
 	trackingRepo *repository.TrackingRepository,
+	addressRepo *repository.AddressRepository,
+	locationUpdateRepo *repository.LocationUpdateRepository,
 ) *ShippingService {
 	return &ShippingService{
-		shippingRepo: shippingRepo,
-		trackingRepo: trackingRepo,
+		shippingRepo:       shippingRepo,
+		trackingRepo:       trackingRepo,
+		addressRepo:        addressRepo,
+		locationUpdateRepo: locationUpdateRepo,
 	}
 }
 
-// CreateShipping creates a new shipping for an order
-func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*models.Shipping, error) {
+// CreateShippingRequest represents a request to create shipping
+type CreateShippingRequest struct {
+	OrderID           uuid.UUID `json:"order_id"`
+	Carrier           string    `json:"carrier"`
+	ShippingAddressID uuid.UUID `json:"shipping_address_id"`
+	Weight            float64   `json:"weight"`
+	Dimensions        string    `json:"dimensions"`
+}
+
+// CreateShippingWithAddress creates a new shipping with address
+func (s *ShippingService) CreateShippingWithAddress(req *CreateShippingRequest) (*models.Shipping, error) {
 	// Check if shipping already exists for this order
-	_, err := s.shippingRepo.GetByOrderID(orderID)
+	_, err := s.shippingRepo.GetByOrderID(req.OrderID)
 	if err == nil {
 		return nil, errors.New("shipping already exists for this order")
 	}
 
-	// Create new shipping
-	shipping := &models.Shipping{
-		OrderID:   orderID,
-		Status:    models.StatusPending,
-		Carrier:   carrier,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// Validate shipping address exists
+	_, err = s.addressRepo.GetByID(req.ShippingAddressID)
+	if err != nil {
+		return nil, errors.New("shipping address not found")
 	}
 
-	// Generate a tracking number (in a real system, this would come from the carrier's API)
+	// Get default origin address
+	originAddress, err := s.addressRepo.GetDefaultOriginAddress()
+	if err != nil {
+		return nil, errors.New("no default origin address configured")
+	}
+
+	// Create new shipping
+	shipping := &models.Shipping{
+		OrderID:           req.OrderID,
+		Status:            models.StatusPending,
+		Carrier:           req.Carrier,
+		ShippingAddressID: req.ShippingAddressID,
+		OriginAddressID:   originAddress.ID,
+		Weight:            req.Weight,
+		Dimensions:        req.Dimensions,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}
+
+	// Generate a tracking number
 	shipping.TrackingNumber = generateTrackingNumber()
 
-	// Estimate delivery date (in a real system, this would be from carrier's API)
-	estimatedDelivery := time.Now().AddDate(0, 0, 3) // 3 days from now
+	// Estimate delivery date
+	estimatedDelivery := time.Now().AddDate(0, 0, 3)
 	shipping.EstimatedDelivery = &estimatedDelivery
+
+	// Calculate shipping cost
+	shipping.ShippingCost = shipping.CalculateShippingCost()
 
 	// Save to database
 	if err := s.shippingRepo.Create(shipping); err != nil {
@@ -59,7 +93,7 @@ func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*mo
 	// Create initial tracking entry
 	tracking := &models.ShipmentTracking{
 		ShippingID: shipping.ID,
-		Location:   "Distribution Center",
+		Location:   originAddress.City + ", " + originAddress.State,
 		Status:     "Order received and processing",
 		Timestamp:  time.Now(),
 		CreatedAt:  time.Now(),
@@ -69,7 +103,36 @@ func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*mo
 		return nil, err
 	}
 
-	return shipping, nil
+	// Load relationships for return
+	return s.shippingRepo.GetByID(shipping.ID)
+}
+
+// CreateShipping creates a new shipping for an order (backward compatibility)
+func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*models.Shipping, error) {
+	// Create a dummy shipping address (for backward compatibility)
+	dummyAddress := &models.Address{
+		FirstName:    "Customer",
+		LastName:     "Customer",
+		AddressLine1: "123 Customer St",
+		City:         "Customer City",
+		State:        "CS",
+		PostalCode:   "12345",
+		Country:      "USA",
+	}
+
+	if err := s.addressRepo.Create(dummyAddress); err != nil {
+		return nil, err
+	}
+
+	req := &CreateShippingRequest{
+		OrderID:           orderID,
+		Carrier:           carrier,
+		ShippingAddressID: dummyAddress.ID,
+		Weight:            1.0,      // Default weight
+		Dimensions:        "10x8x6", // Default dimensions
+	}
+
+	return s.CreateShippingWithAddress(req)
 }
 
 // GetShipping retrieves shipping details by ID
@@ -87,8 +150,16 @@ func (s *ShippingService) GetAllShippings(limit, offset int) ([]models.Shipping,
 	return s.shippingRepo.GetAll(limit, offset)
 }
 
+// GetShippingsByStatus retrieves shippings by status
+func (s *ShippingService) GetShippingsByStatus(status models.ShippingStatus, limit, offset int) ([]models.Shipping, error) {
+	return s.shippingRepo.GetShippingsByStatus(status, limit, offset)
+}
+
 // UpdateShipping updates shipping details
 func (s *ShippingService) UpdateShipping(shipping *models.Shipping) error {
+	// Recalculate cost if weight or dimensions changed
+	shipping.ShippingCost = shipping.CalculateShippingCost()
+
 	return s.shippingRepo.Update(shipping)
 }
 
@@ -100,7 +171,7 @@ func (s *ShippingService) UpdateStatus(id uuid.UUID, status models.ShippingStatu
 	}
 
 	// Get existing shipping
-	shipping, err := s.shippingRepo.GetByID(id)
+	shipping, err := s.shippingRepo.GetByIDWithoutPreload(id)
 	if err != nil {
 		return err
 	}
@@ -124,6 +195,51 @@ func (s *ShippingService) UpdateStatus(id uuid.UUID, status models.ShippingStatu
 	return s.trackingRepo.Create(tracking)
 }
 
+// UpdateStatusWithGPS updates the shipping status with GPS coordinates
+func (s *ShippingService) UpdateStatusWithGPS(id uuid.UUID, status models.ShippingStatus, location, notes string, lat, lng *float64, deviceID, driverID string) error {
+	// Validate status
+	if !status.IsValid() {
+		return errors.New("invalid shipping status")
+	}
+
+	// Get existing shipping
+	shipping, err := s.shippingRepo.GetByIDWithoutPreload(id)
+	if err != nil {
+		return err
+	}
+
+	// Update shipping status and location
+	shipping.UpdateStatus(status)
+	if lat != nil && lng != nil {
+		shipping.UpdateCurrentLocation(*lat, *lng)
+	}
+
+	if err := s.shippingRepo.Update(shipping); err != nil {
+		return err
+	}
+
+	// Add tracking entry with GPS
+	tracking := &models.ShipmentTracking{
+		ShippingID: id,
+		Location:   location,
+		Status:     status.String(),
+		Timestamp:  time.Now(),
+		Notes:      notes,
+		Latitude:   lat,
+		Longitude:  lng,
+		DeviceID:   deviceID,
+		DriverID:   driverID,
+		CreatedAt:  time.Now(),
+	}
+
+	return s.trackingRepo.Create(tracking)
+}
+
+// UpdateCurrentLocation updates the current GPS location of a shipping
+func (s *ShippingService) UpdateCurrentLocation(id uuid.UUID, lat, lng float64) error {
+	return s.shippingRepo.UpdateLocation(id, lat, lng)
+}
+
 // TrackOrder gets the tracking history for a shipment
 func (s *ShippingService) TrackOrder(id uuid.UUID) (*models.Shipping, []models.ShipmentTracking, error) {
 	// Get shipping info
@@ -143,20 +259,63 @@ func (s *ShippingService) TrackOrder(id uuid.UUID) (*models.Shipping, []models.S
 
 // CalculateShippingCost calculates the shipping cost
 func (s *ShippingService) CalculateShippingCost(id uuid.UUID) (float64, error) {
-	shipping, err := s.shippingRepo.GetByID(id)
+	shipping, err := s.shippingRepo.GetByIDWithoutPreload(id)
 	if err != nil {
 		return 0, err
 	}
 
 	// Use the model's method to calculate the cost
-	return shipping.CalculateShippingCost(), nil
+	cost := shipping.CalculateShippingCost()
+
+	// Update the shipping record with the calculated cost
+	shipping.ShippingCost = cost
+	s.shippingRepo.Update(shipping)
+
+	return cost, nil
+}
+
+// GetShippingsInTransit returns all shippings currently in transit
+func (s *ShippingService) GetShippingsInTransit() ([]models.Shipping, error) {
+	return s.shippingRepo.GetShippingsInTransit()
+}
+
+// AddLocationUpdate adds a real-time location update
+func (s *ShippingService) AddLocationUpdate(shippingID uuid.UUID, deviceID string, lat, lng, speed, heading, accuracy float64) error {
+	// Verify shipping exists
+	_, err := s.shippingRepo.GetByIDWithoutPreload(shippingID)
+	if err != nil {
+		return errors.New("shipping not found")
+	}
+
+	// Create location update
+	locationUpdate := &models.LocationUpdate{
+		ShippingID: shippingID,
+		DeviceID:   deviceID,
+		Latitude:   lat,
+		Longitude:  lng,
+		Speed:      &speed,
+		Heading:    &heading,
+		Accuracy:   &accuracy,
+		Timestamp:  time.Now(),
+		CreatedAt:  time.Now(),
+	}
+
+	if err := s.locationUpdateRepo.Create(locationUpdate); err != nil {
+		return err
+	}
+
+	// Update shipping's current location
+	return s.shippingRepo.UpdateLocation(shippingID, lat, lng)
+}
+
+// GetLocationHistory gets location update history for a shipping
+func (s *ShippingService) GetLocationHistory(shippingID uuid.UUID, limit int) ([]models.LocationUpdate, error) {
+	return s.locationUpdateRepo.GetByShippingID(shippingID, limit)
 }
 
 // generateTrackingNumber creates a mock tracking number
-// In a real system, this would be provided by the shipping carrier
 func generateTrackingNumber() string {
-	// Format: SHP-UUID-shortened
 	id := uuid.New().String()
-	shortID := id[:8] // Use first 8 characters of UUID
+	shortID := id[:8]
 	return "SHP-" + shortID
 }
