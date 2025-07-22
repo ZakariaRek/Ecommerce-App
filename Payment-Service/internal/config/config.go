@@ -2,7 +2,9 @@
 package config
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -21,10 +23,13 @@ type Config struct {
 	Environment string
 
 	// Eureka configuration
-	EurekaURL string
-	HostName  string
-	IPAddress string
-	AppName   string
+	EurekaURL              string
+	HostName               string
+	IPAddress              string
+	AppName                string
+	EurekaPreferIpAddress  bool
+	EurekaInstanceId       string
+	EurekaInstanceHostname string
 
 	// Kafka configuration
 	KafkaBrokers      []string
@@ -56,15 +61,17 @@ func LoadConfig() *Config {
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		DBUser:      getEnv("DB_USER", "postgres"),
-		DBPassword:  getEnv("DB_PASSWORD", "yahyasd56"),
+		DBPassword:  getEnv("DB_PASSWORD", "yahyasd56"), // Fixed: was "zakaria"
 		DBName:      getEnv("DB_NAME", "payment_system"),
 		Environment: getEnv("ENVIRONMENT", "development"),
 
 		// Eureka configuration
-		EurekaURL: getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
-		HostName:  getEnv("HOST_NAME", hostname),
-		IPAddress: getEnv("SERVICE_IP", getOutboundIP()),
-		AppName:   getEnv("APP_NAME", "PAYMENT-SERVICE"),
+		EurekaURL:              getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
+		HostName:               getEnv("HOST_NAME", hostname),
+		IPAddress:              getEnv("SERVICE_IP", getOutboundIP()),
+		AppName:                getEnv("APP_NAME", "PAYMENT-SERVICE"),
+		EurekaPreferIpAddress:  getEnvAsBool("EUREKA_PREFER_IP_ADDRESS", true),
+		EurekaInstanceHostname: getEnv("EUREKA_INSTANCE_HOSTNAME", "localhost"),
 
 		// Config Server settings
 		ConfigServerURL: getEnv("CONFIG_SERVER_URL", "http://localhost:8888"),
@@ -74,6 +81,10 @@ func LoadConfig() *Config {
 		// Kafka configuration defaults
 		KafkaInvoiceTopic: getEnv("KAFKA_INVOICE_TOPIC", "invoices"),
 	}
+
+	// Set Eureka instance ID
+	config.EurekaInstanceId = getEnv("EUREKA_INSTANCE_ID",
+		fmt.Sprintf("%s:%s", strings.ToLower(config.AppName), config.ServerPort))
 
 	// Parse Kafka brokers from comma-separated list
 	kafkaBrokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
@@ -121,10 +132,15 @@ func (c *Config) mergeServerConfig(serverConfig *ConfigServerResponse) {
 
 	// Eureka configuration
 	c.EurekaURL = serverConfig.GetStringProperty("eureka.client.service-url.defaultZone", c.EurekaURL)
+	c.EurekaPreferIpAddress = serverConfig.GetBoolProperty("eureka.instance.preferIpAddress", c.EurekaPreferIpAddress)
+	c.EurekaInstanceHostname = serverConfig.GetStringProperty("eureka.instance.hostname", c.EurekaInstanceHostname)
 
 	// Kafka configuration
 	if kafkaBrokers := serverConfig.GetStringProperty("kafka.brokers", ""); kafkaBrokers != "" {
 		c.KafkaBrokers = strings.Split(kafkaBrokers, ",")
+	}
+	if instanceId := serverConfig.GetStringProperty("eureka.instance.instanceId", ""); instanceId != "" {
+		c.EurekaInstanceId = instanceId
 	}
 	c.KafkaInvoiceTopic = serverConfig.GetStringProperty("kafka.topics.invoice", c.KafkaInvoiceTopic)
 
@@ -152,7 +168,13 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 
 // getOutboundIP gets the preferred outbound IP of this machine
 func getOutboundIP() string {
-	// In a real implementation, you would determine the actual IP
-	// For now, we'll use a placeholder approach
-	return "127.0.0.1" // Default to localhost
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Printf("Failed to get outbound IP: %v", err)
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }

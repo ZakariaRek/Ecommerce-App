@@ -10,7 +10,7 @@ datasource:
   host: localhost
   port: 5432
   username: postgres
-  password: yahyasd56
+  password: zakaria
   database: payment_system
 
 # Eureka configuration
