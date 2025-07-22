@@ -15,7 +15,6 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/config"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/database"
-	_ "github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/events"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/handler"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/listeners"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/repository"
@@ -69,16 +68,16 @@ func main() {
 	paymentService := service.NewPaymentService(paymentRepo, txRepo)
 	orderPaymentService := service.NewOrderPaymentService(paymentRepo, txRepo)
 
-	// Initialize Kafka - Get Kafka configuration
+	// Initialize Kafka
 	brokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
 	brokers := strings.Split(brokersStr, ",")
 
-	// Create topic maps for each entity type - UPDATED to match Order Service expectations
+	// Create topic maps for each entity type
 	paymentTopics := map[string]string{
-		EventCreated: getEnv("KAFKA_PAYMENT_CREATED_TOPIC", "payment-created"),
-		EventUpdated: getEnv("KAFKA_PAYMENT_UPDATED_TOPIC", "payment-updated"),
-		EventChanged: getEnv("KAFKA_PAYMENT_STATUS_CHANGED_TOPIC", "payment-confirmed"), // Order Service expects this
-		EventDeleted: getEnv("KAFKA_PAYMENT_DELETED_TOPIC", "payment-deleted"),
+		"created": getEnv("KAFKA_PAYMENT_CREATED_TOPIC", "payment-created"),
+		"updated": getEnv("KAFKA_PAYMENT_UPDATED_TOPIC", "payment-updated"),
+		"changed": getEnv("KAFKA_PAYMENT_STATUS_CHANGED_TOPIC", "payment-confirmed"),
+		"deleted": getEnv("KAFKA_PAYMENT_DELETED_TOPIC", "payment-deleted"),
 	}
 
 	// Create Kafka producer
@@ -123,6 +122,22 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 
+	// Add CORS middleware for cross-origin requests
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// Routes
 	r.Route("/api", func(r chi.Router) {
 		// Regular payment routes
@@ -138,7 +153,7 @@ func main() {
 			r.Get("/{id}/status", paymentHandler.GetPaymentStatus)
 		})
 
-		// Order payment routes - THIS WAS MISSING!
+		// Order payment routes
 		r.Route("/orders", func(r chi.Router) {
 			r.Post("/{orderID}/payments", orderPaymentHandler.ProcessOrderPayment)
 			r.Get("/{orderID}/payments", orderPaymentHandler.GetOrderPayments)
@@ -149,8 +164,9 @@ func main() {
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		w.Write([]byte(`{"status":"UP","service":"payment-service"}`))
 	})
 
 	// Create HTTP server
@@ -159,7 +175,7 @@ func main() {
 		Handler: r,
 	}
 
-	// Register with Eureka server (optional)
+	// Register with Eureka server
 	eurekaClient, eurekaErr := connectToEureka(cfg)
 	if eurekaErr != nil {
 		log.Printf("Warning: Failed to connect to Eureka: %v", eurekaErr)
@@ -171,13 +187,14 @@ func main() {
 
 	// Start the server in a goroutine
 	go func() {
-		fmt.Printf("Starting payment service on port %s...\n", cfg.ServerPort)
-		log.Printf("Available endpoints:")
+		fmt.Printf("🚀 Starting Payment Service on port %s...\n", cfg.ServerPort)
+		log.Printf("📋 Available endpoints:")
 		log.Printf("  POST /api/orders/{orderID}/payments - Process order payment")
 		log.Printf("  GET  /api/orders/{orderID}/payments - Get order payments")
 		log.Printf("  POST /api/orders/{orderID}/refund - Refund order payment")
 		log.Printf("  GET  /api/orders/{orderID}/payments/status - Get order payment status")
 		log.Printf("  GET  /health - Health check")
+		log.Printf("🏥 Health check URL: http://localhost:%s/health", cfg.ServerPort)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
@@ -198,7 +215,7 @@ func main() {
 		}
 	}
 
-	fmt.Println("Shutting down server...")
+	fmt.Println("🛑 Shutting down server...")
 
 	// Create a deadline for server shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -209,52 +226,74 @@ func main() {
 		log.Fatalf("Server shutdown failed: %v", err)
 	}
 
-	fmt.Println("Server stopped")
+	fmt.Println("✅ Server stopped")
 }
 
-// connectToEureka registers the service with Eureka server
+// Helper functions
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
 func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
-	// Create a new Eureka connection
 	eurekaConn := fargo.NewConn(cfg.EurekaURL)
 
-	// Convert port string to integer
 	portInt, err := strconv.Atoi(cfg.ServerPort)
 	if err != nil {
-		portInt = 8080 // Default port if conversion fails
+		portInt = 8080
 	}
 
-	// Create Eureka instance info
 	instance := &fargo.Instance{
 		HostName:         cfg.HostName,
 		Port:             portInt,
 		App:              cfg.AppName,
 		IPAddr:           cfg.IPAddress,
-		VipAddress:       "payment-service",
-		SecureVipAddress: "payment-service",
+		VipAddress:       strings.ToLower(cfg.AppName),
+		SecureVipAddress: strings.ToLower(cfg.AppName),
 		DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
 		Status:           fargo.UP,
-		HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.HostName, cfg.ServerPort),
-		StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
-		HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
+		HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.IPAddress, cfg.ServerPort),
+		StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
+		HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
+		Metadata: fargo.InstanceMetadata{
+			"management.port":         cfg.ServerPort,
+			"management.context-path": "/api",
+			"zone":                    "default",
+			"instanceId":              cfg.EurekaInstanceId,
+		},
 	}
 
-	// Try to register with Eureka
+	log.Printf("Registering with Eureka:")
+	log.Printf("  App Name: %s", instance.App)
+	log.Printf("  VIP Address: %s", instance.VipAddress)
+	log.Printf("  Host: %s:%d", instance.HostName, instance.Port)
+	log.Printf("  IP Address: %s", instance.IPAddr)
+	log.Printf("  Instance ID: %s", cfg.EurekaInstanceId)
+
 	err = eurekaConn.RegisterInstance(instance)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register with Eureka: %v", err)
 	}
 
+	log.Printf("Successfully registered with Eureka at %s", cfg.EurekaURL)
 	return &eurekaConn, nil
 }
 
-// startHeartbeat sends heartbeats to Eureka to keep the registration active
 func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	portInt, err := strconv.Atoi(cfg.ServerPort)
+	if err != nil {
+		portInt = 8080
+	}
+
 	instance := &fargo.Instance{
 		HostName: cfg.HostName,
+		Port:     portInt,
 		App:      cfg.AppName,
+		IPAddr:   cfg.IPAddress,
 	}
 
 	for {
@@ -263,24 +302,24 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 		if err != nil {
 			log.Printf("Failed to send heartbeat to Eureka: %v", err)
 
-			// Try to re-register if heartbeat fails
-			portInt, convErr := strconv.Atoi(cfg.ServerPort)
-			if convErr != nil {
-				portInt = 8080 // Default port if conversion fails
-			}
-
 			newInstance := &fargo.Instance{
 				HostName:         cfg.HostName,
 				Port:             portInt,
 				App:              cfg.AppName,
 				IPAddr:           cfg.IPAddress,
-				VipAddress:       "payment-service",
-				SecureVipAddress: "payment-service",
+				VipAddress:       strings.ToLower(cfg.AppName),
+				SecureVipAddress: strings.ToLower(cfg.AppName),
 				DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
 				Status:           fargo.UP,
-				HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.HostName, cfg.ServerPort),
-				StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
-				HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.HostName, cfg.ServerPort),
+				HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.IPAddress, cfg.ServerPort),
+				StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
+				HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
+				Metadata: fargo.InstanceMetadata{
+					"management.port":         cfg.ServerPort,
+					"management.context-path": "/api",
+					"zone":                    "default",
+					"instanceId":              cfg.EurekaInstanceId,
+				},
 			}
 
 			regErr := eurekaConn.RegisterInstance(newInstance)
@@ -290,18 +329,26 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 				log.Printf("Successfully re-registered with Eureka")
 				instance = newInstance
 			}
+		} else {
+			log.Printf("Heartbeat sent successfully to Eureka")
 		}
 	}
 }
 
-// deregisterFromEureka removes the service from Eureka registry
 func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config) error {
-	instance := &fargo.Instance{
-		HostName: cfg.HostName,
-		App:      cfg.AppName,
+	portInt, err := strconv.Atoi(cfg.ServerPort)
+	if err != nil {
+		portInt = 8080
 	}
 
-	err := eurekaConn.DeregisterInstance(instance)
+	instance := &fargo.Instance{
+		HostName: cfg.HostName,
+		Port:     portInt,
+		App:      cfg.AppName,
+		IPAddr:   cfg.IPAddress,
+	}
+
+	err = eurekaConn.DeregisterInstance(instance)
 	if err != nil {
 		return fmt.Errorf("failed to deregister from Eureka: %v", err)
 	}

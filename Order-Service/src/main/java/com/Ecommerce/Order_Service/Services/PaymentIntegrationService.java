@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -29,9 +32,35 @@ public class PaymentIntegrationService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final OrderRepository orderRepository;
+    private final DiscoveryClient discoveryClient;
 
-    @Value("${payment.service.url:http://localhost:8080}")
-    private String paymentServiceUrl;
+    @Value("${payment.service.name:payment-service}")
+    private String paymentServiceName;
+
+    @Value("${payment.service.url:#{null}}")
+    private String fallbackPaymentServiceUrl;
+
+    /**
+     * Get Payment Service URL using service discovery
+     */
+    private String getPaymentServiceUrl() {
+        try {
+            List<ServiceInstance> instances = discoveryClient.getInstances(paymentServiceName);
+            if (!instances.isEmpty()) {
+                ServiceInstance instance = instances.get(0);
+                String serviceUrl = instance.getUri().toString();
+                log.info("💳 Found Payment Service via discovery: {}", serviceUrl);
+                return serviceUrl;
+            }
+        } catch (Exception e) {
+            log.warn("💳 Service discovery failed for {}: {}", paymentServiceName, e.getMessage());
+        }
+
+        // Fallback to configured URL or default
+        String fallbackUrl = fallbackPaymentServiceUrl != null ? fallbackPaymentServiceUrl : "http://localhost:8080";
+        log.info("💳 Using fallback Payment Service URL: {}", fallbackUrl);
+        return fallbackUrl;
+    }
 
     /**
      * Process payment for an order
@@ -48,18 +77,21 @@ public class PaymentIntegrationService {
                 throw new RuntimeException("Order is not in pending status");
             }
 
-            // Create payment request with all required fields populated
+            // Create payment request with correct field names for Go service
             ProcessPaymentRequestDto paymentRequest = ProcessPaymentRequestDto.builder()
-                    .orderId(orderId.toString())
+                    .orderId(orderId.toString())  // This matches the Go struct field "orderId"
                     .amount(amount.doubleValue())
-                    .paymentMethod(paymentMethod)
+                    .paymentMethod(paymentMethod)  // This matches the Go struct field "paymentMethod"
                     .currency("USD")
                     .build();
 
-            // Call Payment Service
-            String url = paymentServiceUrl + "/api/orders/" + orderId + "/payments";
+            // Get Payment Service URL
+            String baseUrl = getPaymentServiceUrl();
+            String url = baseUrl + "/api/orders/" + orderId + "/payments";
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Accept", MediaType.APPLICATION_JSON_VALUE);
 
             HttpEntity<ProcessPaymentRequestDto> entity = new HttpEntity<>(paymentRequest, headers);
 
@@ -89,7 +121,8 @@ public class PaymentIntegrationService {
      */
     public PaymentResponseDto getOrderPaymentStatus(UUID orderId) {
         try {
-            String url = paymentServiceUrl + "/api/orders/" + orderId + "/payments/status";
+            String baseUrl = getPaymentServiceUrl();
+            String url = baseUrl + "/api/orders/" + orderId + "/payments/status";
 
             log.info("💳 Getting payment status for order: {}", orderId);
             ResponseEntity<PaymentResponseDto> response = restTemplate.getForEntity(url, PaymentResponseDto.class);
@@ -116,7 +149,9 @@ public class PaymentIntegrationService {
                     .reason(reason)
                     .build();
 
-            String url = paymentServiceUrl + "/api/orders/" + orderId + "/refund";
+            String baseUrl = getPaymentServiceUrl();
+            String url = baseUrl + "/api/orders/" + orderId + "/refund";
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
