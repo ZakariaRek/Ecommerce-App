@@ -278,9 +278,9 @@ func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, op
 	time.Sleep(100 * time.Millisecond)
 
 	// Simulate random failures (5% failure rate)
-	if time.Now().UnixNano()%20 == 0 {
-		return fmt.Errorf("payment gateway error: %s operation failed for payment %s", operation, payment.ID)
-	}
+	//if time.Now().UnixNano()%20 == 0 {
+	//	return fmt.Errorf("payment gateway error: %s operation failed for payment %s", operation, payment.ID)
+	//}
 
 	// Simulate specific validation failures
 	if payment.Amount <= 0 && operation != "refund" {
@@ -295,9 +295,9 @@ func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, op
 	switch payment.Method {
 	case models.CreditCard, models.DebitCard:
 		// Simulate card validation
-		if operation == "authorize" && time.Now().UnixNano()%50 == 0 {
-			return errors.New("card declined")
-		}
+		//if operation == "authorize" && time.Now().UnixNano()%50 == 0 {
+		//	return errors.New("card declined")
+		//}
 	case models.BankTransfer:
 		// Simulate bank processing time
 		time.Sleep(200 * time.Millisecond)
