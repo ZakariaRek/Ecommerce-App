@@ -4,6 +4,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
@@ -42,6 +43,9 @@ func (s *orderPaymentService) ProcessOrderPayment(
 	amount float64,
 	method models.PaymentMethod,
 ) (*models.Payment, error) {
+	log.Printf("💳 Starting payment processing for order %s, amount: %.2f, method: %s",
+		orderID, amount, method)
+
 	// Create payment record
 	payment := &models.Payment{
 		ID:      uuid.New(),
@@ -53,26 +57,45 @@ func (s *orderPaymentService) ProcessOrderPayment(
 
 	// Save payment record
 	if err := s.paymentRepo.Create(payment); err != nil {
+		log.Printf("💳 Failed to create payment record: %v", err)
 		return nil, fmt.Errorf("failed to create payment record: %w", err)
 	}
 
-	// Authorize payment
+	log.Printf("💳 Created payment record with ID: %s", payment.ID)
+
+	// Step 1: Authorize payment
+	log.Printf("💳 Starting authorization for payment %s", payment.ID)
 	if err := s.AuthorizePayment(payment); err != nil {
+		log.Printf("💳 Authorization failed for payment %s: %v", payment.ID, err)
 		// Update payment status to failed
 		payment.Status = models.Failed
 		s.paymentRepo.Update(payment)
-		return payment, err
+		return payment, fmt.Errorf("payment authorization failed: %w", err)
 	}
 
-	// If authorization successful, capture payment
+	log.Printf("💳 Authorization successful for payment %s", payment.ID)
+
+	// Step 2: Capture payment (this should update status to Completed)
+	log.Printf("💳 Starting capture for payment %s", payment.ID)
 	if err := s.CapturePayment(payment.ID); err != nil {
+		log.Printf("💳 Capture failed for payment %s: %v", payment.ID, err)
 		// Update payment status to failed
 		payment.Status = models.Failed
 		s.paymentRepo.Update(payment)
-		return payment, err
+		return payment, fmt.Errorf("payment capture failed: %w", err)
 	}
 
-	return payment, nil
+	// Fetch updated payment record (CapturePayment should have updated the status)
+	updatedPayment, err := s.paymentRepo.FindByID(payment.ID)
+	if err != nil {
+		log.Printf("💳 Failed to fetch updated payment record: %v", err)
+		return payment, nil // Return original payment if fetch fails
+	}
+
+	log.Printf("💳 Payment processing completed successfully for payment %s, final status: %s",
+		updatedPayment.ID, updatedPayment.Status)
+
+	return updatedPayment, nil
 }
 
 // AuthorizePayment authorizes a payment (simulate payment gateway)
@@ -119,6 +142,8 @@ func (s *orderPaymentService) CapturePayment(paymentID uuid.UUID) error {
 		return fmt.Errorf("payment not found: %w", err)
 	}
 
+	log.Printf("💳 Capturing payment %s for amount %.2f", paymentID, payment.Amount)
+
 	// Create transaction record for capture
 	transaction := &models.PaymentTransaction{
 		ID:             uuid.New(),
@@ -134,25 +159,37 @@ func (s *orderPaymentService) CapturePayment(paymentID uuid.UUID) error {
 	}
 
 	if err := s.transactionRepo.Create(transaction); err != nil {
+		log.Printf("💳 Failed to create capture transaction: %v", err)
 		return fmt.Errorf("failed to create capture transaction: %w", err)
 	}
 
+	log.Printf("💳 Created capture transaction %s for payment %s", transaction.ID, paymentID)
+
 	// Simulate payment gateway capture
 	if err := s.simulatePaymentGateway(payment, "capture"); err != nil {
+		log.Printf("💳 Payment gateway capture failed: %v", err)
 		transaction.Status = "capture_failed"
 		transaction.ResponseData["error"] = err.Error()
 		s.transactionRepo.Update(transaction)
 		return err
 	}
 
-	// Update transaction and payment status
+	// Update transaction status
 	transaction.Status = "captured"
 	transaction.ResponseData["captured_at"] = time.Now()
-	s.transactionRepo.Update(transaction)
+	if err := s.transactionRepo.Update(transaction); err != nil {
+		log.Printf("💳 Failed to update capture transaction status: %v", err)
+	}
 
-	// Update payment status to completed
+	// IMPORTANT: Update payment status to completed
 	payment.Status = models.Completed
-	return s.paymentRepo.Update(payment)
+	if err := s.paymentRepo.Update(payment); err != nil {
+		log.Printf("💳 Failed to update payment status to completed: %v", err)
+		return fmt.Errorf("failed to update payment status: %w", err)
+	}
+
+	log.Printf("💳 Successfully captured payment %s, status updated to COMPLETED", paymentID)
+	return nil
 }
 
 // RefundOrderPayment processes a refund for an order
@@ -273,14 +310,12 @@ func (s *orderPaymentService) getPaymentGateway(method models.PaymentMethod) str
 }
 
 // simulatePaymentGateway simulates payment gateway operations
+// Enhanced simulatePaymentGateway with better logging
 func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, operation string) error {
+	log.Printf("💳 Simulating payment gateway %s operation for payment %s", operation, payment.ID)
+
 	// Simulate processing time
 	time.Sleep(100 * time.Millisecond)
-
-	// Simulate random failures (5% failure rate)
-	//if time.Now().UnixNano()%20 == 0 {
-	//	return fmt.Errorf("payment gateway error: %s operation failed for payment %s", operation, payment.ID)
-	//}
 
 	// Simulate specific validation failures
 	if payment.Amount <= 0 && operation != "refund" {
@@ -291,17 +326,21 @@ func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, op
 		return errors.New("payment amount exceeds limit")
 	}
 
-	// Simulate method-specific failures
+	// Simulate method-specific processing
 	switch payment.Method {
 	case models.CreditCard, models.DebitCard:
-		// Simulate card validation
-		//if operation == "authorize" && time.Now().UnixNano()%50 == 0 {
-		//	return errors.New("card declined")
-		//}
+		log.Printf("💳 Processing %s transaction", payment.Method)
+		// Simulate additional processing time for card transactions
+		time.Sleep(50 * time.Millisecond)
 	case models.BankTransfer:
+		log.Printf("💳 Processing bank transfer")
 		// Simulate bank processing time
 		time.Sleep(200 * time.Millisecond)
+	case models.PayPal:
+		log.Printf("💳 Processing PayPal transaction")
+		time.Sleep(75 * time.Millisecond)
 	}
 
+	log.Printf("💳 Payment gateway %s operation completed successfully", operation)
 	return nil
 }

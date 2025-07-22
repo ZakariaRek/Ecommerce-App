@@ -1,3 +1,5 @@
+// Fixed Order-Service/src/main/java/com/Ecommerce/Order_Service/Listeners/AsyncComm/KafkaStatusLisiner.java
+
 package com.Ecommerce.Order_Service.Listeners.AsyncComm;
 
 import com.Ecommerce.Order_Service.Config.KafkaProducerConfig;
@@ -34,20 +36,24 @@ public class KafkaStatusLisiner {
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     /**
-     * Enhanced shipping update listener that handles the new event format from shipping service
+     * REMOVED: Payment confirmed listener to avoid conflicts with EnhancedKafkaConsumerService
+     * Let EnhancedKafkaConsumerService handle payment events exclusively
      */
 
+    /**
+     * Enhanced shipping update listener that handles the new event format from shipping service
+     */
     @KafkaListener(topics = "shipping-update", groupId = "${spring.kafka.consumer.group-id}")
     public void listenShippingUpdate(Map<String, Object> shippingUpdate) {
         try {
             log.info("📦 ORDER SERVICE: Received shipping update: {}", shippingUpdate);
 
             // Extract data directly from the map
-            String orderIdStr = (String) shippingUpdate.get("orderId");
-            String shippingStatus = (String) shippingUpdate.get("status");
-            String shippingId = (String) shippingUpdate.get("shippingId");
-            String trackingNumber = (String) shippingUpdate.get("trackingNumber");
-            String carrier = (String) shippingUpdate.get("carrier");
+            String orderIdStr = getStringValue(shippingUpdate, "orderId");
+            String shippingStatus = getStringValue(shippingUpdate, "status");
+            String shippingId = getStringValue(shippingUpdate, "shippingId");
+            String trackingNumber = getStringValue(shippingUpdate, "trackingNumber");
+            String carrier = getStringValue(shippingUpdate, "carrier");
 
             if (orderIdStr == null || orderIdStr.isEmpty()) {
                 log.error("📦 ORDER SERVICE: Missing orderId in shipping update event");
@@ -135,48 +141,35 @@ public class KafkaStatusLisiner {
     }
 
     /**
-     * Listen for payment confirmation events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_PAYMENT_CONFIRMED, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenPaymentConfirmed(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID orderId = UUID.fromString(eventNode.path("orderId").asText());
-
-            // Update order status to PAID
-            orderService.updateOrderStatus(orderId, OrderStatus.PAID);
-
-            log.info("📦 ORDER SERVICE: Updated order status to PAID after payment confirmation. Order ID: {}", orderId);
-        } catch (EntityNotFoundException e) {
-            log.error("📦 ORDER SERVICE: Order not found for payment confirmation event", e);
-        } catch (Exception e) {
-            log.error("📦 ORDER SERVICE: Error processing payment confirmation event", e);
-        }
-    }
-
-    /**
      * Listen for cart checkout events to create orders
      */
     @KafkaListener(topics = KafkaProducerConfig.TOPIC_CART_CHECKED_OUT, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenCartCheckedOut(String message) {
+    public void listenCartCheckedOut(Map<String, Object> cartEvent) {
         try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            String userId = eventNode.path("userId").asText();
-            UUID cartId = UUID.fromString(eventNode.path("cartId").asText());
+            String userId = getStringValue(cartEvent, "userId");
+            String cartIdStr = getStringValue(cartEvent, "cartId");
+            UUID cartId = UUID.fromString(cartIdStr);
 
             // Extract shipping and billing address IDs
-            UUID billingAddressId = UUID.fromString(eventNode.path("billingAddressId").asText("00000000-0000-0000-0000-000000000000"));
-            UUID shippingAddressId = UUID.fromString(eventNode.path("shippingAddressId").asText("00000000-0000-0000-0000-000000000000"));
+            String billingAddressIdStr = getStringValue(cartEvent, "billingAddressId");
+            String shippingAddressIdStr = getStringValue(cartEvent, "shippingAddressId");
+
+            UUID billingAddressId = billingAddressIdStr.isEmpty() ?
+                    UUID.fromString("00000000-0000-0000-0000-000000000000") : UUID.fromString(billingAddressIdStr);
+            UUID shippingAddressId = shippingAddressIdStr.isEmpty() ?
+                    UUID.fromString("00000000-0000-0000-0000-000000000000") : UUID.fromString(shippingAddressIdStr);
 
             // Create new order
             Order newOrder = orderService.createOrder(userId, cartId, billingAddressId, shippingAddressId);
 
-            // Process items from cart (this would typically be more elaborate)
-            JsonNode itemsNode = eventNode.path("items");
-            if (itemsNode.isArray()) {
-                for (JsonNode itemNode : itemsNode) {
+            // Process items from cart if available
+            Object itemsObj = cartEvent.get("items");
+            if (itemsObj instanceof java.util.List) {
+                @SuppressWarnings("unchecked")
+                java.util.List<Map<String, Object>> items = (java.util.List<Map<String, Object>>) itemsObj;
+
+                for (Map<String, Object> itemMap : items) {
                     // Create order items from cart items
-                    // Implementation depends on your specific cart item structure
                     log.info("📦 ORDER SERVICE: Processing cart item for order {}", newOrder.getId());
                 }
             }
@@ -192,11 +185,13 @@ public class KafkaStatusLisiner {
      * Listen for product price changes to update orders that are still PENDING
      */
     @KafkaListener(topics = KafkaProducerConfig.TOPIC_PRODUCT_PRICE_CHANGED, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenProductPriceChanged(String message) {
+    public void listenProductPriceChanged(Map<String, Object> priceEvent) {
         try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID productId = UUID.fromString(eventNode.path("productId").asText());
-            BigDecimal newPrice = new BigDecimal(eventNode.path("newPrice").asText());
+            String productIdStr = getStringValue(priceEvent, "productId");
+            UUID productId = UUID.fromString(productIdStr);
+
+            Double newPriceDouble = getDoubleValue(priceEvent, "newPrice");
+            BigDecimal newPrice = BigDecimal.valueOf(newPriceDouble);
 
             // In a real implementation, you would update order items for PENDING orders
             log.info("📦 ORDER SERVICE: Received product price change event. Product ID: {}, New Price: {}",
@@ -206,5 +201,24 @@ public class KafkaStatusLisiner {
         }
     }
 
+    // Helper methods
+    private String getStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : "";
+    }
 
+    private Double getDoubleValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Double.parseDouble((String) value);
+            } catch (NumberFormatException e) {
+                log.warn("📦 ORDER SERVICE: Could not parse '{}' as double for key '{}'", value, key);
+            }
+        }
+        return 0.0;
+    }
 }

@@ -14,7 +14,7 @@ type PaymentEventHandler func(event *events.PaymentEvent) error
 
 // PaymentKafkaService handles kafka operations for payments
 type PaymentKafkaService struct {
-	producer sarama.AsyncProducer
+	Producer sarama.AsyncProducer
 	topics   map[string]string
 	handlers map[events.PaymentEventType][]PaymentEventHandler
 }
@@ -22,7 +22,7 @@ type PaymentKafkaService struct {
 // NewPaymentKafkaService creates a new PaymentKafkaService
 func NewPaymentKafkaService(producer sarama.AsyncProducer, topics map[string]string) *PaymentKafkaService {
 	return &PaymentKafkaService{
-		producer: producer,
+		Producer: producer,
 		topics:   topics,
 		handlers: make(map[events.PaymentEventType][]PaymentEventHandler),
 	}
@@ -35,7 +35,7 @@ func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent, topic str
 		return err
 	}
 
-	s.producer.Input() <- &sarama.ProducerMessage{
+	s.Producer.Input() <- &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(event.PaymentID.String()),
 		Value: sarama.ByteEncoder(data),
@@ -108,4 +108,7 @@ func (s *PaymentKafkaService) HandleEvent(event *events.PaymentEvent) {
 			log.Printf("Error handling payment event %s: %v", event.Type, err)
 		}
 	}
+}
+func (s *PaymentKafkaService) GetProducer() sarama.AsyncProducer {
+	return s.Producer // Corrected typo
 }

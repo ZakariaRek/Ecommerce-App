@@ -3,6 +3,8 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/IBM/sarama"
+	"log"
 	"net/http"
 	"time"
 
@@ -82,19 +84,19 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Validate payment method
+	// Validate payment method and amount
 	if !isValidPaymentMethod(req.PaymentMethod) {
 		http.Error(w, "Invalid payment method", http.StatusBadRequest)
 		return
 	}
-
-	// Validate amount
 	if req.Amount <= 0 {
 		http.Error(w, "Amount must be greater than zero", http.StatusBadRequest)
 		return
 	}
 
-	// Process the payment
+	log.Printf("💳 PAYMENT SERVICE: Processing payment for order: %s, amount: %.2f", orderID, req.Amount)
+
+	// Process the payment - this should complete authorization and capture
 	payment, err := h.orderPaymentService.ProcessOrderPayment(
 		orderID,
 		req.Amount,
@@ -112,8 +114,8 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 	}
 
 	if err != nil {
+		log.Printf("💳 PAYMENT SERVICE: Payment failed for order %s: %v", orderID, err)
 		response.Message = err.Error()
-
 		// Publish payment failed event
 		h.publishPaymentEvent(payment, false, err.Error())
 
@@ -123,11 +125,27 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Payment successful
-	response.Message = "Payment processed successfully"
+	// Check if payment was actually completed
+	if payment.Status == models.Completed {
+		log.Printf("💳 PAYMENT SERVICE: Payment completed successfully for order %s", orderID)
+		response.Message = "Payment completed successfully"
+		// Publish payment confirmed event
+		h.publishPaymentEvent(payment, true, "Payment completed successfully")
+	} else if payment.Status == models.Failed {
+		log.Printf("💳 PAYMENT SERVICE: Payment failed for order %s", orderID)
+		response.Message = "Payment failed"
+		// Publish payment failed event
+		h.publishPaymentEvent(payment, false, "Payment failed")
 
-	// Publish payment confirmed event
-	h.publishPaymentEvent(payment, true, "Payment processed successfully")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	} else {
+		// Payment still pending - this shouldn't happen if ProcessOrderPayment works correctly
+		log.Printf("💳 PAYMENT SERVICE: Payment still pending for order %s - this may indicate an issue", orderID)
+		response.Message = "Payment is being processed"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -250,32 +268,42 @@ func (h *OrderPaymentHandler) GetOrderPaymentStatus(w http.ResponseWriter, r *ht
 }
 
 // publishPaymentEvent publishes payment events to Kafka for Order Service consumption
-func (h *OrderPaymentHandler) publishPaymentEvent(payment *models.Payment, success bool, message string) {
-	if h.kafkaService == nil {
-		return // Kafka not available
-	}
-
-	//eventData := map[string]interface{}{
-	//	"orderId":       payment.OrderID.String(),
-	//	"paymentId":     payment.ID.String(),
-	//	"amount":        payment.Amount,
-	//	"paymentMethod": payment.Method,
-	//	"status":        payment.Status,
-	//	"success":       success,
-	//	"message":       message,
-	//	"processedAt":   time.Now(),
-	//}
-
-	if success {
-		// Create payment confirmed event for Order Service
-		h.kafkaService.PublishPaymentStatusChanged(payment, models.Pending)
-		//h.kafkaService.PublishPaymentEvent(eventData)
-
-	} else {
-		// Create payment failed event for Order Service
-		h.kafkaService.PublishPaymentStatusChanged(payment, models.Pending)
-	}
-}
+//func (h *OrderPaymentHandler) publishPaymentEvent(payment *models.Payment, success bool, message string) {
+//	if h.kafkaService == nil {
+//		log.Printf("💳 PAYMENT SERVICE: Kafka service not available, cannot publish event")
+//		return
+//	}
+//
+//	log.Printf("💳 PAYMENT SERVICE: Publishing payment event - Success: %t, Status: %s, Message: %s",
+//		success, payment.Status, message)
+//
+//	// Create payment event data for Order Service
+//	eventData := map[string]interface{}{
+//		"orderId":       payment.OrderID.String(),
+//		"paymentId":     payment.ID.String(),
+//		"amount":        payment.Amount,
+//		"paymentMethod": payment.Method,
+//		"status":        payment.Status,
+//		"success":       success,
+//		"message":       message,
+//		"processedAt":   time.Now(),
+//	}
+//
+//	if success && payment.Status == models.Completed {
+//		// Create payment confirmed event for Order Service
+//		log.Printf("💳 PAYMENT SERVICE: Publishing payment-confirmed event for order %s", payment.OrderID)
+//
+//		// Use a Kafka topic that Order Service listens to
+//		h.kafkaService.PublishPaymentStatusChanged(payment, models.Pending)
+//
+//		// Also publish to payment-confirmed topic specifically
+//		h.publishToPaymentConfirmedTopic(eventData)
+//	} else {
+//		// Create payment failed event
+//		log.Printf("💳 PAYMENT SERVICE: Publishing payment-failed event for order %s", payment.OrderID)
+//		h.kafkaService.PublishPaymentStatusChanged(payment, models.Pending)
+//	}
+//}
 
 // Helper functions
 func isValidPaymentMethod(method models.PaymentMethod) bool {
@@ -296,4 +324,102 @@ func calculateTotalAmount(payments []*models.Payment) float64 {
 		}
 	}
 	return total
+}
+
+func (h *OrderPaymentHandler) publishPaymentEvent(payment *models.Payment, success bool, message string) {
+	if h.kafkaService == nil {
+		log.Printf("💳 PAYMENT SERVICE: Kafka service not available, cannot publish event")
+		return
+	}
+
+	log.Printf("💳 PAYMENT SERVICE: Publishing payment event - Success: %t, Status: %s, Message: %s",
+		success, payment.Status, message)
+
+	// Create payment event in the format expected by Order Service
+	eventData := map[string]interface{}{
+		"orderId":       payment.OrderID.String(),
+		"paymentId":     payment.ID.String(),
+		"amount":        payment.Amount,
+		"paymentMethod": string(payment.Method),
+		"status":        string(payment.Status),
+		"success":       success,
+		"message":       message,
+		"processedAt":   time.Now().Format(time.RFC3339),
+	}
+
+	if success && payment.Status == models.Completed {
+		// Publish to payment-confirmed topic (Order Service listens to this)
+		h.publishToSpecificTopic("payment-confirmed", eventData)
+
+		// Also publish payment status changed event
+		h.kafkaService.PublishPaymentStatusChanged(payment, models.Pending)
+
+		log.Printf("💳 PAYMENT SERVICE: Published payment-confirmed event for order %s", payment.OrderID)
+	} else {
+		// Publish payment failed event
+		h.publishToSpecificTopic("payment-failed", eventData)
+		log.Printf("💳 PAYMENT SERVICE: Published payment-failed event for order %s", payment.OrderID)
+	}
+}
+
+// New method to publish to specific Kafka topics
+func (h *OrderPaymentHandler) publishToSpecificTopic(topicName string, eventData map[string]interface{}) {
+	if h.kafkaService == nil {
+		log.Printf("💳 PAYMENT SERVICE: Kafka service not available")
+		return
+	}
+
+	// Get the producer from kafkaService
+	producer := h.kafkaService.GetProducer() // Corrected method
+	if producer == nil {
+		log.Printf("💳 PAYMENT SERVICE: Kafka producer not available")
+		return
+	}
+
+	// Marshal event data to JSON
+	data, err := json.Marshal(eventData)
+	if err != nil {
+		log.Printf("💳 PAYMENT SERVICE: Failed to marshal event data: %v", err)
+		return
+	}
+
+	// Create Kafka message
+	message := &sarama.ProducerMessage{
+		Topic: topicName,
+		Key:   sarama.StringEncoder(eventData["orderId"].(string)),
+		Value: sarama.ByteEncoder(data),
+	}
+
+	// Send message
+	producer.Input() <- message
+
+	log.Printf("💳 PAYMENT SERVICE: Successfully sent event to topic '%s' for order %s",
+		topicName, eventData["orderId"])
+}
+
+// Add this method to PaymentKafkaService to expose the producer
+
+func (h *OrderPaymentHandler) publishToPaymentConfirmedTopic(eventData map[string]interface{}) {
+	// This should match the topic that Order Service listens to
+	// Check your Order Service EnhancedKafkaConsumerService.java for the exact topic name
+
+	if h.kafkaService == nil || h.kafkaService.Producer == nil {
+		return
+	}
+
+	data, err := json.Marshal(eventData)
+	if err != nil {
+		log.Printf("💳 PAYMENT SERVICE: Failed to marshal payment event: %v", err)
+		return
+	}
+
+	// Send to payment-confirmed topic
+	message := &sarama.ProducerMessage{
+		Topic: "payment-confirmed",
+		Key:   sarama.StringEncoder(eventData["orderId"].(string)),
+		Value: sarama.ByteEncoder(data),
+	}
+
+	h.kafkaService.Producer.Input() <- message
+	log.Printf("💳 PAYMENT SERVICE: Sent event to payment-confirmed topic")
 }
