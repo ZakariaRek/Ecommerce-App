@@ -1,3 +1,4 @@
+// internal/config/kafka_topics.go
 package config
 
 import (
@@ -41,6 +42,8 @@ func LoadKafkaTopicsConfig() *KafkaTopicsConfig {
 		EventUpdated: getEnv("KAFKA_SHIPPING_UPDATED_TOPIC", "shipping-updated"),
 		EventChanged: getEnv("KAFKA_SHIPPING_STATUS_CHANGED_TOPIC", "shipping-status-changed"),
 		EventDeleted: getEnv("KAFKA_SHIPPING_DELETED_TOPIC", "shipping-deleted"),
+		// Add the shipping-update topic for order service communication
+		"order_update": getEnv("KAFKA_SHIPPING_ORDER_UPDATE_TOPIC", "shipping-update"),
 	}
 
 	trackingTopics := map[string]string{
