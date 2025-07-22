@@ -1,3 +1,4 @@
+// Shipping-Service/internal/service/kafka/tracking_kafka_service.go
 package kafka
 
 import (
@@ -92,3 +93,6 @@ func (s *TrackingKafkaService) HandleEvent(event *events.TrackingEvent) {
 		}
 	}
 }
+
+// Verify interface implementation at compile time
+var _ models.KafkaTrackingService = (*TrackingKafkaService)(nil)
