@@ -28,7 +28,7 @@ type OrderPaymentResponse struct {
 	Amount        float64              `json:"amount"`
 	Status        models.PaymentStatus `json:"status"`
 	PaymentMethod models.PaymentMethod `json:"paymentMethod"`
-	TransactionID string               `json:"transactionId,omitempty"`
+	TransactionID string               `json:"transaction_id,omitempty"`
 	CreatedAt     time.Time            `json:"created_at"`
 	Message       string               `json:"message,omitempty"`
 }

@@ -26,30 +26,6 @@ import (
 	"github.com/hudl/fargo"
 )
 
-// Constants for Kafka event types
-const (
-	EventCreated = "created"
-	EventUpdated = "updated"
-	EventChanged = "changed"
-	EventDeleted = "deleted"
-)
-
-// Helper functions for getting environment values
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsBool(key string, defaultValue bool) bool {
-	strValue := getEnv(key, "")
-	if strValue == "" {
-		return defaultValue
-	}
-	return strValue == "true" || strValue == "1" || strValue == "yes"
-}
-
 func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
@@ -141,33 +117,66 @@ func main() {
 	// Routes
 	r.Route("/api", func(r chi.Router) {
 		// Regular payment routes
-		r.Route("/payments", func(r chi.Router) {
-			r.Post("/", paymentHandler.CreatePayment)
-			r.Get("/{id}", paymentHandler.GetPayment)
-			r.Put("/{id}", paymentHandler.UpdatePayment)
-			r.Delete("/{id}", paymentHandler.DeletePayment)
-			r.Get("/", paymentHandler.GetAllPayments)
-			r.Get("/order/{orderID}", paymentHandler.GetPaymentsByOrder)
-			r.Post("/{id}/process", paymentHandler.ProcessPayment)
-			r.Post("/{id}/refund", paymentHandler.RefundPayment)
-			r.Get("/{id}/status", paymentHandler.GetPaymentStatus)
-		})
+		paymentHandler.RegisterRoutes(r)
 
-		// Order payment routes
+		// Order payment routes - EXPLICITLY REGISTER THESE ROUTES
 		r.Route("/orders", func(r chi.Router) {
-			r.Post("/{orderID}/payments", orderPaymentHandler.ProcessOrderPayment)
-			r.Get("/{orderID}/payments", orderPaymentHandler.GetOrderPayments)
-			r.Post("/{orderID}/refund", orderPaymentHandler.RefundOrderPayment)
-			r.Get("/{orderID}/payments/status", orderPaymentHandler.GetOrderPaymentStatus)
+			r.Post("/{orderID}/payments", func(w http.ResponseWriter, req *http.Request) {
+				log.Printf("💳 PAYMENT SERVICE: Received payment request for order: %s", chi.URLParam(req, "orderID"))
+				orderPaymentHandler.ProcessOrderPayment(w, req)
+			})
+
+			r.Get("/{orderID}/payments", func(w http.ResponseWriter, req *http.Request) {
+				log.Printf("💳 PAYMENT SERVICE: Getting payments for order: %s", chi.URLParam(req, "orderID"))
+				orderPaymentHandler.GetOrderPayments(w, req)
+			})
+
+			r.Post("/{orderID}/refund", func(w http.ResponseWriter, req *http.Request) {
+				log.Printf("💳 PAYMENT SERVICE: Processing refund for order: %s", chi.URLParam(req, "orderID"))
+				orderPaymentHandler.RefundOrderPayment(w, req)
+			})
+
+			r.Get("/{orderID}/payments/status", func(w http.ResponseWriter, req *http.Request) {
+				log.Printf("💳 PAYMENT SERVICE: Getting payment status for order: %s", chi.URLParam(req, "orderID"))
+				orderPaymentHandler.GetOrderPaymentStatus(w, req)
+			})
 		})
 	})
 
-	// Health check
+	// Add a test endpoint to verify the service is running
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":"Payment Service is running","port":"` + cfg.ServerPort + `"}`))
+	})
+
+	// Health check with more detailed information
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"UP","service":"payment-service"}`))
+		response := fmt.Sprintf(`{
+			"status":"UP",
+			"service":"payment-service",
+			"port":"%s",
+			"timestamp":"%s",
+			"routes":[
+				"POST /api/orders/{orderID}/payments",
+				"GET /api/orders/{orderID}/payments", 
+				"POST /api/orders/{orderID}/refund",
+				"GET /api/orders/{orderID}/payments/status"
+			]
+		}`, cfg.ServerPort, time.Now().Format(time.RFC3339))
+		w.Write([]byte(response))
 	})
+
+	// Log all registered routes for debugging
+	walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		log.Printf("📍 Route registered: %s %s", method, route)
+		return nil
+	}
+	if err := chi.Walk(r, walkFunc); err != nil {
+		log.Printf("Error walking routes: %v", err)
+	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -187,14 +196,15 @@ func main() {
 
 	// Start the server in a goroutine
 	go func() {
-		fmt.Printf("🚀 Starting Payment Service on port %s...\n", cfg.ServerPort)
-		log.Printf("📋 Available endpoints:")
-		log.Printf("  POST /api/orders/{orderID}/payments - Process order payment")
-		log.Printf("  GET  /api/orders/{orderID}/payments - Get order payments")
-		log.Printf("  POST /api/orders/{orderID}/refund - Refund order payment")
-		log.Printf("  GET  /api/orders/{orderID}/payments/status - Get order payment status")
-		log.Printf("  GET  /health - Health check")
-		log.Printf("🏥 Health check URL: http://localhost:%s/health", cfg.ServerPort)
+		fmt.Printf("🚀 Payment Service starting on port %s...\n", cfg.ServerPort)
+		fmt.Printf("📋 Service available at: http://localhost:%s\n", cfg.ServerPort)
+		fmt.Printf("🏥 Health check: http://localhost:%s/health\n", cfg.ServerPort)
+		fmt.Printf("🧪 Test endpoint: http://localhost:%s/test\n", cfg.ServerPort)
+		log.Printf("📋 Order Payment endpoints:")
+		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/payments - Process order payment", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/payments - Get order payments", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/refund - Refund order payment", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/payments/status - Get order payment status", cfg.ServerPort)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
@@ -229,54 +239,61 @@ func main() {
 	fmt.Println("✅ Server stopped")
 }
 
-// Helper functions
+// Helper functions (keep the existing helper functions)
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
 	return defaultValue
 }
+
 func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 	eurekaConn := fargo.NewConn(cfg.EurekaURL)
 
 	portInt, err := strconv.Atoi(cfg.ServerPort)
 	if err != nil {
-		portInt = 8080
+		portInt = 8082
+	}
+
+	var instanceHostName string
+	var instanceIPAddr string
+
+	if cfg.EurekaPreferIpAddress {
+		instanceHostName = cfg.IPAddress
+		instanceIPAddr = cfg.IPAddress
+	} else {
+		instanceHostName = cfg.EurekaInstanceHostname
+		instanceIPAddr = cfg.IPAddress
 	}
 
 	instance := &fargo.Instance{
-		HostName:         cfg.HostName,
+		InstanceId:       cfg.EurekaInstanceId,
+		HostName:         instanceHostName,
 		Port:             portInt,
 		App:              cfg.AppName,
-		IPAddr:           cfg.IPAddress,
+		IPAddr:           instanceIPAddr,
 		VipAddress:       strings.ToLower(cfg.AppName),
 		SecureVipAddress: strings.ToLower(cfg.AppName),
 		DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
 		Status:           fargo.UP,
-		HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.IPAddress, cfg.ServerPort),
-		StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
-		HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
-		Metadata: fargo.InstanceMetadata{
-			"management.port":         cfg.ServerPort,
-			"management.context-path": "/api",
-			"zone":                    "default",
-			"instanceId":              cfg.EurekaInstanceId,
-		},
-	}
 
-	log.Printf("Registering with Eureka:")
-	log.Printf("  App Name: %s", instance.App)
-	log.Printf("  VIP Address: %s", instance.VipAddress)
-	log.Printf("  Host: %s:%d", instance.HostName, instance.Port)
-	log.Printf("  IP Address: %s", instance.IPAddr)
-	log.Printf("  Instance ID: %s", cfg.EurekaInstanceId)
+		HomePageUrl:    fmt.Sprintf("http://%s:%s/", instanceHostName, cfg.ServerPort),
+		StatusPageUrl:  fmt.Sprintf("http://%s:%s/health", instanceHostName, cfg.ServerPort),
+		HealthCheckUrl: fmt.Sprintf("http://%s:%s/health", instanceHostName, cfg.ServerPort),
+	}
 
 	err = eurekaConn.RegisterInstance(instance)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register with Eureka: %v", err)
 	}
 
-	log.Printf("Successfully registered with Eureka at %s", cfg.EurekaURL)
+	log.Printf("Successfully registered with Eureka:")
+	log.Printf("  Instance ID: %s", cfg.EurekaInstanceId)
+	log.Printf("  Hostname: %s", instanceHostName)
+	log.Printf("  IP Address: %s", instanceIPAddr)
+	log.Printf("  Port: %d", portInt)
+	log.Printf("  Prefer IP Address: %t", cfg.EurekaPreferIpAddress)
+
 	return &eurekaConn, nil
 }
 
@@ -284,16 +301,10 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	portInt, err := strconv.Atoi(cfg.ServerPort)
-	if err != nil {
-		portInt = 8080
-	}
-
 	instance := &fargo.Instance{
-		HostName: cfg.HostName,
-		Port:     portInt,
-		App:      cfg.AppName,
-		IPAddr:   cfg.IPAddress,
+		InstanceId: cfg.EurekaInstanceId,
+		HostName:   cfg.EurekaInstanceHostname,
+		App:        cfg.AppName,
 	}
 
 	for {
@@ -302,56 +313,30 @@ func startHeartbeat(eurekaConn *fargo.EurekaConnection, cfg *config.Config) {
 		if err != nil {
 			log.Printf("Failed to send heartbeat to Eureka: %v", err)
 
-			newInstance := &fargo.Instance{
-				HostName:         cfg.HostName,
-				Port:             portInt,
-				App:              cfg.AppName,
-				IPAddr:           cfg.IPAddress,
-				VipAddress:       strings.ToLower(cfg.AppName),
-				SecureVipAddress: strings.ToLower(cfg.AppName),
-				DataCenterInfo:   fargo.DataCenterInfo{Name: fargo.MyOwn},
-				Status:           fargo.UP,
-				HomePageUrl:      fmt.Sprintf("http://%s:%s/", cfg.IPAddress, cfg.ServerPort),
-				StatusPageUrl:    fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
-				HealthCheckUrl:   fmt.Sprintf("http://%s:%s/health", cfg.IPAddress, cfg.ServerPort),
-				Metadata: fargo.InstanceMetadata{
-					"management.port":         cfg.ServerPort,
-					"management.context-path": "/api",
-					"zone":                    "default",
-					"instanceId":              cfg.EurekaInstanceId,
-				},
-			}
-
-			regErr := eurekaConn.RegisterInstance(newInstance)
+			_, regErr := connectToEureka(cfg)
 			if regErr != nil {
 				log.Printf("Failed to re-register with Eureka: %v", regErr)
 			} else {
 				log.Printf("Successfully re-registered with Eureka")
-				instance = newInstance
 			}
 		} else {
-			log.Printf("Heartbeat sent successfully to Eureka")
+			log.Printf("Heartbeat sent successfully for instance: %s", cfg.EurekaInstanceId)
 		}
 	}
 }
 
 func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config) error {
-	portInt, err := strconv.Atoi(cfg.ServerPort)
-	if err != nil {
-		portInt = 8080
-	}
-
 	instance := &fargo.Instance{
-		HostName: cfg.HostName,
-		Port:     portInt,
-		App:      cfg.AppName,
-		IPAddr:   cfg.IPAddress,
+		InstanceId: cfg.EurekaInstanceId,
+		HostName:   cfg.EurekaInstanceHostname,
+		App:        cfg.AppName,
 	}
 
-	err = eurekaConn.DeregisterInstance(instance)
+	err := eurekaConn.DeregisterInstance(instance)
 	if err != nil {
 		return fmt.Errorf("failed to deregister from Eureka: %v", err)
 	}
 
+	log.Printf("Successfully deregistered instance: %s", cfg.EurekaInstanceId)
 	return nil
 }

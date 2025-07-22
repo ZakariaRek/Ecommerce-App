@@ -6,8 +6,8 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/Order-service
     username: postgres
-    password: yahyasd56
-#    password: zakaria
+#    password: yahyasd56
+    password: zakaria
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -76,4 +76,5 @@ logging:
 # Payment Service Configuration
 payment:
   service:
-    url: http://localhost:8080
+    name: PAYMENT-SERVICE
+    url: http://localhost:8085
