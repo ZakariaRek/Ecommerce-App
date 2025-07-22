@@ -4,20 +4,26 @@ package com.Ecommerce.Order_Service.Controllers;
 import com.Ecommerce.Order_Service.Entities.Order;
 import com.Ecommerce.Order_Service.Entities.OrderItem;
 
+import com.Ecommerce.Order_Service.Entities.OrderStatus;
 import com.Ecommerce.Order_Service.Payload.OrderMapper;
 import com.Ecommerce.Order_Service.Payload.Request.OrderItem.CreateOrderItemRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.OrderItem.UpdateOrderItemQuantityRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.order.CreateOrderRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.order.CreateOrderWithDiscountsRequestDto;
 import com.Ecommerce.Order_Service.Payload.Request.order.UpdateOrderStatusRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.payment.PaymentMethodRequestDto;
+import com.Ecommerce.Order_Service.Payload.Request.payment.ProcessPaymentRequestDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.InvoiceResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.OrderResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.Order.OrderTotalResponseDto;
 import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
+import com.Ecommerce.Order_Service.Payload.Response.payment.PaymentResponseDto;
 import com.Ecommerce.Order_Service.Services.EnhancedOrderService;
 import com.Ecommerce.Order_Service.Services.OrderService;
+import com.Ecommerce.Order_Service.Services.PaymentIntegrationService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,7 +33,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -325,5 +333,203 @@ public class OrderController {
 
         // Try parsing as-is (in case it's already properly formatted)
         return UUID.fromString(uuidString);
+    }
+
+
+//
+@Autowired
+private PaymentIntegrationService paymentIntegrationService;
+
+    @PostMapping("/{orderId}/pay")
+    public ResponseEntity<Map<String, Object>> processOrderPayment(
+            @PathVariable UUID orderId,
+            @Valid @RequestBody PaymentMethodRequestDto paymentRequest) {
+        try {
+            log.info("💳 Processing payment for order: {}", orderId);
+
+            // Get order to validate
+            Order order = orderService.getOrderById(orderId);
+
+            if (order.getStatus() != OrderStatus.PENDING) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Order must be in PENDING status to process payment");
+            }
+
+            // Process payment through Payment Service
+            PaymentResponseDto paymentResponse = paymentIntegrationService.processOrderPayment(
+                    orderId,
+                    paymentRequest.getPaymentMethod(),
+                    order.getTotalAmount()
+            );
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("orderId", orderId);
+            response.put("orderStatus", order.getStatus());
+            response.put("payment", paymentResponse);
+            response.put("message", "Payment processing initiated");
+
+            return ResponseEntity.ok(response);
+
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            log.error("💳 Error processing payment for order {}: {}", orderId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Payment processing failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get payment status for an order
+     */
+    @GetMapping("/{orderId}/payment/status")
+    public ResponseEntity<Map<String, Object>> getOrderPaymentStatus(@PathVariable UUID orderId) {
+        try {
+            log.info("💳 Getting payment status for order: {}", orderId);
+
+            // Verify order exists
+            Order order = orderService.getOrderById(orderId);
+
+            // Get payment status from Payment Service
+            PaymentResponseDto paymentStatus = paymentIntegrationService.getOrderPaymentStatus(orderId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("orderId", orderId);
+            response.put("orderStatus", order.getStatus());
+            response.put("orderTotal", order.getTotalAmount());
+            response.put("paymentStatus", paymentStatus);
+
+            return ResponseEntity.ok(response);
+
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            log.error("💳 Error getting payment status for order {}: {}", orderId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to get payment status: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Refund payment for an order
+     */
+    @PostMapping("/{orderId}/refund")
+    public ResponseEntity<Map<String, Object>> refundOrderPayment(
+            @PathVariable UUID orderId,
+            @RequestBody Map<String, Object> refundRequest) {
+        try {
+            log.info("💳 Processing refund for order: {}", orderId);
+
+            // Get order to validate
+            Order order = orderService.getOrderById(orderId);
+
+            if (order.getStatus() != OrderStatus.PAID && order.getStatus() != OrderStatus.COMPLETED) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Order must be PAID or COMPLETED to process refund");
+            }
+
+            // Extract refund details
+            BigDecimal refundAmount = new BigDecimal(refundRequest.get("amount").toString());
+            String reason = (String) refundRequest.getOrDefault("reason", "Customer request");
+
+            // Process refund through Payment Service
+            PaymentResponseDto refundResponse = paymentIntegrationService.refundOrderPayment(
+                    orderId, refundAmount, reason
+            );
+
+            // Update order status if full refund
+            if (refundAmount.compareTo(order.getTotalAmount()) == 0) {
+                orderService.updateOrderStatus(orderId, OrderStatus.REFUNDED);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("orderId", orderId);
+            response.put("refund", refundResponse);
+            response.put("message", "Refund processed successfully");
+
+            return ResponseEntity.ok(response);
+
+        } catch (EntityNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            log.error("💳 Error processing refund for order {}: {}", orderId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Refund processing failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Create order and process payment in one step
+     */
+    @PostMapping("/with-payment")
+    public ResponseEntity<Map<String, Object>> createOrderWithPayment(
+            @Valid @RequestBody CreateOrderWithPaymentRequestDto orderRequest) {
+        try {
+            log.info("💳 Creating order with payment for user: {}", orderRequest.getUserId());
+
+            // Create order first
+            Order newOrder = orderService.createOrder(
+                    orderRequest.getUserId(),
+                    orderRequest.getCartId(),
+                    orderRequest.getBillingAddressId(),
+                    orderRequest.getShippingAddressId()
+            );
+
+            // Add items if provided
+            if (orderRequest.getItems() != null && !orderRequest.getItems().isEmpty()) {
+                List<OrderItem> items = orderMapper.toOrderItemList(orderRequest.getItems());
+                for (OrderItem item : items) {
+                    orderService.addOrderItem(newOrder.getId(), item);
+                }
+                // Refresh the order to get updated total
+                newOrder = orderService.getOrderById(newOrder.getId());
+            }
+
+            // Process payment if payment method provided
+            PaymentResponseDto paymentResponse = null;
+            if (orderRequest.getPaymentMethod() != null && !orderRequest.getPaymentMethod().isEmpty()) {
+                paymentResponse = paymentIntegrationService.processOrderPayment(
+                        newOrder.getId(),
+                        orderRequest.getPaymentMethod(),
+                        newOrder.getTotalAmount()
+                );
+            }
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("order", orderMapper.toOrderResponseDto(newOrder));
+            response.put("payment", paymentResponse);
+            response.put("message", "Order created" + (paymentResponse != null ? " and payment initiated" : ""));
+
+            return new ResponseEntity<>(response, HttpStatus.CREATED);
+
+        } catch (Exception e) {
+            log.error("💳 Error creating order with payment: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Order creation with payment failed: " + e.getMessage());
+        }
+    }
+
+    // Add this DTO class for the combined create order with payment request
+    @lombok.Data
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class CreateOrderWithPaymentRequestDto {
+        @NotNull(message = "User ID is required")
+        private String userId;
+
+        @NotNull(message = "Cart ID is required")
+        private UUID cartId;
+
+        @NotNull(message = "Billing address ID is required")
+        private UUID billingAddressId;
+
+        @NotNull(message = "Shipping address ID is required")
+        private UUID shippingAddressId;
+
+        private List<CreateOrderItemRequestDto> items;
+
+        private String paymentMethod;
     }
 }
