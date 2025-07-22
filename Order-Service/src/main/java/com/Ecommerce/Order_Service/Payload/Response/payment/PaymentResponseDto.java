@@ -2,22 +2,23 @@
 // Order-Service/src/main/java/com/Ecommerce/Order_Service/Payload/Response/payment/PaymentResponseDto.java
 package com.Ecommerce.Order_Service.Payload.Response.payment;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PaymentResponseDto {
-    private String paymentId;     // Matches Go response field name
-    private String orderId;       // Matches Go response field name
-    private Double amount;
+    private String paymentId;
+    private String orderId;
+    private String transactionId;
     private String status;
-    private String paymentMethod; // Matches Go response field name
-    private String transactionId; // Matches Go response field name
-    private LocalDateTime createdAt; // Matches Go response field name
+    private boolean success;
+    private String paymentMethod;
+    private BigDecimal amount;
     private String message;
-    private Boolean success;      // Matches Go response field name
+    private String createdAt; // Add this field if needed
 }
