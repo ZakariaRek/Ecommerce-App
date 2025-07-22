@@ -52,7 +52,7 @@ func LoadConfig() *Config {
 	// Get hostname for registration
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "unknown"
+		hostname = "localhost"
 	}
 
 	// Initialize config with defaults and environment variables
@@ -61,15 +61,15 @@ func LoadConfig() *Config {
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		DBUser:      getEnv("DB_USER", "postgres"),
-		DBPassword:  getEnv("DB_PASSWORD", "yahyasd56"), // Fixed: was "zakaria"
+		DBPassword:  getEnv("DB_PASSWORD", "zakaria"),
 		DBName:      getEnv("DB_NAME", "payment_system"),
 		Environment: getEnv("ENVIRONMENT", "development"),
 
-		// Eureka configuration
+		// Eureka configuration - Fixed to match Spring Cloud naming conventions
 		EurekaURL:              getEnv("EUREKA_URL", "http://localhost:8761/eureka"),
 		HostName:               getEnv("HOST_NAME", hostname),
 		IPAddress:              getEnv("SERVICE_IP", getOutboundIP()),
-		AppName:                getEnv("APP_NAME", "PAYMENT-SERVICE"),
+		AppName:                getEnv("APP_NAME", "PAYMENT-SERVICE"), // This should match the Order Service expectation
 		EurekaPreferIpAddress:  getEnvAsBool("EUREKA_PREFER_IP_ADDRESS", true),
 		EurekaInstanceHostname: getEnv("EUREKA_INSTANCE_HOSTNAME", "localhost"),
 
@@ -82,7 +82,7 @@ func LoadConfig() *Config {
 		KafkaInvoiceTopic: getEnv("KAFKA_INVOICE_TOPIC", "invoices"),
 	}
 
-	// Set Eureka instance ID
+	// Set Eureka instance ID to match Spring Boot pattern
 	config.EurekaInstanceId = getEnv("EUREKA_INSTANCE_ID",
 		fmt.Sprintf("%s:%s", strings.ToLower(config.AppName), config.ServerPort))
 
@@ -110,6 +110,15 @@ func LoadConfig() *Config {
 			config.mergeServerConfig(serverConfig)
 		}
 	}
+
+	// Log final configuration for debugging
+	log.Printf("Payment Service Configuration:")
+	log.Printf("  Server Port: %s", config.ServerPort)
+	log.Printf("  App Name: %s", config.AppName)
+	log.Printf("  Eureka URL: %s", config.EurekaURL)
+	log.Printf("  Instance ID: %s", config.EurekaInstanceId)
+	log.Printf("  IP Address: %s", config.IPAddress)
+	log.Printf("  Hostname: %s", config.HostName)
 
 	return config
 }

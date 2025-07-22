@@ -12,16 +12,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProcessPaymentRequestDto {
-//    @NotNull(message = "Order ID is required")
-    private String orderId;
-//
-//    @NotNull(message = "Amount is required")
-//    @Positive(message = "Amount must be positive")
+    @NotNull(message = "Order ID is required")
+    private String orderId;  // Matches Go struct field name
+
+    @NotNull(message = "Amount is required")
+    @Positive(message = "Amount must be positive")
     private Double amount;
 
     @NotNull(message = "Payment method is required")
-    private String paymentMethod;
+    private String paymentMethod;  // Matches Go struct field name
 
     private String currency = "USD";
 }
-

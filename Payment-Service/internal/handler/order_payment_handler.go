@@ -15,27 +15,27 @@ import (
 
 // OrderPaymentRequest represents a payment request for an order
 type OrderPaymentRequest struct {
-	OrderID       string               `json:"order_id"`
+	OrderID       string               `json:"orderId"`
 	Amount        float64              `json:"amount"`
-	PaymentMethod models.PaymentMethod `json:"payment_method"`
+	PaymentMethod models.PaymentMethod `json:"paymentMethod"`
 	Currency      string               `json:"currency,omitempty"`
 }
 
 // OrderPaymentResponse represents the response for order payment
 type OrderPaymentResponse struct {
-	PaymentID     string               `json:"payment_id"`
-	OrderID       string               `json:"order_id"`
+	PaymentID     string               `json:"paymentId"`
+	OrderID       string               `json:"orderId"`
 	Amount        float64              `json:"amount"`
 	Status        models.PaymentStatus `json:"status"`
-	PaymentMethod models.PaymentMethod `json:"payment_method"`
-	TransactionID string               `json:"transaction_id,omitempty"`
+	PaymentMethod models.PaymentMethod `json:"paymentMethod"`
+	TransactionID string               `json:"transactionId,omitempty"`
 	CreatedAt     time.Time            `json:"created_at"`
 	Message       string               `json:"message,omitempty"`
 }
 
 // OrderRefundRequest represents a refund request for an order
 type OrderRefundRequest struct {
-	OrderID string  `json:"order_id"`
+	OrderID string  `json:"orderId"`
 	Amount  float64 `json:"amount"`
 	Reason  string  `json:"reason,omitempty"`
 }
