@@ -38,10 +38,12 @@ public class KafkaProducerConfig {
     public static final String TOPIC_ORDER_CANCELED = "order-canceled";
     public static final String TOPIC_ORDER_ITEM_ADDED = "order-item-added";
     public static final String TOPIC_ORDER_ITEM_UPDATED = "order-item-updated";
+    public static final String TOPIC_ORDER_COMPLETED = "order-completed";
 
     // External Topics to Listen
     public static final String TOPIC_PAYMENT_CONFIRMED = "payment-confirmed";
-    public static final String TOPIC_SHIPPING_UPDATE = "shipping-update";
+    public static final String TOPIC_SHIPPING_UPDATE = "shipping-update"; // Main topic for shipping updates
+    public static final String TOPIC_SHIPPING_STATUS_CHANGED = "shipping-status-changed"; // Legacy topic
     public static final String TOPIC_CART_CHECKED_OUT = "cart-checked-out";
     public static final String TOPIC_PRODUCT_PRICE_CHANGED = "product-price-changed";
     public static final String TOPIC_PRODUCT_STOCK_CHANGED = "product-stock-changed";
@@ -50,14 +52,9 @@ public class KafkaProducerConfig {
     public static final String TOPIC_ORDER_REQUEST = "order.request";
     public static final String TOPIC_ORDER_RESPONSE = "order.response";
     public static final String TOPIC_ORDER_ERROR = "order.error";
-
-
     public static final String TOPIC_ORDER_BATCH_REQUEST = "order.batch.request";
     public static final String TOPIC_ORDER_BATCH_RESPONSE = "order.batch.response";
     public static final String TOPIC_ORDER_BATCH_ERROR = "order.batch.error";
-
-
-    public static final String TOPIC_ORDER_COMPLETED = "order-completed";
 
     // Producer configuration
     @Bean
@@ -84,14 +81,13 @@ public class KafkaProducerConfig {
     public ConsumerFactory<String, Object> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId); // Use the correct group ID
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
         // Fix JsonDeserializer configuration
         props.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-        // Remove the specific default type or use a generic Object type
         props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Object.class);
 
         // Consumer reliability settings
@@ -120,7 +116,6 @@ public class KafkaProducerConfig {
         mapper.findAndRegisterModules(); // Register JavaTime module for LocalDateTime
         return mapper;
     }
-
 
     // Order Topic definitions
     @Bean
@@ -170,14 +165,65 @@ public class KafkaProducerConfig {
                 .replicas(1)
                 .build();
     }
+
     @Bean
-    public NewTopic OrderProductStockChanged() {
+    public NewTopic orderCompletedTopic() {
+        return TopicBuilder.name(TOPIC_ORDER_COMPLETED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    // External Topics (topics we listen to from other services)
+    @Bean
+    public NewTopic shippingUpdateTopic() {
+        return TopicBuilder.name(TOPIC_SHIPPING_UPDATE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic shippingStatusChangedTopic() {
+        return TopicBuilder.name(TOPIC_SHIPPING_STATUS_CHANGED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic paymentConfirmedTopic() {
+        return TopicBuilder.name(TOPIC_PAYMENT_CONFIRMED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic cartCheckedOutTopic() {
+        return TopicBuilder.name(TOPIC_CART_CHECKED_OUT)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic productPriceChangedTopic() {
+        return TopicBuilder.name(TOPIC_PRODUCT_PRICE_CHANGED)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic productStockChangedTopic() {
         return TopicBuilder.name(TOPIC_PRODUCT_STOCK_CHANGED)
                 .partitions(3)
                 .replicas(1)
                 .build();
     }
 
+    // Request/Response Topics
     @Bean
     public NewTopic orderRequestTopic() {
         return TopicBuilder.name(TOPIC_ORDER_REQUEST)
@@ -202,7 +248,6 @@ public class KafkaProducerConfig {
                 .build();
     }
 
-    // Add these bean definitions at the end of the configuration class
     @Bean
     public NewTopic orderBatchRequestTopic() {
         return TopicBuilder.name(TOPIC_ORDER_BATCH_REQUEST)
@@ -226,13 +271,4 @@ public class KafkaProducerConfig {
                 .replicas(1)
                 .build();
     }
-
-    @Bean
-    public NewTopic orderCompletedTopic() {
-        return TopicBuilder.name(TOPIC_ORDER_COMPLETED)
-                .partitions(3)
-                .replicas(1)
-                .build();
-    }
-
 }

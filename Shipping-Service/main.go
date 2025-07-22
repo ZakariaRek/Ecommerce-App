@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +20,7 @@ import (
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/config"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/database"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/events"
-	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/listeners"
+	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/models"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/repository"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/service"
 	"github.com/ZakariaRek/Ecommerce-App/Shipping-Service/internal/service/kafka"
@@ -84,8 +83,9 @@ func main() {
 		EventUpdated: getEnv("KAFKA_SHIPPING_UPDATED_TOPIC", "shipping-updated"),
 		EventChanged: getEnv("KAFKA_SHIPPING_STATUS_CHANGED_TOPIC", "shipping-status-changed"),
 		EventDeleted: getEnv("KAFKA_SHIPPING_DELETED_TOPIC", "shipping-deleted"),
+		// Add the shipping-update topic for order service communication
+		"order_update": getEnv("KAFKA_SHIPPING_ORDER_UPDATE_TOPIC", "shipping-update"),
 	}
-
 	trackingTopics := map[string]string{
 		EventCreated: getEnv("KAFKA_TRACKING_CREATED_TOPIC", "tracking-created"),
 		EventUpdated: getEnv("KAFKA_TRACKING_UPDATED_TOPIC", "tracking-updated"),
@@ -115,13 +115,216 @@ func main() {
 	log.Printf("Topics to consume: %s", strings.Join(consumerTopics, ", "))
 
 	// Initialize Kafka producer and services
+	// Add this to your main.go - Enhanced Kafka producer setup with better debugging
+
+	// Initialize Kafka producer and services
+	// Simple fix - Replace your producer configuration in main.go with this:
+
+	// Enhanced Kafka producer configuration for immediate delivery
+	log.Printf("🔧 Setting up enhanced Kafka producer configuration...")
 	producerConfig := sarama.NewConfig()
-	producerConfig.Producer.RequiredAcks = sarama.WaitForLocal
-	producerConfig.Producer.Compression = sarama.CompressionSnappy
+
+	// Reliability settings
+	producerConfig.Producer.RequiredAcks = sarama.WaitForAll // Wait for all replicas
+	producerConfig.Producer.Retry.Max = 3
+	producerConfig.Producer.Retry.Backoff = 100 * time.Millisecond
 	producerConfig.Producer.Return.Successes = true
 	producerConfig.Producer.Return.Errors = true
 
+	// CRITICAL: Force immediate sending - no batching
+	producerConfig.Producer.Flush.Frequency = 10 * time.Millisecond // Flush every 10ms
+	producerConfig.Producer.Flush.Messages = 1                      // Flush after every single message
+	producerConfig.Producer.Flush.Bytes = 1                         // Flush after 1 byte
+
+	// Compression (optional, can disable for debugging)
+	producerConfig.Producer.Compression = sarama.CompressionSnappy
+
+	// Timeouts
+	producerConfig.Net.DialTimeout = 10 * time.Second
+	producerConfig.Net.ReadTimeout = 10 * time.Second
+	producerConfig.Net.WriteTimeout = 10 * time.Second
+
+	// Metadata refresh
+	producerConfig.Metadata.Retry.Max = 3
+	producerConfig.Metadata.Retry.Backoff = 250 * time.Millisecond
+	producerConfig.Metadata.RefreshFrequency = 10 * time.Minute
+
+	log.Printf("🔧 Creating Kafka producer with IMMEDIATE FLUSH settings...")
 	producer, producerErr := sarama.NewAsyncProducer(brokers, producerConfig)
+	if producerErr != nil {
+		log.Printf("❌ Failed to create Kafka producer: %v", producerErr)
+		log.Println("Continuing without Kafka support...")
+	} else {
+		log.Printf("✅ Kafka producer created with immediate flush configuration")
+
+		// Simple monitoring
+		go func() {
+			log.Printf("🔄 Starting Kafka producer monitoring...")
+			for {
+				select {
+				case success := <-producer.Successes():
+					log.Printf("✅ KAFKA SUCCESS: Topic=%s, Partition=%d, Offset=%d, Key=%s",
+						success.Topic, success.Partition, success.Offset, string(success.Key.(sarama.StringEncoder)))
+
+				case err := <-producer.Errors():
+					log.Printf("❌ KAFKA ERROR: %v", err.Err)
+					if err.Msg != nil {
+						log.Printf("   Failed Topic: %s, Key: %s", err.Msg.Topic, string(err.Msg.Key.(sarama.StringEncoder)))
+					}
+				}
+			}
+		}()
+
+		// Test connectivity with a simple message
+		log.Printf("🧪 Sending test message...")
+		testMessage := &sarama.ProducerMessage{
+			Topic: "shipping-update",
+			Key:   sarama.StringEncoder("test-connectivity"),
+			Value: sarama.StringEncoder(`{"test": "producer-config", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`),
+		}
+		producer.Input() <- testMessage
+
+		// Wait a moment for the test message to process
+		time.Sleep(500 * time.Millisecond)
+		log.Printf("🧪 Test message sent - check logs above for SUCCESS/ERROR")
+
+		// Continue with your existing service setup...
+		shippingKafka := kafka.NewShippingKafkaService(producer, shippingTopics)
+		trackingKafka := kafka.NewTrackingKafkaService(producer, trackingTopics)
+		models.SetKafkaServices(shippingKafka, trackingKafka)
+		log.Printf("✅ Kafka services set with IMMEDIATE FLUSH configuration")
+	}
+
+	// Add version for compatibility
+	version, err := sarama.ParseKafkaVersion("2.6.0")
+	if err != nil {
+		log.Printf("⚠️ Error parsing Kafka version: %v", err)
+	} else {
+		producerConfig.Version = version
+	}
+
+	log.Printf("🔧 Creating Kafka producer with brokers: %v", brokers)
+
+	// Test Kafka connectivity first
+	log.Printf("🔍 Testing Kafka broker connectivity...")
+	client, err := sarama.NewClient(brokers, producerConfig)
+	if err != nil {
+		log.Printf("❌ Failed to connect to Kafka brokers: %v", err)
+		log.Printf("   Make sure Kafka is running on: %v", brokers)
+		log.Println("Continuing without Kafka support...")
+	} else {
+		log.Printf("✅ Successfully connected to Kafka brokers")
+
+		// List available topics for debugging
+		topics, err := client.Topics()
+		if err != nil {
+			log.Printf("⚠️ Could not list topics: %v", err)
+		} else {
+			log.Printf("📋 Available Kafka topics: %v", topics)
+
+			// Check if our required topics exist
+			requiredTopics := []string{"shipping-update", "shipping-status-changed", "shipping-updated"}
+			for _, requiredTopic := range requiredTopics {
+				found := false
+				for _, topic := range topics {
+					if topic == requiredTopic {
+						found = true
+						break
+					}
+				}
+				if found {
+					log.Printf("✅ Topic '%s' exists", requiredTopic)
+				} else {
+					log.Printf("❌ Topic '%s' does not exist - will be auto-created if enabled", requiredTopic)
+				}
+			}
+		}
+		client.Close()
+
+		// Now create the producer
+		producer, producerErr := sarama.NewAsyncProducer(brokers, producerConfig)
+		if producerErr != nil {
+			log.Printf("❌ Failed to create Kafka producer: %v", producerErr)
+			log.Println("Continuing without Kafka support...")
+		} else {
+			log.Printf("✅ Kafka producer created successfully")
+
+			// Enhanced monitoring with immediate feedback
+			go func() {
+				log.Printf("🔄 Starting enhanced Kafka producer monitoring...")
+				successCount := 0
+				errorCount := 0
+
+				for {
+					select {
+					case success := <-producer.Successes():
+						successCount++
+						log.Printf("✅ KAFKA SUCCESS #%d: Topic=%s, Partition=%d, Offset=%d, Key=%s",
+							successCount, success.Topic, success.Partition, success.Offset, string(success.Key.(sarama.StringEncoder)))
+
+					case err := <-producer.Errors():
+						errorCount++
+						log.Printf("❌ KAFKA ERROR #%d: %v", errorCount, err.Err)
+						if err.Msg != nil {
+							log.Printf("   Failed message - Topic: %s, Key: %s", err.Msg.Topic, string(err.Msg.Key.(sarama.StringEncoder)))
+							log.Printf("   Error details: %+v", err)
+						}
+					}
+				}
+			}()
+
+			// Create Kafka services
+			log.Printf("🔧 Creating Kafka services...")
+			log.Printf("   Shipping topics: %+v", shippingTopics)
+			log.Printf("   Tracking topics: %+v", trackingTopics)
+
+			shippingKafka := kafka.NewShippingKafkaService(producer, shippingTopics)
+			trackingKafka := kafka.NewTrackingKafkaService(producer, trackingTopics)
+
+			// Set the global Kafka services for GORM hooks
+			log.Printf("🔧 Setting Kafka services for GORM hooks...")
+			models.SetKafkaServices(shippingKafka, trackingKafka)
+			log.Printf("✅ Kafka services initialized and set for GORM hooks")
+
+			// Test message to verify everything works
+			log.Printf("🧪 Sending test message to verify Kafka connectivity...")
+			testMessage := &sarama.ProducerMessage{
+				Topic: "shipping-update",
+				Key:   sarama.StringEncoder("test-key"),
+				Value: sarama.StringEncoder(`{"test": "connectivity", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`),
+			}
+			producer.Input() <- testMessage
+			log.Printf("📤 Test message sent, check logs for success/error...")
+
+			// Create and start consumer if enabled
+			if enableConsumer {
+				log.Printf("🔧 Creating Kafka consumer...")
+				consumer, err := kafka.NewConsumer(brokers, consumerGroup, consumerTopics)
+				if err != nil {
+					log.Printf("❌ Failed to create Kafka consumer: %v", err)
+				} else {
+					log.Printf("✅ Kafka consumer created successfully")
+
+					// Register event handlers
+					consumer.RegisterShippingEventHandler(events.ShippingCreated, func(event *events.ShippingEvent) error {
+						log.Printf("🔄 Handling shipping created event: %s", event.ShippingID)
+						return nil
+					})
+
+					consumer.RegisterTrackingEventHandler(events.TrackingCreated, func(event *events.TrackingEvent) error {
+						log.Printf("🔄 Handling tracking created event: %s", event.TrackingID)
+						return nil
+					})
+
+					// Start the consumer in a separate goroutine
+					go consumer.Start()
+				}
+			} else {
+				log.Printf("⚠️ Kafka consumer is disabled")
+			}
+		}
+	}
+
 	if producerErr != nil {
 		log.Printf("Warning: Failed to create Kafka producer: %v", producerErr)
 		log.Println("Continuing without Kafka support...")
@@ -137,12 +340,9 @@ func main() {
 		shippingKafka := kafka.NewShippingKafkaService(producer, shippingTopics)
 		trackingKafka := kafka.NewTrackingKafkaService(producer, trackingTopics)
 
-		// Register GORM listeners for publishing events
-		shippingListener := listeners.NewShippingListener(shippingKafka)
-		shippingListener.RegisterCallbacks(db)
-
-		trackingListener := listeners.NewTrackingListener(trackingKafka)
-		trackingListener.RegisterCallbacks(db)
+		// Set the global Kafka services for GORM hooks
+		models.SetKafkaServices(shippingKafka, trackingKafka)
+		log.Println("✅ Kafka services initialized and set for GORM hooks")
 
 		// Create and start consumer if enabled
 		if enableConsumer {
@@ -186,15 +386,15 @@ func main() {
 	if useShippingOnly {
 		// Option 1: Shipping service only
 		httpRouter = shippingController.SetupRoutes()
-		log.Println("Running as Enhanced Shipping-only service")
+		log.Println("Running as Enhanced Shipping-only service with GORM hooks")
 	} else if useTrackingOnly {
 		// Option 2: Tracking service only
 		httpRouter = trackingController.SetupRoutes()
-		log.Println("Running as Enhanced Tracking-only service")
+		log.Println("Running as Enhanced Tracking-only service with GORM hooks")
 	} else {
 		// Option 3: Combined service (default)
 		httpRouter = setupCombinedRoutes(shippingController, trackingController)
-		log.Println("Running as Enhanced Combined Shipping-Tracking service")
+		log.Println("Running as Enhanced Combined Shipping-Tracking service with GORM hooks")
 	}
 
 	// Configure server
@@ -277,7 +477,8 @@ func setupCombinedRoutes(shippingController *controller.ShippingController, trac
 				"shipping": "UP",
 				"tracking": "UP",
 				"addresses": "UP",
-				"location_updates": "UP"
+				"location_updates": "UP",
+				"gorm_hooks": "UP"
 			}
 		}`))
 	}).Methods("GET")
@@ -288,9 +489,9 @@ func setupCombinedRoutes(shippingController *controller.ShippingController, trac
 		w.Write([]byte(`{
 			"service": "enhanced-shipping-tracking-service",
 			"version": "2.0.0",
-			"description": "Enhanced shipping and tracking service with GPS support, address management, and real-time location updates",
+			"description": "Enhanced shipping and tracking service with GPS support, address management, real-time location updates, and GORM hooks for Kafka events",
 			"modules": ["shipping", "tracking", "addresses", "location_updates"],
-			"features": ["gps_tracking", "real_time_location", "address_management", "enhanced_tracking"]
+			"features": ["gps_tracking", "real_time_location", "address_management", "enhanced_tracking", "gorm_hooks", "kafka_events"]
 		}`))
 	}).Methods("GET")
 
@@ -302,7 +503,7 @@ func logAvailableEndpoints(shippingOnly, trackingOnly bool) {
 	log.Println("Available endpoints:")
 
 	if shippingOnly {
-		log.Println("  📦 Enhanced Shipping API:")
+		log.Println("  📦 Enhanced Shipping API with GORM Hooks:")
 		log.Println("    POST   /api/shipping")
 		log.Println("    POST   /api/shipping/with-address")
 		log.Println("    GET    /api/shipping")
@@ -327,27 +528,18 @@ func logAvailableEndpoints(shippingOnly, trackingOnly bool) {
 		log.Println("    GET    /api/addresses/search")
 		log.Println("    GET    /api/addresses/default-origin")
 	} else if trackingOnly {
-		log.Println("  📍 Enhanced Tracking API:")
+		log.Println("  📍 Enhanced Tracking API with GORM Hooks:")
 		log.Println("    POST   /api/shipping/tracking")
-		log.Println("    POST   /api/shipping/tracking/with-gps")
 		log.Println("    GET    /api/shipping/tracking/{id}")
 		log.Println("    PUT    /api/shipping/tracking/{id}")
 		log.Println("    DELETE /api/shipping/tracking/{id}")
 		log.Println("    PATCH  /api/shipping/tracking/{id}/location")
-		log.Println("    PATCH  /api/shipping/tracking/{id}/location/gps")
+		log.Println("    GET    /api/shipping/tracking/shipping/{shipping_id}")
+		log.Println("    POST   /api/shipping/tracking/shipping/{shipping_id}")
+		log.Println("    GET    /api/shipping/tracking/shipping/{shipping_id}/latest")
 		log.Println("    GET    /api/shipping/tracking/{id}/details")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}/gps")
-		log.Println("    POST   /api/shipping/tracking/shipping/{id}")
-		log.Println("    POST   /api/shipping/tracking/shipping/{id}/gps")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}/latest")
-		log.Println("    GET    /api/shipping/tracking/device/{device_id}")
-		log.Println("    GET    /api/shipping/tracking/driver/{driver_id}")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/latest")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/history")
 	} else {
-		log.Println("  📦 Enhanced Shipping API:")
+		log.Println("  📦 Enhanced Shipping API with GORM Hooks:")
 		log.Println("    POST   /api/shipping")
 		log.Println("    POST   /api/shipping/with-address")
 		log.Println("    GET    /api/shipping")
@@ -371,32 +563,18 @@ func logAvailableEndpoints(shippingOnly, trackingOnly bool) {
 		log.Println("    DELETE /api/addresses/{id}")
 		log.Println("    GET    /api/addresses/search")
 		log.Println("    GET    /api/addresses/default-origin")
-		log.Println("  📍 Enhanced Tracking API:")
+		log.Println("  📍 Enhanced Tracking API with GORM Hooks:")
 		log.Println("    POST   /api/shipping/tracking")
-		log.Println("    POST   /api/shipping/tracking/with-gps")
 		log.Println("    GET    /api/shipping/tracking/{id}")
 		log.Println("    PUT    /api/shipping/tracking/{id}")
 		log.Println("    DELETE /api/shipping/tracking/{id}")
 		log.Println("    PATCH  /api/shipping/tracking/{id}/location")
-		log.Println("    PATCH  /api/shipping/tracking/{id}/location/gps")
+		log.Println("    GET    /api/shipping/tracking/shipping/{shipping_id}")
+		log.Println("    POST   /api/shipping/tracking/shipping/{shipping_id}")
+		log.Println("    GET    /api/shipping/tracking/shipping/{shipping_id}/latest")
 		log.Println("    GET    /api/shipping/tracking/{id}/details")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}/gps")
-		log.Println("    POST   /api/shipping/tracking/shipping/{id}")
-		log.Println("    POST   /api/shipping/tracking/shipping/{id}/gps")
-		log.Println("    GET    /api/shipping/tracking/shipping/{id}/latest")
-		log.Println("    GET    /api/shipping/tracking/device/{device_id}")
-		log.Println("    GET    /api/shipping/tracking/driver/{driver_id}")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/latest")
-		log.Println("    GET    /api/shipping/tracking/location-updates/{shipping_id}/history")
 	}
 
-	log.Println("  🏥 Health & Monitoring:")
-	log.Println("    GET    /health")
-	log.Println("    GET    /health/live")
-	log.Println("    GET    /health/ready")
-	log.Println("    GET    /info")
 }
 
 // Eureka functions remain the same...
@@ -492,16 +670,4 @@ func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config
 
 	log.Printf("Successfully deregistered instance: %s", cfg.EurekaInstanceId)
 	return nil
-}
-
-func getOutboundIP() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		log.Printf("Failed to get outbound IP: %v", err)
-		return "127.0.0.1"
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP.String()
 }

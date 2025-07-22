@@ -1,6 +1,8 @@
+// Shipping-Service/internal/models/shipping.go - Debug Version
 package models
 
 import (
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +23,26 @@ const (
 	StatusFailed         ShippingStatus = "FAILED"
 	StatusReturned       ShippingStatus = "RETURNED"
 )
+
+// Global variable to hold Kafka services (will be set during initialization)
+var (
+	GlobalShippingKafkaService KafkaShippingService
+	GlobalTrackingKafkaService KafkaTrackingService
+)
+
+// Interface for Kafka services to avoid circular dependencies
+type KafkaShippingService interface {
+	PublishShippingCreated(shipping *Shipping) error
+	PublishShippingUpdated(shipping *Shipping) error
+	PublishShippingStatusChanged(shipping *Shipping, oldStatus ShippingStatus) error
+	PublishShippingDeleted(shipping *Shipping) error
+}
+
+type KafkaTrackingService interface {
+	PublishTrackingCreated(tracking *ShipmentTracking) error
+	PublishTrackingUpdated(tracking *ShipmentTracking) error
+	PublishTrackingDeleted(tracking *ShipmentTracking) error
+}
 
 // IsValid checks if the status is a valid shipping status
 func (s ShippingStatus) IsValid() bool {
@@ -115,21 +137,110 @@ type Shipping struct {
 	ShippingAddress Address            `gorm:"foreignKey:ShippingAddressID" json:"shipping_address"`
 	OriginAddress   Address            `gorm:"foreignKey:OriginAddressID" json:"origin_address"`
 	TrackingHistory []ShipmentTracking `gorm:"foreignKey:ShippingID" json:"tracking_history,omitempty"`
+
+	// Field to store old status for comparison (not persisted to DB)
+	oldStatus ShippingStatus `gorm:"-"`
 }
 
-// BeforeCreate hook for Shipping to set UUID
+// BeforeCreate hook for Shipping
 func (s *Shipping) BeforeCreate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: BeforeCreate called for Shipping ID: %s", s.ID)
 	if s.ID == uuid.Nil {
 		s.ID = uuid.New()
+		log.Printf("🆔 Generated new UUID: %s", s.ID)
 	}
 	if s.Status == "" {
 		s.Status = StatusPending
+		log.Printf("📊 Set default status: %s", s.Status)
+	}
+	return nil
+}
+
+// BeforeUpdate hook for Shipping - captures old status
+func (s *Shipping) BeforeUpdate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: BeforeUpdate called for Shipping ID: %s", s.ID)
+
+	// Get the old record to compare status
+	var oldShipping Shipping
+	if err := tx.Where("id = ?", s.ID).First(&oldShipping).Error; err == nil {
+		s.oldStatus = oldShipping.Status
+		log.Printf("📊 Captured old status: %s -> new status: %s", s.oldStatus, s.Status)
+	} else {
+		log.Printf("⚠️ Could not fetch old shipping record: %v", err)
+	}
+	return nil
+}
+
+// AfterCreate hook for Shipping
+func (s *Shipping) AfterCreate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterCreate called for Shipping ID: %s", s.ID)
+
+	if GlobalShippingKafkaService == nil {
+		log.Printf("❌ GlobalShippingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	log.Printf("📤 Publishing shipping created event for ID: %s", s.ID)
+	if err := GlobalShippingKafkaService.PublishShippingCreated(s); err != nil {
+		log.Printf("❌ Failed to publish shipping created event: %v", err)
+		// Don't fail the transaction, just log the error
+	} else {
+		log.Printf("✅ Successfully published shipping created event")
+	}
+	return nil
+}
+
+// AfterUpdate hook for Shipping
+func (s *Shipping) AfterUpdate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterUpdate called for Shipping ID: %s", s.ID)
+
+	if GlobalShippingKafkaService == nil {
+		log.Printf("❌ GlobalShippingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	log.Printf("📤 Publishing shipping updated event for ID: %s", s.ID)
+	if err := GlobalShippingKafkaService.PublishShippingUpdated(s); err != nil {
+		log.Printf("❌ Failed to publish shipping updated event: %v", err)
+	} else {
+		log.Printf("✅ Successfully published shipping updated event")
+	}
+
+	// Check if status changed
+	if s.oldStatus != "" && s.oldStatus != s.Status {
+		log.Printf("📊 Status changed detected: %s -> %s", s.oldStatus, s.Status)
+		log.Printf("📤 Publishing shipping status changed event")
+		if err := GlobalShippingKafkaService.PublishShippingStatusChanged(s, s.oldStatus); err != nil {
+			log.Printf("❌ Failed to publish shipping status changed event: %v", err)
+		} else {
+			log.Printf("✅ Successfully published shipping status changed event")
+		}
+	} else {
+		log.Printf("📊 No status change detected (old: %s, new: %s)", s.oldStatus, s.Status)
+	}
+	return nil
+}
+
+// AfterDelete hook for Shipping
+func (s *Shipping) AfterDelete(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterDelete called for Shipping ID: %s", s.ID)
+
+	if GlobalShippingKafkaService == nil {
+		log.Printf("❌ GlobalShippingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	if err := GlobalShippingKafkaService.PublishShippingDeleted(s); err != nil {
+		log.Printf("❌ Failed to publish shipping deleted event: %v", err)
+	} else {
+		log.Printf("✅ Successfully published shipping deleted event")
 	}
 	return nil
 }
 
 // UpdateStatus updates the shipping status and related dates
 func (s *Shipping) UpdateStatus(status ShippingStatus) {
+	log.Printf("📊 UpdateStatus called: %s -> %s", s.Status, status)
 	now := time.Now()
 	s.Status = status
 	s.UpdatedAt = now
@@ -137,8 +248,10 @@ func (s *Shipping) UpdateStatus(status ShippingStatus) {
 	switch status {
 	case StatusShipped:
 		s.ShippedDate = &now
+		log.Printf("📅 Set shipped date: %v", now)
 	case StatusDelivered:
 		s.DeliveredDate = &now
+		log.Printf("📅 Set delivered date: %v", now)
 	}
 }
 
@@ -197,13 +310,65 @@ type ShipmentTracking struct {
 	Shipping  *Shipping `gorm:"foreignKey:ShippingID" json:"-"`
 }
 
-// BeforeCreate hook for ShipmentTracking to set UUID
+// BeforeCreate hook for ShipmentTracking
 func (st *ShipmentTracking) BeforeCreate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: BeforeCreate called for ShipmentTracking ID: %s", st.ID)
 	if st.ID == uuid.Nil {
 		st.ID = uuid.New()
 	}
 	if st.Timestamp.IsZero() {
 		st.Timestamp = time.Now()
+	}
+	return nil
+}
+
+// AfterCreate hook for ShipmentTracking
+func (st *ShipmentTracking) AfterCreate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterCreate called for ShipmentTracking ID: %s", st.ID)
+
+	if GlobalTrackingKafkaService == nil {
+		log.Printf("❌ GlobalTrackingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	if err := GlobalTrackingKafkaService.PublishTrackingCreated(st); err != nil {
+		log.Printf("❌ Failed to publish tracking created event: %v", err)
+	} else {
+		log.Printf("✅ Successfully published tracking created event")
+	}
+	return nil
+}
+
+// AfterUpdate hook for ShipmentTracking
+func (st *ShipmentTracking) AfterUpdate(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterUpdate called for ShipmentTracking ID: %s", st.ID)
+
+	if GlobalTrackingKafkaService == nil {
+		log.Printf("❌ GlobalTrackingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	if err := GlobalTrackingKafkaService.PublishTrackingUpdated(st); err != nil {
+		log.Printf("❌ Failed to publish tracking updated event: %v", err)
+	} else {
+		log.Printf("✅ Successfully published tracking updated event")
+	}
+	return nil
+}
+
+// AfterDelete hook for ShipmentTracking
+func (st *ShipmentTracking) AfterDelete(tx *gorm.DB) error {
+	log.Printf("🔄 GORM HOOK: AfterDelete called for ShipmentTracking ID: %s", st.ID)
+
+	if GlobalTrackingKafkaService == nil {
+		log.Printf("❌ GlobalTrackingKafkaService is nil! Cannot publish events.")
+		return nil
+	}
+
+	if err := GlobalTrackingKafkaService.PublishTrackingDeleted(st); err != nil {
+		log.Printf("❌ Failed to publish tracking deleted event: %v", err)
+	} else {
+		log.Printf("✅ Successfully published tracking deleted event")
 	}
 	return nil
 }
@@ -241,4 +406,23 @@ func (lu *LocationUpdate) BeforeCreate(tx *gorm.DB) error {
 		lu.Timestamp = time.Now()
 	}
 	return nil
+}
+
+// SetKafkaServices sets the global Kafka services
+func SetKafkaServices(shippingKafka KafkaShippingService, trackingKafka KafkaTrackingService) {
+	log.Printf("🔧 Setting Kafka services - Shipping: %v, Tracking: %v", shippingKafka != nil, trackingKafka != nil)
+	GlobalShippingKafkaService = shippingKafka
+	GlobalTrackingKafkaService = trackingKafka
+
+	if GlobalShippingKafkaService != nil {
+		log.Printf("✅ GlobalShippingKafkaService set successfully")
+	} else {
+		log.Printf("❌ GlobalShippingKafkaService is nil")
+	}
+
+	if GlobalTrackingKafkaService != nil {
+		log.Printf("✅ GlobalTrackingKafkaService set successfully")
+	} else {
+		log.Printf("❌ GlobalTrackingKafkaService is nil")
+	}
 }
