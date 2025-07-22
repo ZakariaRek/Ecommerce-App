@@ -340,6 +340,7 @@ public class OrderController {
 @Autowired
 private PaymentIntegrationService paymentIntegrationService;
 
+
     @PostMapping("/{orderId}/pay")
     public ResponseEntity<Map<String, Object>> processOrderPayment(
             @PathVariable UUID orderId,
@@ -351,35 +352,96 @@ private PaymentIntegrationService paymentIntegrationService;
             Order order = orderService.getOrderById(orderId);
 
             if (order.getStatus() != OrderStatus.PENDING) {
+                log.warn("💳 Order {} is not in PENDING status. Current status: {}", orderId, order.getStatus());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Order must be in PENDING status to process payment");
+                        "Order must be in PENDING status to process payment. Current status: " + order.getStatus());
             }
 
-            // Process payment through Payment Service
-            PaymentResponseDto paymentResponse = paymentIntegrationService.processOrderPayment(
-                    orderId,
-                    paymentRequest.getPaymentMethod(),
-                    order.getTotalAmount()
-            );
+            // Validate payment request
+            if (paymentRequest.getPaymentMethod() == null || paymentRequest.getPaymentMethod().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment method is required");
+            }
 
-            // Create response
+            if (order.getTotalAmount() == null || order.getTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order total amount must be greater than zero");
+            }
+
+            log.info("💳 Order details - ID: {}, Total: {}, Status: {}", orderId, order.getTotalAmount(), order.getStatus());
+
+            // Process payment through Payment Service
+            PaymentResponseDto paymentResponse;
+            try {
+                paymentResponse = paymentIntegrationService.processOrderPayment(
+                        orderId,
+                        paymentRequest.getPaymentMethod(),
+                        order.getTotalAmount()
+                );
+            } catch (RuntimeException e) {
+                log.error("💳 Payment processing failed for order {}: {}", orderId, e.getMessage());
+
+                // Create detailed error response
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("orderId", orderId);
+                errorResponse.put("orderStatus", order.getStatus());
+                errorResponse.put("success", false);
+                errorResponse.put("error", "Payment processing failed");
+                errorResponse.put("details", e.getMessage());
+                errorResponse.put("timestamp", System.currentTimeMillis());
+
+                // Provide specific error messages based on the type of error
+                if (e.getMessage().contains("404 Not Found")) {
+                    errorResponse.put("suggestion", "Payment Service endpoint not found. Please verify Payment Service is running and accessible.");
+                    return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
+                } else if (e.getMessage().contains("not accessible") || e.getMessage().contains("ConnectException")) {
+                    errorResponse.put("suggestion", "Payment Service is not accessible. Please check if Payment Service is running.");
+                    return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
+                } else {
+                    errorResponse.put("suggestion", "Payment processing encountered an error. Please try again later.");
+                    return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+            }
+
+            // Validate payment response
+            if (paymentResponse == null) {
+                log.error("💳 Payment Service returned null response for order {}", orderId);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Payment Service returned invalid response");
+            }
+
+            log.info("💳 Payment response received: {}", paymentResponse);
+
+            // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("orderId", orderId);
             response.put("orderStatus", order.getStatus());
             response.put("payment", paymentResponse);
-            response.put("message", "Payment processing initiated");
+            response.put("success", true);
+            response.put("message", "Payment processing initiated successfully");
+            response.put("timestamp", System.currentTimeMillis());
 
             return ResponseEntity.ok(response);
 
         } catch (EntityNotFoundException e) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+            log.error("💳 Order not found: {}", orderId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found: " + orderId);
+
+        } catch (ResponseStatusException e) {
+            // Re-throw ResponseStatusException as-is
+            throw e;
+
         } catch (Exception e) {
-            log.error("💳 Error processing payment for order {}: {}", orderId, e.getMessage());
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Payment processing failed: " + e.getMessage());
+            log.error("💳 Unexpected error processing payment for order {}: {}", orderId, e.getMessage(), e);
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("orderId", orderId);
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Unexpected error during payment processing");
+            errorResponse.put("details", e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
+
+            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
     /**
      * Get payment status for an order
      */

@@ -76,4 +76,5 @@ logging:
 # Payment Service Configuration
 payment:
   service:
-    url: http://localhost:8080
+    name: PAYMENT-SERVICE
+    url: http://localhost:8085
