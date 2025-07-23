@@ -1,4 +1,4 @@
-// Payment-Service/internal/service/order_payment_service.go
+// Payment-Service/internal/service/order_payment_service.go - ENHANCED WITH INVOICE GENERATION
 package service
 
 import (
@@ -18,21 +18,29 @@ type OrderPaymentService interface {
 	CapturePayment(paymentID uuid.UUID) error
 	RefundOrderPayment(orderID uuid.UUID, amount float64) (*models.Payment, error)
 	GetOrderPayments(orderID uuid.UUID) ([]*models.Payment, error)
+	GetPaymentInvoice(paymentID uuid.UUID) (*models.Invoice, error) // NEW: Get invoice for payment
+	GetOrderInvoices(orderID uuid.UUID) ([]*models.Invoice, error)  // NEW: Get all invoices for order
 }
 
 type orderPaymentService struct {
 	paymentRepo     repository.PaymentRepository
 	transactionRepo repository.PaymentTransactionRepository
+	invoiceRepo     repository.InvoiceRepository // NEW: Add invoice repository
+	invoiceService  InvoiceService               // NEW: Add invoice service
 }
 
 // NewOrderPaymentService creates a new order payment service
 func NewOrderPaymentService(
 	paymentRepo repository.PaymentRepository,
 	transactionRepo repository.PaymentTransactionRepository,
+	invoiceRepo repository.InvoiceRepository, // NEW: Add invoice repo parameter
+	invoiceService InvoiceService, // NEW: Add invoice service parameter
 ) OrderPaymentService {
 	return &orderPaymentService{
 		paymentRepo:     paymentRepo,
 		transactionRepo: transactionRepo,
+		invoiceRepo:     invoiceRepo,
+		invoiceService:  invoiceService,
 	}
 }
 
@@ -152,7 +160,48 @@ func (s *orderPaymentService) CapturePayment(paymentID uuid.UUID) error {
 
 	// Update payment status to completed
 	payment.Status = models.Completed
-	return s.paymentRepo.Update(payment)
+	if err := s.paymentRepo.Update(payment); err != nil {
+		return fmt.Errorf("failed to update payment status: %w", err)
+	}
+
+	// 🎯 NEW: Automatically generate invoice when payment is completed
+	if err := s.generateInvoiceForPayment(payment); err != nil {
+		// Log error but don't fail the payment - invoice generation is secondary
+		fmt.Printf("⚠️  Warning: Failed to generate invoice for payment %s: %v\n", payment.ID, err)
+	}
+
+	return nil
+}
+
+// 🎯 NEW: generateInvoiceForPayment automatically creates an invoice for a completed payment
+func (s *orderPaymentService) generateInvoiceForPayment(payment *models.Payment) error {
+	fmt.Printf("📋 INVOICE: Generating invoice for payment %s (Order: %s)\n", payment.ID, payment.OrderID)
+
+	// Check if invoice already exists for this payment
+	existingInvoice, err := s.invoiceRepo.FindByPaymentID(payment.ID)
+	if err == nil && existingInvoice != nil {
+		fmt.Printf("📋 INVOICE: Invoice already exists for payment %s: %s\n", payment.ID, existingInvoice.InvoiceNumber)
+		return nil // Invoice already exists
+	}
+
+	// Create new invoice
+	invoice := &models.Invoice{
+		ID:        uuid.New(),
+		OrderID:   payment.OrderID,
+		PaymentID: payment.ID,
+		IssueDate: time.Now(),
+		DueDate:   time.Now(), // For completed payments, due date is immediate
+	}
+
+	// Generate invoice using invoice service (this will set the invoice number)
+	if err := s.invoiceService.CreateInvoice(invoice); err != nil {
+		return fmt.Errorf("failed to create invoice: %w", err)
+	}
+
+	fmt.Printf("📋 INVOICE: Successfully generated invoice %s for payment %s (Order: %s)\n",
+		invoice.InvoiceNumber, payment.ID, payment.OrderID)
+
+	return nil
 }
 
 // RefundOrderPayment processes a refund for an order
@@ -248,12 +297,52 @@ func (s *orderPaymentService) RefundOrderPayment(
 	}
 	s.paymentRepo.Update(originalPayment)
 
+	// 🎯 NEW: Generate credit note/refund invoice for refunds
+	if err := s.generateRefundInvoiceForPayment(refundPayment, originalPayment); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to generate refund invoice for payment %s: %v\n", refundPayment.ID, err)
+	}
+
 	return refundPayment, nil
+}
+
+// 🎯 NEW: generateRefundInvoiceForPayment creates a credit note for refunds
+func (s *orderPaymentService) generateRefundInvoiceForPayment(refundPayment *models.Payment, originalPayment *models.Payment) error {
+	fmt.Printf("📋 REFUND INVOICE: Generating credit note for refund %s (Original: %s)\n",
+		refundPayment.ID, originalPayment.ID)
+
+	// Create refund invoice (credit note)
+	invoice := &models.Invoice{
+		ID:        uuid.New(),
+		OrderID:   refundPayment.OrderID,
+		PaymentID: refundPayment.ID,
+		IssueDate: time.Now(),
+		DueDate:   time.Now(),
+	}
+
+	// Create invoice with special handling for refunds
+	if err := s.invoiceService.CreateInvoice(invoice); err != nil {
+		return fmt.Errorf("failed to create refund invoice: %w", err)
+	}
+
+	fmt.Printf("📋 REFUND INVOICE: Successfully generated credit note %s for refund %s\n",
+		invoice.InvoiceNumber, refundPayment.ID)
+
+	return nil
 }
 
 // GetOrderPayments retrieves all payments for an order
 func (s *orderPaymentService) GetOrderPayments(orderID uuid.UUID) ([]*models.Payment, error) {
 	return s.paymentRepo.FindByOrderID(orderID)
+}
+
+// 🎯 NEW: GetPaymentInvoice retrieves the invoice for a specific payment
+func (s *orderPaymentService) GetPaymentInvoice(paymentID uuid.UUID) (*models.Invoice, error) {
+	return s.invoiceRepo.FindByPaymentID(paymentID)
+}
+
+// 🎯 NEW: GetOrderInvoices retrieves all invoices for an order
+func (s *orderPaymentService) GetOrderInvoices(orderID uuid.UUID) ([]*models.Invoice, error) {
+	return s.invoiceRepo.FindByOrderID(orderID)
 }
 
 // getPaymentGateway returns the payment gateway based on payment method
@@ -277,11 +366,6 @@ func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, op
 	// Simulate processing time
 	time.Sleep(100 * time.Millisecond)
 
-	// Simulate random failures (5% failure rate)
-	//if time.Now().UnixNano()%20 == 0 {
-	//	return fmt.Errorf("payment gateway error: %s operation failed for payment %s", operation, payment.ID)
-	//}
-
 	// Simulate specific validation failures
 	if payment.Amount <= 0 && operation != "refund" {
 		return errors.New("invalid payment amount")
@@ -295,9 +379,6 @@ func (s *orderPaymentService) simulatePaymentGateway(payment *models.Payment, op
 	switch payment.Method {
 	case models.CreditCard, models.DebitCard:
 		// Simulate card validation
-		//if operation == "authorize" && time.Now().UnixNano()%50 == 0 {
-		//	return errors.New("card declined")
-		//}
 	case models.BankTransfer:
 		// Simulate bank processing time
 		time.Sleep(200 * time.Millisecond)
