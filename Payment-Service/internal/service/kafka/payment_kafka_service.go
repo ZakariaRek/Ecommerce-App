@@ -1,3 +1,4 @@
+// Payment-Service/internal/service/kafka/payment_kafka_service.go - FIXED VERSION
 package kafka
 
 import (
@@ -14,7 +15,7 @@ type PaymentEventHandler func(event *events.PaymentEvent) error
 
 // PaymentKafkaService handles kafka operations for payments
 type PaymentKafkaService struct {
-	Producer sarama.AsyncProducer
+	producer sarama.AsyncProducer
 	topics   map[string]string
 	handlers map[events.PaymentEventType][]PaymentEventHandler
 }
@@ -22,7 +23,7 @@ type PaymentKafkaService struct {
 // NewPaymentKafkaService creates a new PaymentKafkaService
 func NewPaymentKafkaService(producer sarama.AsyncProducer, topics map[string]string) *PaymentKafkaService {
 	return &PaymentKafkaService{
-		Producer: producer,
+		producer: producer,
 		topics:   topics,
 		handlers: make(map[events.PaymentEventType][]PaymentEventHandler),
 	}
@@ -35,11 +36,53 @@ func (s *PaymentKafkaService) PublishEvent(event *events.PaymentEvent, topic str
 		return err
 	}
 
-	s.Producer.Input() <- &sarama.ProducerMessage{
+	s.producer.Input() <- &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(event.PaymentID.String()),
 		Value: sarama.ByteEncoder(data),
 	}
+
+	return nil
+}
+
+// FIXED: PublishOrderPaymentEvent - sends message directly in Order Service format
+func (s *PaymentKafkaService) PublishOrderPaymentEvent(topic string, eventData map[string]interface{}) error {
+	// Convert the event data to JSON
+	data, err := json.Marshal(eventData)
+	if err != nil {
+		log.Printf("💳 PAYMENT SERVICE: Failed to marshal event data: %v", err)
+		return err
+	}
+
+	// Extract order ID for the key
+	orderIDStr := ""
+	if orderId, ok := eventData["orderId"].(string); ok {
+		orderIDStr = orderId
+	}
+
+	// Send message to Kafka
+	message := &sarama.ProducerMessage{
+		Topic: topic,
+		Key:   sarama.StringEncoder(orderIDStr),
+		Value: sarama.ByteEncoder(data),
+	}
+
+	log.Printf("💳 PAYMENT SERVICE: Sending message to topic '%s' with key '%s'", topic, orderIDStr)
+	log.Printf("💳 PAYMENT SERVICE: Message content: %s", string(data))
+
+	s.producer.Input() <- message
+
+	// Wait for confirmation from producer success channel
+	go func() {
+		select {
+		case success := <-s.producer.Successes():
+			log.Printf("💳 PAYMENT SERVICE: Successfully sent event to topic '%s' for order %s",
+				success.Topic, orderIDStr)
+		case err := <-s.producer.Errors():
+			log.Printf("💳 PAYMENT SERVICE: Failed to send event to topic '%s': %v",
+				topic, err)
+		}
+	}()
 
 	return nil
 }
@@ -108,7 +151,4 @@ func (s *PaymentKafkaService) HandleEvent(event *events.PaymentEvent) {
 			log.Printf("Error handling payment event %s: %v", event.Type, err)
 		}
 	}
-}
-func (s *PaymentKafkaService) GetProducer() sarama.AsyncProducer {
-	return s.Producer // Corrected typo
 }

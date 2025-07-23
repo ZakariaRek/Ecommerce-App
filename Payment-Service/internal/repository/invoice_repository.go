@@ -1,3 +1,4 @@
+// Payment-Service/internal/repository/invoice_repository.go - ENHANCED VERSION
 package repository
 
 import (
@@ -12,7 +13,10 @@ type InvoiceRepository interface {
 	FindByID(id uuid.UUID) (*models.Invoice, error)
 	FindByOrderID(orderID uuid.UUID) ([]*models.Invoice, error)
 	FindByPaymentID(paymentID uuid.UUID) (*models.Invoice, error)
+	FindByInvoiceNumber(invoiceNumber string) (*models.Invoice, error)
 	Update(invoice *models.Invoice) error
+	Delete(id uuid.UUID) error
+	FindAll() ([]*models.Invoice, error)
 }
 
 // invoiceRepository implements InvoiceRepository
@@ -51,7 +55,26 @@ func (r *invoiceRepository) FindByPaymentID(paymentID uuid.UUID) (*models.Invoic
 	return &invoice, err
 }
 
+// FindByInvoiceNumber finds an invoice by invoice number
+func (r *invoiceRepository) FindByInvoiceNumber(invoiceNumber string) (*models.Invoice, error) {
+	var invoice models.Invoice
+	err := r.db.Where("invoice_number = ?", invoiceNumber).First(&invoice).Error
+	return &invoice, err
+}
+
 // Update updates an invoice
 func (r *invoiceRepository) Update(invoice *models.Invoice) error {
 	return r.db.Save(invoice).Error
+}
+
+// Delete deletes an invoice
+func (r *invoiceRepository) Delete(id uuid.UUID) error {
+	return r.db.Delete(&models.Invoice{}, id).Error
+}
+
+// FindAll returns all invoices
+func (r *invoiceRepository) FindAll() ([]*models.Invoice, error) {
+	var invoices []*models.Invoice
+	err := r.db.Find(&invoices).Error
+	return invoices, err
 }
