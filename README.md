@@ -46,6 +46,30 @@
 
 </div>
 
+## 🧩 Key Components
+
+- **Client Applications**: The gateway to our digital marketplace
+- **API Gateway**: Our intelligent traffic controller with advanced features (see below)
+- **Service Registry (Eureka)**: The compass that guides service discovery
+- **Configuration Server**: The central brain for distributed configuration
+- **Microservices Fleet**:
+    - 🧑‍💼 **User Service** - Managing customer identities and profiles (Spring Boot + MongoDB)
+    - 🛍️ **Product Service** - Our digital catalog (Spring Boot + PostgreSQL)
+    - 🛒 **Cart Service** - The virtual shopping cart (Go + MongoDB + Redis)
+    - 📋 **Order Service** - Order processing and history (Spring Boot + PostgreSQL)
+    - 💳 **Payment Service** - Secure transaction processing (Go + PostgreSQL)
+    - 🚚 **Shipping Service** - Delivery tracking and management (Go + PostgreSQL)
+    - 🎁 **Loyalty Service** - Rewards and customer retention (Spring Boot + PostgreSQL)
+    - 📱 **Notification Service** - Customer communications (Spring Boot + MongoDB)
+- **Kafka Message Bus**: The neural network enabling event-driven communication
+- **Centralized Logging Pipeline**: Real-time log aggregation and analysis (ELK + Kafka)
+- **Observability Stack**:
+    - **Zipkin**: Tracing requests through our service mesh
+    - **ELK Stack**: Illuminating our system through logs and analytics
+    - **Prometheus & Grafana**: Metrics collection and visualization
+- **SonarQube**: Our quality guardian, ensuring code excellence
+
+
 ## 🏗️ Detailed Architecture Overview
 
 Our platform implements a sophisticated cloud-native microservices architecture with advanced patterns including Backend for Frontend (BFF), event-driven communication, and comprehensive resilience mechanisms:
@@ -432,77 +456,6 @@ Our Kibana setup provides comprehensive observability dashboards:
 - **Response Time Trends**: Performance metrics and SLA tracking
 - **Error Rate Monitoring**: Service-specific error tracking
 
-#### 🚨 **Error Analysis Dashboard**
-- **Error Distribution**: By service, time, and severity
-- **Stack Trace Analysis**: Detailed error investigation
-- **Error Correlation**: Related errors across services
-- **Alert Management**: Automatic error notifications
-
-#### 🔍 **Business Intelligence Dashboard**
-- **User Journey Tracking**: Cross-service user behavior
-- **Transaction Flow**: Order processing pipeline monitoring
-- **Payment Success Rates**: Financial transaction analytics
-- **Customer Service Metrics**: Support and satisfaction KPIs
-
-#### ⚡ **Performance Monitoring Dashboard**
-- **Service Response Times**: 95th percentile tracking
-- **Database Query Performance**: Slow query identification
-- **Cache Hit Rates**: Redis performance optimization
-- **Resource Utilization**: CPU, memory, and network metrics
-
-### 🔧 **Configuration Examples**
-
-#### **Microservice Logback Configuration**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<configuration>
-    <springProperty scope="context" name="application.name" source="spring.application.name"/>
-    
-    <!-- Console Appender -->
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [${application.name}] %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <!-- Kafka Appender for ELK Stack -->
-    <appender name="KAFKA" class="com.github.danielwegener.logback.kafka.KafkaAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <includeContext>true</includeContext>
-            <includeMdc>true</includeMdc>
-            <includeStackTrace>true</includeStackTrace>
-            <customFields>{"service_name":"${application.name}","environment":"production"}</customFields>
-            <fieldNames>
-                <timestamp>@timestamp</timestamp>
-                <version>[ignore]</version>
-                <levelValue>[ignore]</levelValue>
-            </fieldNames>
-        </encoder>
-        
-        <topic>app-logs</topic>
-        <keyingStrategy class="com.github.danielwegener.logback.kafka.keying.NoKeyKeyingStrategy" />
-        <deliveryStrategy class="com.github.danielwegener.logback.kafka.delivery.AsynchronousDeliveryStrategy" />
-        
-        <producerConfig>bootstrap.servers=kafka:29092</producerConfig>
-        <producerConfig>acks=1</producerConfig>
-        <producerConfig>retries=3</producerConfig>
-        <producerConfig>linger.ms=1000</producerConfig>
-    </appender>
-
-    <!-- Profile-based Configuration -->
-    <springProfile name="kafka">
-        <root level="INFO">
-            <appender-ref ref="CONSOLE" />
-            <appender-ref ref="KAFKA" />
-        </root>
-        
-        <logger name="com.Ecommerce" level="DEBUG" additivity="false">
-            <appender-ref ref="CONSOLE" />
-            <appender-ref ref="KAFKA" />
-        </logger>
-    </springProfile>
-</configuration>
-```
 
 #### **Logstash Processing Configuration**
 ```ruby
@@ -550,31 +503,6 @@ output {
 }
 ```
 
-### 🎯 **Key Benefits**
-
-#### **🚀 Performance Benefits**
-- **Asynchronous Processing**: Zero impact on API response times
-- **High Throughput**: Kafka handles 100K+ logs/second
-- **Efficient Indexing**: Daily Elasticsearch indices for optimal performance
-- **Real-time Search**: Sub-second query response times
-
-#### **🔍 Operational Benefits**
-- **Centralized Visibility**: All services in one unified view
-- **Correlation Tracking**: Follow requests across service boundaries
-- **Advanced Search**: Full-text search across all log messages
-- **Custom Dashboards**: Business-specific monitoring views
-
-#### **🛡️ Reliability Benefits**
-- **Fault Tolerance**: Pipeline continues even if components fail
-- **Data Persistence**: Long-term log storage and historical analysis
-- **Automatic Recovery**: Self-healing log processing pipeline
-- **Scalable Architecture**: Horizontal scaling for increased load
-
-#### **📊 Business Benefits**
-- **Faster Issue Resolution**: Comprehensive debugging capabilities
-- **Proactive Monitoring**: Early problem detection and alerts
-- **Performance Optimization**: Data-driven optimization decisions
-- **Compliance**: Audit trail and regulatory compliance support
 
 ### 🌐 **Monitoring & Management Endpoints**
 
@@ -587,28 +515,6 @@ Access comprehensive logging pipeline management through these endpoints:
 
 ---
 
-## 🧩 Key Components
-
-- **Client Applications**: The gateway to our digital marketplace
-- **API Gateway**: Our intelligent traffic controller with advanced features (see below)
-- **Service Registry (Eureka)**: The compass that guides service discovery
-- **Configuration Server**: The central brain for distributed configuration
-- **Microservices Fleet**:
-    - 🧑‍💼 **User Service** - Managing customer identities and profiles (Spring Boot + MongoDB)
-    - 🛍️ **Product Service** - Our digital catalog (Spring Boot + PostgreSQL)
-    - 🛒 **Cart Service** - The virtual shopping cart (Go + MongoDB + Redis)
-    - 📋 **Order Service** - Order processing and history (Spring Boot + PostgreSQL)
-    - 💳 **Payment Service** - Secure transaction processing (Go + PostgreSQL)
-    - 🚚 **Shipping Service** - Delivery tracking and management (Go + PostgreSQL)
-    - 🎁 **Loyalty Service** - Rewards and customer retention (Spring Boot + PostgreSQL)
-    - 📱 **Notification Service** - Customer communications (Spring Boot + MongoDB)
-- **Kafka Message Bus**: The neural network enabling event-driven communication
-- **Centralized Logging Pipeline**: Real-time log aggregation and analysis (ELK + Kafka)
-- **Observability Stack**:
-    - **Zipkin**: Tracing requests through our service mesh
-    - **ELK Stack**: Illuminating our system through logs and analytics
-    - **Prometheus & Grafana**: Metrics collection and visualization
-- **SonarQube**: Our quality guardian, ensuring code excellence
 
 ## 🌐 Service Communication Matrix
 
