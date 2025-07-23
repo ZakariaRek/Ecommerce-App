@@ -36,32 +36,35 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// 🎯 FIXED: Initialize repositories - ADD INVOICE REPOSITORY
+	// Initialize repositories
 	paymentRepo := repository.NewPaymentRepository(db)
 	txRepo := repository.NewPaymentTransactionRepository(db)
-	invoiceRepo := repository.NewInvoiceRepository(db) // NEW: Add invoice repository
+	invoiceRepo := repository.NewInvoiceRepository(db)
 
-	// 🎯 FIXED: Initialize services - ADD INVOICE SERVICE
-	paymentService := service.NewPaymentService(paymentRepo, txRepo)
-	invoiceService := service.NewInvoiceService(invoiceRepo) // FIXED: Correct parameters
+	// 🎯 FIXED: Initialize services with correct parameters
+	// Fix: Pass both invoiceRepo and paymentRepo to invoice service
+	invoiceService := service.NewInvoiceService(invoiceRepo, paymentRepo)
+	// Use enhanced payment service with auto-invoice generation
+	paymentService := service.NewEnhancedPaymentService(paymentRepo, txRepo, invoiceService)
 
-	// 🎯 FIXED: Initialize enhanced order payment service with invoice support
-	orderPaymentService := service.NewOrderPaymentService(
-		paymentRepo,
-		txRepo,
-		invoiceRepo,    // NEW: Pass invoice repository
-		invoiceService, // NEW: Pass invoice service
-	)
+	// Initialize enhanced order payment service with invoice support
+	//orderPaymentService := service.NewOrderPaymentService(
+	//	paymentRepo,
+	//	txRepo,
+	//	invoiceRepo,
+	//	invoiceService,
+	//)
+	orderPaymentService := service.NewOrderPaymentService(paymentRepo, txRepo, invoiceRepo, invoiceService)
 
-	// 🎯 FIXED: Initialize Kafka with proper setup
+	// Setup Kafka
 	paymentKafka, producer := setupKafka(cfg)
 
-	// Register GORM listeners for publishing events (only if Kafka is available)
+	// Register GORM listeners for publishing events
 	if paymentKafka != nil {
 		paymentListener := listeners.NewPaymentListener(paymentKafka)
 		paymentListener.RegisterCallbacks(db)
 
-		// 🎯 FIXED: Register invoice listeners for invoice events - CORRECTED SYNTAX
+		// Register invoice listeners for invoice events
 		invoiceTopics := map[string]string{
 			"created": getEnv("KAFKA_INVOICE_CREATED_TOPIC", "invoice-created"),
 			"updated": getEnv("KAFKA_INVOICE_UPDATED_TOPIC", "invoice-updated"),
@@ -79,11 +82,11 @@ func main() {
 		log.Printf("💳 PAYMENT SERVICE: GORM listeners registered for payment events")
 	}
 
-	// 🎯 FIXED: Initialize handlers with invoice service
+	// Initialize handlers
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	orderPaymentHandler := handler.NewOrderPaymentHandler(
 		orderPaymentService,
-		invoiceService, // NEW: Pass invoice service to handler
+		invoiceService,
 		paymentKafka,
 	)
 
@@ -96,7 +99,7 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 
-	// Add CORS middleware for cross-origin requests
+	// Add CORS middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -114,53 +117,59 @@ func main() {
 
 	// Routes
 	r.Route("/api", func(r chi.Router) {
-		// Regular payment routes
+		// 🎯 FIXED: Regular payment routes use /payments prefix
 		paymentHandler.RegisterRoutes(r)
 
-		// 🎯 UPDATED: Enhanced order payment routes with invoice support
+		// Order-specific payment routes use /orders prefix
 		orderPaymentHandler.RegisterRoutes(r)
 	})
 
-	// Add a test endpoint to verify the service is running
+	// Test endpoint
 	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"Payment Service with Invoice Support is running","port":"` + cfg.ServerPort + `"}`))
+		w.Write([]byte(`{"message":"Payment Service with Auto-Invoice Generation","port":"` + cfg.ServerPort + `"}`))
 	})
 
-	// 🎯 UPDATED: Health check with invoice information
+	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		response := fmt.Sprintf(`{
 			"status":"UP",
 			"service":"payment-service",
-			"features":["payments","invoices","kafka"],
+			"features":["payments","auto-invoices","kafka"],
 			"port":"%s",
 			"timestamp":"%s",
-			"routes":[
-				"POST /api/orders/{orderID}/payments",
-				"GET /api/orders/{orderID}/payments", 
-				"POST /api/orders/{orderID}/refund",
-				"GET /api/orders/{orderID}/payments/status",
-				"GET /api/orders/{orderID}/invoices",
-				"GET /api/orders/{orderID}/invoices/{invoiceID}",
-				"GET /api/orders/{orderID}/invoices/{invoiceID}/pdf",
-				"POST /api/orders/{orderID}/invoices/{invoiceID}/email",
-				"GET /api/payments/{paymentID}/invoice"
-			]
+			"endpoints":{
+				"payments":[
+					"POST /api/payments",
+					"GET /api/payments/{id}",
+					"PUT /api/payments/{id}",
+					"DELETE /api/payments/{id}",
+					"GET /api/payments",
+					"GET /api/payments/order/{orderID}",
+					"POST /api/payments/{id}/process",
+					"POST /api/payments/{id}/refund",
+					"GET /api/payments/{id}/status"
+				],
+				"order_payments":[
+					"POST /api/orders/{orderID}/payments",
+					"GET /api/orders/{orderID}/payments",
+					"POST /api/orders/{orderID}/refund",
+					"GET /api/orders/{orderID}/payments/status"
+				],
+				"invoices":[
+					"GET /api/orders/{orderID}/invoices",
+					"GET /api/orders/{orderID}/invoices/{invoiceID}",
+					"GET /api/orders/{orderID}/invoices/{invoiceID}/pdf",
+					"POST /api/orders/{orderID}/invoices/{invoiceID}/email",
+					"GET /api/payments/{paymentID}/invoice"
+				]
+			}
 		}`, cfg.ServerPort, time.Now().Format(time.RFC3339))
 		w.Write([]byte(response))
 	})
-
-	// Log all registered routes for debugging
-	walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-		log.Printf("📍 Route registered: %s %s", method, route)
-		return nil
-	}
-	if err := chi.Walk(r, walkFunc); err != nil {
-		log.Printf("Error walking routes: %v", err)
-	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -168,7 +177,7 @@ func main() {
 		Handler: r,
 	}
 
-	// Register with Eureka server
+	// Register with Eureka
 	eurekaClient, eurekaErr := connectToEureka(cfg)
 	if eurekaErr != nil {
 		log.Printf("Warning: Failed to connect to Eureka: %v", eurekaErr)
@@ -178,24 +187,26 @@ func main() {
 		go startHeartbeat(eurekaClient, cfg)
 	}
 
-	// Start the server in a goroutine
+	// Start the server
 	go func() {
-		fmt.Printf("🚀 Payment Service with Invoice Support starting on port %s...\n", cfg.ServerPort)
+		fmt.Printf("🚀 Payment Service with Auto-Invoice Generation starting on port %s...\n", cfg.ServerPort)
 		fmt.Printf("📋 Service available at: http://localhost:%s\n", cfg.ServerPort)
 		fmt.Printf("🏥 Health check: http://localhost:%s/health\n", cfg.ServerPort)
 		fmt.Printf("🧪 Test endpoint: http://localhost:%s/test\n", cfg.ServerPort)
+
+		log.Printf("💳 Payment endpoints:")
+		log.Printf("  POST http://localhost:%s/api/payments - Create payment", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/payments/{id} - Get payment", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/payments/{id}/process - Process payment", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/payments/{id}/refund - Refund payment", cfg.ServerPort)
+
 		log.Printf("📋 Order Payment endpoints:")
-		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/payments - Process order payment", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/payments - Process order payment (Auto-generates invoice)", cfg.ServerPort)
 		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/payments - Get order payments", cfg.ServerPort)
 		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/refund - Refund order payment", cfg.ServerPort)
-		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/payments/status - Get order payment status", cfg.ServerPort)
 
-		// 🎯 NEW: Log invoice endpoints
 		log.Printf("📋 Invoice endpoints:")
 		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/invoices - Get order invoices", cfg.ServerPort)
-		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/invoices/{invoiceID} - Get specific invoice", cfg.ServerPort)
-		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/invoices/{invoiceID}/pdf - Download invoice PDF", cfg.ServerPort)
-		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/invoices/{invoiceID}/email - Email invoice", cfg.ServerPort)
 		log.Printf("  GET  http://localhost:%s/api/payments/{paymentID}/invoice - Get payment invoice", cfg.ServerPort)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -203,12 +214,12 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shut down the server
+	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	// Deregister from Eureka before shutting down
+	// Graceful shutdown
 	if eurekaClient != nil {
 		if err := deregisterFromEureka(eurekaClient, cfg); err != nil {
 			log.Printf("Warning: Failed to deregister from Eureka: %v", err)
@@ -219,16 +230,13 @@ func main() {
 
 	fmt.Println("🛑 Shutting down server...")
 
-	// Create a deadline for server shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Perform graceful shutdown
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server shutdown failed: %v", err)
 	}
 
-	// 🎯 FIXED: Proper cleanup
 	if producer != nil {
 		log.Printf("💳 PAYMENT SERVICE: Closing Kafka producer...")
 		if err := producer.Close(); err != nil {
@@ -241,15 +249,13 @@ func main() {
 	fmt.Println("✅ Server stopped")
 }
 
-// 🎯 FIXED: setupKafka function with proper error handling
+// Rest of the functions remain the same...
 func setupKafka(cfg *config.Config) (*kafka.PaymentKafkaService, sarama.AsyncProducer) {
-	// Initialize Kafka
 	brokersStr := getEnv("KAFKA_BROKERS", "localhost:9092")
 	brokers := strings.Split(brokersStr, ",")
 
 	log.Printf("💳 PAYMENT SERVICE: Connecting to Kafka brokers: %v", brokers)
 
-	// Create topic maps for each entity type
 	paymentTopics := map[string]string{
 		"created": getEnv("KAFKA_PAYMENT_CREATED_TOPIC", "payment-created"),
 		"updated": getEnv("KAFKA_PAYMENT_UPDATED_TOPIC", "payment-updated"),
@@ -262,17 +268,14 @@ func setupKafka(cfg *config.Config) (*kafka.PaymentKafkaService, sarama.AsyncPro
 		log.Printf("  %s: %s", event, topic)
 	}
 
-	// FIXED: Enhanced Kafka producer configuration
 	producerConfig := sarama.NewConfig()
-	producerConfig.Producer.RequiredAcks = sarama.WaitForAll // Wait for all replicas
-	producerConfig.Producer.Retry.Max = 3                    // Retry up to 3 times
-	producerConfig.Producer.Return.Successes = true          // Return successes
-	producerConfig.Producer.Return.Errors = true             // Return errors
+	producerConfig.Producer.RequiredAcks = sarama.WaitForAll
+	producerConfig.Producer.Retry.Max = 3
+	producerConfig.Producer.Return.Successes = true
+	producerConfig.Producer.Return.Errors = true
 	producerConfig.Producer.Compression = sarama.CompressionSnappy
-	producerConfig.Producer.Flush.Frequency = 500 * time.Millisecond // Flush every 500ms
-	producerConfig.Producer.Flush.Messages = 1                       // Flush immediately for real-time updates
-
-	// Add idempotent producer settings for better reliability
+	producerConfig.Producer.Flush.Frequency = 500 * time.Millisecond
+	producerConfig.Producer.Flush.Messages = 1
 	producerConfig.Producer.Idempotent = true
 	producerConfig.Net.MaxOpenRequests = 1
 
@@ -289,7 +292,6 @@ func setupKafka(cfg *config.Config) (*kafka.PaymentKafkaService, sarama.AsyncPro
 
 	log.Printf("💳 PAYMENT SERVICE: Kafka producer created successfully")
 
-	// FIXED: Enhanced error and success monitoring
 	go func() {
 		for {
 			select {
@@ -306,27 +308,16 @@ func setupKafka(cfg *config.Config) (*kafka.PaymentKafkaService, sarama.AsyncPro
 		}
 	}()
 
-	// Create Kafka services
 	paymentKafka = kafka.NewPaymentKafkaService(producer, paymentTopics)
-
 	log.Printf("💳 PAYMENT SERVICE: Kafka services initialized successfully")
 	return paymentKafka, producer
 }
 
-// Helper functions
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
 	return defaultValue
-}
-
-func getEnvAsBool(key string, defaultValue bool) bool {
-	strValue := getEnv(key, "")
-	if strValue == "" {
-		return defaultValue
-	}
-	return strValue == "true" || strValue == "1" || strValue == "yes"
 }
 
 func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
@@ -374,7 +365,6 @@ func connectToEureka(cfg *config.Config) (*fargo.EurekaConnection, error) {
 	log.Printf("  Hostname: %s", instanceHostName)
 	log.Printf("  IP Address: %s", instanceIPAddr)
 	log.Printf("  Port: %d", portInt)
-	log.Printf("  Prefer IP Address: %t", cfg.EurekaPreferIpAddress)
 
 	return &eurekaConn, nil
 }

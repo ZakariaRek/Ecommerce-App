@@ -1,4 +1,4 @@
-// Payment-Service/internal/service/order_payment_service.go - ENHANCED WITH INVOICE GENERATION
+// Payment-Service/internal/service/order_payment_service.go - FIXED VERSION
 package service
 
 import (
@@ -26,7 +26,7 @@ type orderPaymentService struct {
 	paymentRepo     repository.PaymentRepository
 	transactionRepo repository.PaymentTransactionRepository
 	invoiceRepo     repository.InvoiceRepository // NEW: Add invoice repository
-	invoiceService  InvoiceService               // NEW: Add invoice service
+	invoiceService  InvoiceService               // 🎯 FIXED: Use interface instead of concrete type
 }
 
 // NewOrderPaymentService creates a new order payment service
@@ -34,7 +34,7 @@ func NewOrderPaymentService(
 	paymentRepo repository.PaymentRepository,
 	transactionRepo repository.PaymentTransactionRepository,
 	invoiceRepo repository.InvoiceRepository, // NEW: Add invoice repo parameter
-	invoiceService InvoiceService, // NEW: Add invoice service parameter
+	invoiceService InvoiceService, // 🎯 FIXED: Use interface instead of concrete type
 ) OrderPaymentService {
 	return &orderPaymentService{
 		paymentRepo:     paymentRepo,
@@ -177,25 +177,10 @@ func (s *orderPaymentService) CapturePayment(paymentID uuid.UUID) error {
 func (s *orderPaymentService) generateInvoiceForPayment(payment *models.Payment) error {
 	fmt.Printf("📋 INVOICE: Generating invoice for payment %s (Order: %s)\n", payment.ID, payment.OrderID)
 
-	// Check if invoice already exists for this payment
-	existingInvoice, err := s.invoiceRepo.FindByPaymentID(payment.ID)
-	if err == nil && existingInvoice != nil {
-		fmt.Printf("📋 INVOICE: Invoice already exists for payment %s: %s\n", payment.ID, existingInvoice.InvoiceNumber)
-		return nil // Invoice already exists
-	}
-
-	// Create new invoice
-	invoice := &models.Invoice{
-		ID:        uuid.New(),
-		OrderID:   payment.OrderID,
-		PaymentID: payment.ID,
-		IssueDate: time.Now(),
-		DueDate:   time.Now(), // For completed payments, due date is immediate
-	}
-
-	// Generate invoice using invoice service (this will set the invoice number)
-	if err := s.invoiceService.CreateInvoice(invoice); err != nil {
-		return fmt.Errorf("failed to create invoice: %w", err)
+	// 🎯 FIXED: Use the AutoGenerateInvoiceForPayment method from the interface
+	invoice, err := s.invoiceService.AutoGenerateInvoiceForPayment(payment)
+	if err != nil {
+		return fmt.Errorf("failed to auto-generate invoice: %w", err)
 	}
 
 	fmt.Printf("📋 INVOICE: Successfully generated invoice %s for payment %s (Order: %s)\n",
@@ -310,18 +295,10 @@ func (s *orderPaymentService) generateRefundInvoiceForPayment(refundPayment *mod
 	fmt.Printf("📋 REFUND INVOICE: Generating credit note for refund %s (Original: %s)\n",
 		refundPayment.ID, originalPayment.ID)
 
-	// Create refund invoice (credit note)
-	invoice := &models.Invoice{
-		ID:        uuid.New(),
-		OrderID:   refundPayment.OrderID,
-		PaymentID: refundPayment.ID,
-		IssueDate: time.Now(),
-		DueDate:   time.Now(),
-	}
-
-	// Create invoice with special handling for refunds
-	if err := s.invoiceService.CreateInvoice(invoice); err != nil {
-		return fmt.Errorf("failed to create refund invoice: %w", err)
+	// 🎯 FIXED: Use the AutoGenerateInvoiceForPayment method which handles refunds properly
+	invoice, err := s.invoiceService.AutoGenerateInvoiceForPayment(refundPayment)
+	if err != nil {
+		return fmt.Errorf("failed to auto-generate refund invoice: %w", err)
 	}
 
 	fmt.Printf("📋 REFUND INVOICE: Successfully generated credit note %s for refund %s\n",
