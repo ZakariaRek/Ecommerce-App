@@ -8,6 +8,45 @@
 
 **NexusCommerce** isn't just another e-commerce platform—it's a resilient, scalable ecosystem where microservices dance in perfect harmony to deliver exceptional shopping experiences. Born from the vision of making online retail more responsive, reliable, and revolutionary, our architecture stands as a testament to modern software engineering principles.
 
+## 🛠️ Technology Stack
+
+<div align="center">
+
+### Core Technologies
+![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)
+![Spring Cloud](https://img.shields.io/badge/Spring_Cloud-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
+
+### Databases & Storage
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+
+### Message Streaming & Communication
+![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=for-the-badge&logo=apache-kafka&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
+
+### Observability & Monitoring
+![Elasticsearch](https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white)
+![Kibana](https://img.shields.io/badge/Kibana-005571?style=for-the-badge&logo=kibana&logoColor=white)
+![Logstash](https://img.shields.io/badge/Logstash-005571?style=for-the-badge&logo=logstash&logoColor=white)
+![Zipkin](https://img.shields.io/badge/Zipkin-1f425f?style=for-the-badge&logo=zipkin&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+
+### DevOps & Infrastructure
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Netflix Eureka](https://img.shields.io/badge/Netflix_Eureka-E50914?style=for-the-badge&logo=netflix&logoColor=white)
+![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)
+
+### Security & Authentication
+![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=json-web-tokens&logoColor=white)
+![OAuth2](https://img.shields.io/badge/OAuth2-3C4043?style=for-the-badge&logo=oauth&logoColor=white)
+
+</div>
+
 ## 🏗️ Detailed Architecture Overview
 
 Our platform implements a sophisticated cloud-native microservices architecture with advanced patterns including Backend for Frontend (BFF), event-driven communication, and comprehensive resilience mechanisms:
@@ -61,6 +100,7 @@ graph TB
             PRODUCT_TOPICS[product.batch.request<br/>product.batch.response<br/>product.error]
             ORDER_TOPICS[order.request<br/>order.response<br/>order.error<br/>order.ids.request<br/>order.ids.response]
             SAVED_TOPICS[saved4later.request<br/>saved4later.response<br/>saved4later.error]
+            LOG_TOPICS[app-logs<br/>system-metrics<br/>error-alerts]
         end
     end
 
@@ -111,10 +151,10 @@ graph TB
     subgraph "Observability & Monitoring"
         ZIPKIN[Zipkin<br/>:9411<br/>Distributed Tracing]
         
-        subgraph "ELK Stack"
-            ELASTICSEARCH[Elasticsearch<br/>Log Storage]
-            LOGSTASH[Logstash<br/>Log Processing]
-            KIBANA[Kibana<br/>:5601<br/>Log Visualization]
+        subgraph "ELK Stack + Kafka Integration"
+            ELASTICSEARCH[Elasticsearch<br/>:9200<br/>Log Storage & Search]
+            LOGSTASH[Logstash<br/>:5044<br/>Log Processing & Enrichment]
+            KIBANA[Kibana<br/>:5601<br/>Dashboards & Visualization]
         end
         
         subgraph "Metrics & Health"
@@ -168,6 +208,21 @@ graph TB
     ORDER_SVC --> ORDER_TOPICS
     USER_SVC --> KAFKA
 
+    %% Logging Pipeline
+    GATEWAY --> LOG_TOPICS
+    USER_SVC --> LOG_TOPICS
+    PRODUCT_SVC --> LOG_TOPICS
+    CART_SVC --> LOG_TOPICS
+    ORDER_SVC --> LOG_TOPICS
+    PAYMENT_SVC --> LOG_TOPICS
+    SHIPPING_SVC --> LOG_TOPICS
+    LOYALTY_SVC --> LOG_TOPICS
+    NOTIFICATION_SVC --> LOG_TOPICS
+    
+    LOG_TOPICS --> LOGSTASH
+    LOGSTASH --> ELASTICSEARCH
+    ELASTICSEARCH --> KIBANA
+
     %% Services to Databases
     USER_SVC --> USER_DB
     PRODUCT_SVC --> PRODUCT_DB
@@ -199,15 +254,6 @@ graph TB
     CART_SVC --> ZIPKIN
     ORDER_SVC --> ZIPKIN
 
-    %% Log Flow
-    GATEWAY --> LOGSTASH
-    USER_SVC --> LOGSTASH
-    PRODUCT_SVC --> LOGSTASH
-    CART_SVC --> LOGSTASH
-    ORDER_SVC --> LOGSTASH
-    LOGSTASH --> ELASTICSEARCH
-    ELASTICSEARCH --> KIBANA
-
     %% Health Monitoring
     GATEWAY --> ACTUATOR
     USER_SVC --> ACTUATOR
@@ -219,36 +265,353 @@ graph TB
     classDef dbStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef infraStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef bffStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef loggingStyle fill:#f1f8e9,stroke:#33691e,stroke-width:2px
 
     class GATEWAY,JWT,RATE,CIRCUIT,CORS gatewayStyle
     class CART_BFF,ORDER_BFF,SAVED_BFF,PRODUCT_BFF bffStyle
     class USER_SVC,PRODUCT_SVC,CART_SVC,ORDER_SVC,PAYMENT_SVC,SHIPPING_SVC,LOYALTY_SVC,NOTIFICATION_SVC serviceStyle
     class USER_DB,PRODUCT_DB,CART_DB,ORDER_DB,PAYMENT_DB,SHIPPING_DB,LOYALTY_DB,NOTIFICATION_DB,REDIS dbStyle
-    class EUREKA,CONFIG,KAFKA,ZIPKIN,ELASTICSEARCH,LOGSTASH,KIBANA,SONAR infraStyle
+    class EUREKA,CONFIG,KAFKA,ZIPKIN,PROMETHEUS,GRAFANA,SONAR infraStyle
+    class ELASTICSEARCH,LOGSTASH,KIBANA,LOG_TOPICS,ACTUATOR loggingStyle
 ```
 
-### 🔧 **Architecture Components Breakdown**
+## 📊 Centralized Logging Pipeline Architecture
 
-#### **Gateway Layer (Port 8099)**
-- **Spring Cloud Gateway** with WebFlux for reactive processing
-- **JWT Authentication Filter** with role-based access control
-- **Redis-backed Rate Limiting** with IP/User/API-key strategies  
-- **Resilience4j Circuit Breakers** for fault tolerance
-- **CORS Configuration** for cross-origin support
-- **BFF Services** for data aggregation and enrichment
+### 🔄 **Real-Time Logging Pipeline Overview**
 
-#### **Service Discovery & Configuration**
-- **Eureka Server** (:8761) for dynamic service registration
-- **Config Server** (:8888) for centralized configuration management
-- **Redis** for caching, rate limiting, and session storage
+Our platform implements a sophisticated **centralized logging pipeline** that provides real-time observability across all microservices. This enterprise-grade logging architecture enables comprehensive monitoring, debugging, and analytics for the entire NexusCommerce ecosystem.
 
-#### **Event-Driven Architecture**
-- **Apache Kafka** (:9092) as the central message bus
-- **Dedicated Topics** for each service domain
-- **Async Request-Response** patterns with correlation IDs
-- **Error Handling Topics** for failure scenarios
+```mermaid
+graph TB
+    subgraph "Microservices Layer"
+        subgraph "Spring Boot Services"
+            ORDER[Order Service<br/>🛒 Order Processing]
+            USER[User Service<br/>👤 Authentication]
+            PRODUCT[Product Service<br/>📦 Catalog Management]
+            LOYALTY[Loyalty Service<br/>🎁 Rewards Program]
+            NOTIFICATION[Notification Service<br/>📱 Messaging]
+        end
+        
+        subgraph "Go Services"
+            CART[Cart Service<br/>🛒 Shopping Cart]
+            PAYMENT[Payment Service<br/>💳 Transactions]
+            SHIPPING[Shipping Service<br/>🚚 Delivery]
+        end
+        
+        subgraph "API Gateway"
+            GATEWAY[Gateway Service<br/>🌐 Traffic Controller]
+        end
+    end
 
-### 🌐 **Service Communication Matrix**
+    subgraph "Log Processing Pipeline"
+        subgraph "Message Streaming"
+            KAFKA_LOGS[Apache Kafka<br/>📡 Topic: app-logs<br/>High-throughput streaming]
+        end
+        
+        subgraph "Log Processing Engine"
+            LOGSTASH[Logstash<br/>🔄 Log Parser & Enricher<br/>• JSON Processing<br/>• Field Mapping<br/>• Timestamp Parsing<br/>• Error Handling]
+        end
+        
+        subgraph "Search & Storage"
+            ELASTICSEARCH[Elasticsearch<br/>💾 Distributed Search Engine<br/>• Daily Indices<br/>• Full-text Search<br/>• Aggregations<br/>• High Performance]
+        end
+        
+        subgraph "Visualization & Analytics"
+            KIBANA[Kibana<br/>📈 Interactive Dashboards<br/>• Real-time Search<br/>• Service Monitoring<br/>• Error Analysis<br/>• Custom Dashboards]
+        end
+    end
+
+    subgraph "Log Configuration"
+        LOGBACK[Logback Configuration<br/>📝 JSON Structured Logging<br/>• Service Metadata<br/>• Correlation IDs<br/>• Error Stack Traces<br/>• Performance Metrics]
+    end
+
+    %% Logging Flow
+    ORDER --> LOGBACK
+    USER --> LOGBACK
+    PRODUCT --> LOGBACK
+    LOYALTY --> LOGBACK
+    NOTIFICATION --> LOGBACK
+    CART --> LOGBACK
+    PAYMENT --> LOGBACK
+    SHIPPING --> LOGBACK
+    GATEWAY --> LOGBACK
+
+    LOGBACK --> KAFKA_LOGS
+    KAFKA_LOGS --> LOGSTASH
+    LOGSTASH --> ELASTICSEARCH
+    ELASTICSEARCH --> KIBANA
+
+    %% Styling
+    classDef serviceStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef kafkaStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef elkStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef configStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+
+    class ORDER,USER,PRODUCT,LOYALTY,NOTIFICATION,CART,PAYMENT,SHIPPING,GATEWAY serviceStyle
+    class KAFKA_LOGS kafkaStyle
+    class LOGSTASH,ELASTICSEARCH,KIBANA elkStyle
+    class LOGBACK configStyle
+```
+
+### ⚡ **Real-Time Data Flow Example**
+
+This sequence diagram shows how a single API request generates structured logs that flow through our pipeline in real-time:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as API Gateway
+    participant OrderSvc as Order Service
+    participant Kafka as Kafka Bus<br/>(app-logs topic)
+    participant Logstash as Logstash<br/>(Log Processor)
+    participant Elasticsearch as Elasticsearch<br/>(Search Engine)
+    participant Kibana as Kibana<br/>(Dashboard)
+
+    Client->>+Gateway: POST /api/orders (Create Order)
+    Note over Gateway: 📝 Gateway generates logs:<br/>• Request received<br/>• JWT validation<br/>• Rate limit check
+    Gateway->>Kafka: Structured JSON logs
+    
+    Gateway->>+OrderSvc: Route to Order Service
+    Note over OrderSvc: 📝 Order Service logs:<br/>• Order validation<br/>• Database operations<br/>• Business logic events
+    OrderSvc->>Kafka: Structured JSON logs
+    
+    OrderSvc-->>-Gateway: Order Response
+    Note over Gateway: 📝 Gateway logs:<br/>• Response processing<br/>• Performance metrics<br/>• Success/Error status
+    Gateway->>Kafka: Final logs
+    Gateway-->>-Client: Order Created Response
+
+    Note over Kafka: 🚀 Real-time log streaming<br/>High-throughput message processing
+
+    Kafka->>+Logstash: Consume log messages
+    Note over Logstash: 🔄 Log processing:<br/>• Parse JSON structure<br/>• Enrich with metadata<br/>• Handle timestamps<br/>• Error validation
+    
+    Logstash->>+Elasticsearch: Index processed logs
+    Note over Elasticsearch: 💾 Storage & indexing:<br/>• Daily indices creation<br/>• Full-text search setup<br/>• Field mapping<br/>• Performance optimization
+
+    Elasticsearch->>+Kibana: Real-time data refresh
+    Note over Kibana: 📊 Visualization update:<br/>• Dashboard refresh<br/>• Search results<br/>• Metrics calculation<br/>• Alert processing
+
+    Note over Client,Kibana: ⚡ Total pipeline latency: < 2 seconds<br/>From API call to Kibana visualization
+```
+
+### 🛠️ **Log Structure & Schema**
+
+Our logging pipeline generates highly structured JSON logs with consistent schema across all services:
+
+```json
+{
+  "@timestamp": "2025-07-23T21:45:00.123Z",
+  "level": "INFO",
+  "service_name": "order-service",
+  "logger_name": "com.Ecommerce.Order_Service.Controllers.OrderController",
+  "message": "Order created successfully for user 12345",
+  "thread": "http-nio-8083-exec-1",
+  "correlation_id": "req-abc123",
+  "user_id": "12345",
+  "order_id": "ord-789",
+  "request_duration_ms": 245,
+  "environment": "production",
+  "version": "1.0.0"
+}
+```
+
+**Key Fields:**
+- **Timestamp**: ISO 8601 format for precise time tracking
+- **Service Name**: Identifies the source microservice
+- **Log Level**: ERROR, WARN, INFO, DEBUG for filtering
+- **Correlation ID**: Tracks requests across service boundaries
+- **Business Context**: User IDs, order IDs, transaction data
+- **Performance Metrics**: Response times, resource usage
+
+### 📈 **Kibana Dashboards & Visualizations**
+
+Our Kibana setup provides comprehensive observability dashboards:
+
+#### 🎯 **Service Overview Dashboard**
+- **Service Health Map**: Real-time status of all microservices
+- **Request Volume**: API calls per service over time
+- **Response Time Trends**: Performance metrics and SLA tracking
+- **Error Rate Monitoring**: Service-specific error tracking
+
+#### 🚨 **Error Analysis Dashboard**
+- **Error Distribution**: By service, time, and severity
+- **Stack Trace Analysis**: Detailed error investigation
+- **Error Correlation**: Related errors across services
+- **Alert Management**: Automatic error notifications
+
+#### 🔍 **Business Intelligence Dashboard**
+- **User Journey Tracking**: Cross-service user behavior
+- **Transaction Flow**: Order processing pipeline monitoring
+- **Payment Success Rates**: Financial transaction analytics
+- **Customer Service Metrics**: Support and satisfaction KPIs
+
+#### ⚡ **Performance Monitoring Dashboard**
+- **Service Response Times**: 95th percentile tracking
+- **Database Query Performance**: Slow query identification
+- **Cache Hit Rates**: Redis performance optimization
+- **Resource Utilization**: CPU, memory, and network metrics
+
+### 🔧 **Configuration Examples**
+
+#### **Microservice Logback Configuration**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="application.name" source="spring.application.name"/>
+    
+    <!-- Console Appender -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [${application.name}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Kafka Appender for ELK Stack -->
+    <appender name="KAFKA" class="com.github.danielwegener.logback.kafka.KafkaAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>true</includeContext>
+            <includeMdc>true</includeMdc>
+            <includeStackTrace>true</includeStackTrace>
+            <customFields>{"service_name":"${application.name}","environment":"production"}</customFields>
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+        </encoder>
+        
+        <topic>app-logs</topic>
+        <keyingStrategy class="com.github.danielwegener.logback.kafka.keying.NoKeyKeyingStrategy" />
+        <deliveryStrategy class="com.github.danielwegener.logback.kafka.delivery.AsynchronousDeliveryStrategy" />
+        
+        <producerConfig>bootstrap.servers=kafka:29092</producerConfig>
+        <producerConfig>acks=1</producerConfig>
+        <producerConfig>retries=3</producerConfig>
+        <producerConfig>linger.ms=1000</producerConfig>
+    </appender>
+
+    <!-- Profile-based Configuration -->
+    <springProfile name="kafka">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="KAFKA" />
+        </root>
+        
+        <logger name="com.Ecommerce" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="KAFKA" />
+        </logger>
+    </springProfile>
+</configuration>
+```
+
+#### **Logstash Processing Configuration**
+```ruby
+input {
+  kafka {
+    bootstrap_servers => "kafka:29092"
+    topics => ["app-logs"]
+    codec => "json"
+    group_id => "logstash-microservices-group"
+    auto_offset_reset => "earliest"
+  }
+}
+
+filter {
+  # Add processing metadata
+  mutate {
+    add_field => { "logstash_processed_at" => "%{+yyyy-MM-dd HH:mm:ss}" }
+  }
+
+  # Parse timestamp
+  date {
+    match => [ "@timestamp", "ISO8601" ]
+    target => "@timestamp"
+  }
+
+  # Ensure required fields
+  if ![service_name] {
+    mutate { add_field => { "service_name" => "unknown" } }
+  }
+  
+  if ![level] {
+    mutate { add_field => { "level" => "INFO" } }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["elasticsearch:9200"]
+    index => "microservices-logs-%{+yyyy.MM.dd}"
+    document_type => "_doc"
+  }
+  
+  # Debug output (remove in production)
+  stdout { codec => rubydebug }
+}
+```
+
+### 🎯 **Key Benefits**
+
+#### **🚀 Performance Benefits**
+- **Asynchronous Processing**: Zero impact on API response times
+- **High Throughput**: Kafka handles 100K+ logs/second
+- **Efficient Indexing**: Daily Elasticsearch indices for optimal performance
+- **Real-time Search**: Sub-second query response times
+
+#### **🔍 Operational Benefits**
+- **Centralized Visibility**: All services in one unified view
+- **Correlation Tracking**: Follow requests across service boundaries
+- **Advanced Search**: Full-text search across all log messages
+- **Custom Dashboards**: Business-specific monitoring views
+
+#### **🛡️ Reliability Benefits**
+- **Fault Tolerance**: Pipeline continues even if components fail
+- **Data Persistence**: Long-term log storage and historical analysis
+- **Automatic Recovery**: Self-healing log processing pipeline
+- **Scalable Architecture**: Horizontal scaling for increased load
+
+#### **📊 Business Benefits**
+- **Faster Issue Resolution**: Comprehensive debugging capabilities
+- **Proactive Monitoring**: Early problem detection and alerts
+- **Performance Optimization**: Data-driven optimization decisions
+- **Compliance**: Audit trail and regulatory compliance support
+
+### 🌐 **Monitoring & Management Endpoints**
+
+Access comprehensive logging pipeline management through these endpoints:
+
+- **Kafka Management**: `http://localhost:8091` - Kafka UI for topic management
+- **Elasticsearch Health**: `http://localhost:9200/_cluster/health` - Cluster status
+- **Kibana Dashboards**: `http://localhost:5601` - Log visualization and analytics
+- **Logstash Monitoring**: `http://localhost:9600/_node/stats` - Processing statistics
+
+---
+
+## 🧩 Key Components
+
+- **Client Applications**: The gateway to our digital marketplace
+- **API Gateway**: Our intelligent traffic controller with advanced features (see below)
+- **Service Registry (Eureka)**: The compass that guides service discovery
+- **Configuration Server**: The central brain for distributed configuration
+- **Microservices Fleet**:
+    - 🧑‍💼 **User Service** - Managing customer identities and profiles (Spring Boot + MongoDB)
+    - 🛍️ **Product Service** - Our digital catalog (Spring Boot + PostgreSQL)
+    - 🛒 **Cart Service** - The virtual shopping cart (Go + MongoDB + Redis)
+    - 📋 **Order Service** - Order processing and history (Spring Boot + PostgreSQL)
+    - 💳 **Payment Service** - Secure transaction processing (Go + PostgreSQL)
+    - 🚚 **Shipping Service** - Delivery tracking and management (Go + PostgreSQL)
+    - 🎁 **Loyalty Service** - Rewards and customer retention (Spring Boot + PostgreSQL)
+    - 📱 **Notification Service** - Customer communications (Spring Boot + MongoDB)
+- **Kafka Message Bus**: The neural network enabling event-driven communication
+- **Centralized Logging Pipeline**: Real-time log aggregation and analysis (ELK + Kafka)
+- **Observability Stack**:
+    - **Zipkin**: Tracing requests through our service mesh
+    - **ELK Stack**: Illuminating our system through logs and analytics
+    - **Prometheus & Grafana**: Metrics collection and visualization
+- **SonarQube**: Our quality guardian, ensuring code excellence
+
+## 🌐 Service Communication Matrix
 
 This diagram shows the actual communication patterns, ports, and protocols used in your implementation:
 
@@ -283,6 +646,7 @@ graph LR
             PRODUCT_T[product.batch.request/response]
             ORDER_T[order.request/response<br/>order.ids.request/response]
             SAVED_T[saved4later.request/response]
+            LOG_T[app-logs<br/>system-metrics]
         end
     end
 
@@ -302,7 +666,7 @@ graph LR
 
     subgraph "Observability"
         ZIPKIN[Zipkin<br/>:9411<br/>Distributed Tracing]
-        ELK[ELK Stack<br/>Centralized Logging]
+        ELK[ELK Stack<br/>:5601<br/>Centralized Logging]
         ACTUATOR[Spring Actuator<br/>Health & Metrics]
     end
 
@@ -326,12 +690,24 @@ graph LR
     KAFKA_BROKER --> PRODUCT_T
     KAFKA_BROKER --> ORDER_T
     KAFKA_BROKER --> SAVED_T
+    KAFKA_BROKER --> LOG_T
 
     %% Services to Kafka
     CART -.->|Consume/Produce| CART_T
     PRODUCT -.->|Batch Processing| PRODUCT_T
     ORDER -.->|Order Processing| ORDER_T
     CART -.->|Saved Items| SAVED_T
+
+    %% All Services to Logging
+    GATEWAY -.->|Structured Logs| LOG_T
+    USER -.->|Structured Logs| LOG_T
+    PRODUCT -.->|Structured Logs| LOG_T
+    CART -.->|Structured Logs| LOG_T
+    ORDER -.->|Structured Logs| LOG_T
+    PAYMENT -.->|Structured Logs| LOG_T
+    SHIPPING -.->|Structured Logs| LOG_T
+    LOYALTY -.->|Structured Logs| LOG_T
+    NOTIFICATION -.->|Structured Logs| LOG_T
 
     %% Gateway Routes (Load Balanced)
     GATEWAY -->|lb://user-service<br/>Authentication Routes| USER
@@ -360,12 +736,7 @@ graph LR
     CART -.->|Tracing| ZIPKIN
     ORDER -.->|Tracing| ZIPKIN
 
-    GATEWAY -.->|Logs| ELK
-    USER -.->|Logs| ELK
-    PRODUCT -.->|Logs| ELK
-    CART -.->|Logs| ELK
-    ORDER -.->|Logs| ELK
-
+    LOG_T -.->|Log Processing| ELK
     GATEWAY -.->|Health| ACTUATOR
     USER -.->|Health| ACTUATOR
     PRODUCT -.->|Health| ACTUATOR
@@ -380,7 +751,7 @@ graph LR
     class GATEWAY,AUTH,RATE_LIMIT,CIRCUIT,BFF gatewayClass
     class USER,PRODUCT,CART,ORDER,PAYMENT,SHIPPING,LOYALTY,NOTIFICATION serviceClass
     class EUREKA,CONFIG_SRV,REDIS infraClass
-    class KAFKA_BROKER,CART_T,PRODUCT_T,ORDER_T,SAVED_T kafkaClass
+    class KAFKA_BROKER,CART_T,PRODUCT_T,ORDER_T,SAVED_T,LOG_T kafkaClass
     class ZIPKIN,ELK,ACTUATOR observeClass
 ```
 
@@ -670,122 +1041,15 @@ graph TB
     M --> R[Event-Driven Scalability]
 ```
 
-## 🧩 Key Components
-
-- **Client Applications**: The gateway to our digital marketplace
-- **API Gateway**: Our intelligent traffic controller with advanced features (see below)
-- **Service Registry (Eureka)**: The compass that guides service discovery
-- **Configuration Server**: The central brain for distributed configuration
-- **Microservices Fleet**:
-    - 🧑‍💼 **User Service** - Managing customer identities and profiles (Spring Boot + MongoDB)
-    - 🛍️ **Product Service** - Our digital catalog (Spring Boot + PostgreSQL)
-    - 🛒 **Cart Service** - The virtual shopping cart (Go + MongoDB + Redis)
-    - 📋 **Order Service** - Order processing and history (Spring Boot + PostgreSQL)
-    - 💳 **Payment Service** - Secure transaction processing (Go + PostgreSQL)
-    - 🚚 **Shipping Service** - Delivery tracking and management (Go + PostgreSQL)
-    - 🎁 **Loyalty Service** - Rewards and customer retention (Spring Boot + PostgreSQL)
-    - 📱 **Notification Service** - Customer communications (Spring Boot + MongoDB)
-- **Kafka Message Bus**: The neural network enabling event-driven communication
-- **Observability Stack**:
-    - **Zipkin**: Tracing requests through our service mesh
-    - **ELK Stack**: Illuminating our system through logs and analytics
-- **SonarQube**: Our quality guardian, ensuring code excellence
-
-## 🌐 API Gateway Features
-
-Our API Gateway (Port 8099) is the intelligent edge of our platform, providing:
-
-### 🔐 Authentication & Authorization
-- **JWT-based authentication** with role-based access control (RBAC)
-- Support for multiple roles: `ROLE_USER`, `ROLE_ADMIN`, `ROLE_MODERATOR`
-- **OAuth2 integration** for social login providers
-- Cookie and header-based token extraction
-- Automatic user context propagation to downstream services
-
-### 🚦 Rate Limiting
-- **Flexible rate limiting** based on IP address, authenticated user, or API key
-- **Token bucket algorithm** for fair resource allocation
-- Redis-backed distributed rate limiting
-- Endpoint-specific configurations:
-  - Authentication endpoints: 5 requests/60s (brute-force protection)
-  - Payment operations: 3 requests/300s (security)
-  - Public product browsing: 300 requests/60s
-  - Cart operations: 50 requests/60s
-- Real-time rate limit monitoring and management APIs
-
-### 🔄 Circuit Breakers
-- **Resilience4j circuit breakers** for all service endpoints
-- Automatic failure detection and recovery
-- Configurable thresholds:
-  - Failure rate threshold: 30-60%
-  - Sliding window size: 5-20 calls
-  - Wait duration in open state: 30-60s
-- Circuit breaker monitoring dashboard
-- Manual circuit breaker reset capabilities
-
-### 🎯 Backend for Frontend (BFF) Pattern
-- **Enriched endpoints** that aggregate data from multiple services:
-  - `/api/cart/{userId}/enriched` - Cart with full product details
-  - `/api/order/{orderId}/enriched` - Orders with product information
-  - `/api/saved4later/{userId}/enriched` - Saved items with availability
-- **Async Kafka-based orchestration** for efficient data aggregation
-- Correlation ID tracking for distributed transactions
-- Optimized batch processing for multiple orders
-
-### 📊 API Documentation
-- **Centralized Swagger/OpenAPI** documentation
-- Service-specific API documentation endpoints
-- Interactive API testing through Swagger UI
-- Available at `/swagger-ui.html`
-
-### 🔍 Service Discovery & Load Balancing
-- **Netflix Eureka** integration for dynamic service discovery
-- Client-side load balancing with health checks
-- Automatic service instance registration/deregistration
-
-### 🌍 CORS Configuration
-- Configurable cross-origin resource sharing
-- Support for credentials and custom headers
-- Environment-specific allowed origins
-
-### 📈 Monitoring & Management
-- **Gateway health endpoints** at `/api/gateway/health`
-- **Circuit breaker status** at `/api/gateway/circuit-breakers`
-- **Rate limiting statistics** at `/api/gateway/rate-limiting/stats`
-- Service listing and availability monitoring
-- Actuator endpoints for detailed metrics
-
-### 📬 Event-Driven Features
-- **Kafka integration** for asynchronous communication
-- Request-response pattern with correlation IDs
-- Multiple topic consumers for different service responses
-- Timeout handling and error recovery
-
-### 🛡️ Security Features
-- Public endpoint configuration (no auth required)
-- Admin-only endpoint protection
-- Automatic security header injection
-- Request validation and sanitization
-
-## 🛠️ Technology Stack
-
-- **Languages**: Java, Go
-- **Frameworks**: Spring Boot, Spring Cloud Gateway, Go standard library
-- **Data Stores**: PostgreSQL, MongoDB, Redis
-- **Service Mesh**: Spring Cloud Netflix (Eureka)
-- **Message Broker**: Apache Kafka
-- **API Gateway**: Spring Cloud Gateway with WebFlux
-- **Rate Limiting**: Redis with custom filters
-- **Circuit Breaker**: Resilience4j
-- **Authentication**: JWT (JSON Web Tokens)
-- **Monitoring**: Zipkin, ELK Stack (Elasticsearch, Logstash, Kibana)
-- **Quality Assurance**: SonarQube
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes
-
 ## 🚀 Getting Started
 
 ### Prerequisites
+
+![Java](https://img.shields.io/badge/Java_17+-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Go](https://img.shields.io/badge/Go_1.18+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
 
 - Docker and Docker Compose
 - Kubernetes cluster (for production deployment)
@@ -798,38 +1062,45 @@ Our API Gateway (Port 8099) is the intelligent edge of our platform, providing:
 
 1. Clone the repository:
    ```bash
-   https://github.com/ZakariaRek/Ecommerce-App.git
+   git clone https://github.com/ZakariaRek/Ecommerce-App.git
    cd Ecommerce-App
    ```
 
 2. Start the infrastructure services:
    ```bash
-   docker-compose up -d config-server eureka-server kafka zipkin elasticsearch logstash kibana sonarqube redis
+   docker-compose up -d config-server eureka-server kafka zookeeper redis
    ```
 
-3. Start the API Gateway:
+3. Start the observability stack:
+   ```bash
+   docker-compose up -d elasticsearch logstash kibana zipkin sonarqube
+   ```
+
+4. Start the API Gateway:
    ```bash
    cd Gateway-Service
    mvn spring-boot:run
    ```
 
-4. Start the core services:
+5. Start the core services:
    ```bash
    docker-compose up -d user-service product-service cart-service order-service
    ```
 
-5. Start the supporting services:
+6. Start the supporting services:
    ```bash
    docker-compose up -d payment-service shipping-service loyalty-service notification-service
    ```
 
-6. Access the services:
-    - API Gateway: http://localhost:8099
-    - Gateway Swagger UI: http://localhost:8099/swagger-ui.html
-    - Eureka Dashboard: http://localhost:8761
-    - Zipkin: http://localhost:9411
-    - Kibana: http://localhost:5601
-    - SonarQube: http://localhost:9000
+7. Access the services:
+    - **API Gateway**: http://localhost:8099
+    - **Gateway Swagger UI**: http://localhost:8099/swagger-ui.html
+    - **Eureka Dashboard**: http://localhost:8761
+    - **Zipkin Tracing**: http://localhost:9411
+    - **Kibana Dashboards**: http://localhost:5601
+    - **Kafka UI**: http://localhost:8091
+    - **SonarQube**: http://localhost:9000
+    - **Elasticsearch**: http://localhost:9200
 
 ## 🌟 API Gateway Endpoints
 
@@ -847,29 +1118,62 @@ Our API Gateway (Port 8099) is the intelligent edge of our platform, providing:
 - `GET /api/order/user/{userId}/all` - Get all user orders (batch)
 - `GET /api/saved4later/{userId}/enriched` - Get saved items with availability
 
+### Logging & Monitoring
+- `GET /api/logs/health` - Logging pipeline health
+- `GET /api/logs/stats` - Real-time logging statistics
+- `POST /api/logs/test` - Generate test logs for verification
+
 ## 🧪 Development Workflow
 
 1. **Fork & Clone**: Start with your own copy of the repository
 2. **Branch**: Create a feature branch `feature/your-feature-name`
 3. **Develop**: Write your code and tests
 4. **Quality Check**: Run SonarQube analysis
-5. **Test**: Ensure all tests pass
-6. **PR**: Submit a pull request for review
+5. **Logging**: Test log generation and Kibana visualization
+6. **Test**: Ensure all tests pass
+7. **PR**: Submit a pull request for review
 
 ## 📊 Monitoring and Observability
 
-Our platform provides comprehensive visibility:
+Our platform provides comprehensive visibility through multiple layers:
 
-- **Distributed Tracing**: Follow requests across services with Zipkin
-- **Centralized Logging**: Analyze logs through the ELK Stack
-- **Circuit Breaker Metrics**: Monitor service resilience
-- **Rate Limit Analytics**: Track API usage patterns
-- **Service Health**: Real-time service availability monitoring
-- **Alerts**: Proactive issue detection and notification
+### 🔍 **Distributed Tracing**
+![Zipkin](https://img.shields.io/badge/Zipkin-1f425f?style=for-the-badge&logo=zipkin&logoColor=white)
+- Follow requests across services with Zipkin
+- Correlation ID tracking through the entire request lifecycle
+- Performance bottleneck identification
+- Service dependency mapping
+
+### 📋 **Centralized Logging**
+![ELK Stack](https://img.shields.io/badge/ELK_Stack-005571?style=for-the-badge&logo=elastic&logoColor=white)
+- **Real-time log aggregation** from all microservices
+- **Structured JSON logging** with business context
+- **Advanced search capabilities** across all service logs
+- **Custom dashboards** for different stakeholder needs
+- **Alert management** for proactive issue detection
+
+### 📈 **Metrics & Performance**
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+- Circuit breaker metrics and health status
+- Rate limit analytics and usage patterns
+- Service health monitoring with Spring Actuator
+- Resource utilization tracking (CPU, memory, network)
+- Business metrics (orders, payments, user activity)
+
+### 🚨 **Alerting & Notifications**
+- **Automated error detection** through log analysis
+- **Performance degradation alerts** via metrics monitoring
+- **Service availability notifications** from health checks
+- **Business metric alerts** (payment failures, order drops)
+- **Multi-channel notifications** (email, Slack, SMS)
 
 ## 🔒 Security
 
 Security is foundational to our architecture:
+
+![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=json-web-tokens&logoColor=white)
+![OAuth2](https://img.shields.io/badge/OAuth2-3C4043?style=for-the-badge&logo=oauth&logoColor=white)
 
 - **API Gateway Authentication**: JWT-based with refresh tokens
 - **OAuth2 Support**: Social login integration
@@ -878,6 +1182,7 @@ Security is foundational to our architecture:
 - **Service-to-Service Communication**: Mutual TLS
 - **Data Encryption**: At rest and in transit
 - **Security Scanning**: Regular vulnerability assessments with SonarQube
+- **Audit Logging**: Complete audit trail through centralized logging
 
 ## 🌐 Scaling and Resilience
 
@@ -889,10 +1194,23 @@ Our architecture is designed for growth and reliability:
 - **Auto-Healing**: Self-recovering services in Kubernetes
 - **Async Processing**: Kafka-based event handling
 - **Caching**: Redis for performance optimization
+- **Load Balancing**: Client-side load balancing with Eureka
+- **Graceful Degradation**: Fallback responses when services are unavailable
 
 ## 🤝 Contributing
 
 We welcome contributions! See our [Contribution Guidelines](CONTRIBUTING.md) for more details.
+
+### Technology-Specific Contributions
+
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_Services-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)
+- User Service, Order Service, Product Service, Loyalty Service, Notification Service
+
+![Go](https://img.shields.io/badge/Go_Services-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+- Cart Service, Payment Service, Shipping Service
+
+![Infrastructure](https://img.shields.io/badge/Infrastructure-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+- API Gateway, Config Server, Service Registry, Observability Stack
 
 ## 📜 License
 
@@ -902,6 +1220,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions and support, please open an issue or contact our team at support@nexuscommerce.io.
 
+### 🔗 **Useful Links**
+
+- **Documentation**: [Architecture Guide](docs/architecture.md)
+- **API Documentation**: [Swagger UI](http://localhost:8099/swagger-ui.html)
+- **Monitoring Dashboards**: [Kibana](http://localhost:5601) | [Grafana](http://localhost:3000)
+- **Service Health**: [Eureka](http://localhost:8761) | [Actuator](http://localhost:8099/actuator)
+- **Message Streaming**: [Kafka UI](http://localhost:8091)
+- **Code Quality**: [SonarQube](http://localhost:9000)
+
 ---
 
-> "In the world of e-commerce, it's not just about transactions—it's about transformations. NexusCommerce transforms shopping into an experience, monoliths into microservices, and challenges into opportunities."
+> "In the world of e-commerce, it's not just about transactions—it's about transformations. NexusCommerce transforms shopping into an experience, monoliths into microservices, and challenges into opportunities. With comprehensive observability, we transform data into insights, and insights into innovation."
