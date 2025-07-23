@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: kafka  # ADD THIS LINE to enable Kafka logging
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -9,8 +11,8 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/Product-service
     username: postgres
-#    password: yahyasd56
-    password: zakaria
+    password: yahyasd56
+#    password: zakaria
     driver-class-name: org.postgresql.Driver
   servlet:
     multipart:
@@ -106,10 +108,16 @@ management:
 
 logging:
   level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.data.redis: DEBUG
+    org.springframework.web.cors: DEBUG
+    io.github.resilience4j: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
+    com.Ecommerce: DEBUG  # Your package
     org.springframework.kafka: DEBUG
     org.apache.kafka: WARN
-    com.Ecommerce.Product_Service.Listener: DEBUG
-    com.Ecommerce.Product_Service.Config.KafkaProducerConfig: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
