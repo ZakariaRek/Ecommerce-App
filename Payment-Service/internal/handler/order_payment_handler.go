@@ -1,4 +1,4 @@
-// Payment-Service/internal/handler/order_payment_handler.go - ENHANCED WITH INVOICE ENDPOINTS
+// Payment-Service/internal/handler/order_payment_handler.go - FIXED ROUTE CONFLICTS
 package handler
 
 import (
@@ -33,10 +33,10 @@ type OrderPaymentResponse struct {
 	TransactionID string               `json:"transaction_id,omitempty"`
 	CreatedAt     time.Time            `json:"created_at"`
 	Message       string               `json:"message,omitempty"`
-	InvoiceNumber string               `json:"invoiceNumber,omitempty"` // 🎯 NEW: Include invoice info
+	InvoiceNumber string               `json:"invoiceNumber,omitempty"`
 }
 
-// 🎯 NEW: InvoiceResponse represents the response for invoice data
+// InvoiceResponse represents the response for invoice data
 type InvoiceResponse struct {
 	ID            string    `json:"id"`
 	OrderID       string    `json:"orderID"`
@@ -59,14 +59,14 @@ type OrderRefundRequest struct {
 // OrderPaymentHandler handles order payment-related HTTP requests
 type OrderPaymentHandler struct {
 	orderPaymentService service.OrderPaymentService
-	invoiceService      service.InvoiceService // 🎯 NEW: Add invoice service
+	invoiceService      service.InvoiceService
 	kafkaService        *kafka.PaymentKafkaService
 }
 
 // NewOrderPaymentHandler creates a new order payment handler
 func NewOrderPaymentHandler(
 	orderPaymentService service.OrderPaymentService,
-	invoiceService service.InvoiceService, // 🎯 NEW: Add invoice service parameter
+	invoiceService service.InvoiceService,
 	kafkaService *kafka.PaymentKafkaService,
 ) *OrderPaymentHandler {
 	return &OrderPaymentHandler{
@@ -78,24 +78,29 @@ func NewOrderPaymentHandler(
 
 // RegisterRoutes registers routes for order payment handler
 func (h *OrderPaymentHandler) RegisterRoutes(r chi.Router) {
+	// 🎯 FIXED: Only register order-specific routes to avoid conflicts
 	r.Route("/orders", func(r chi.Router) {
-		// Payment routes
+		// Payment routes for orders
 		r.Post("/{orderID}/payments", h.ProcessOrderPayment)
 		r.Get("/{orderID}/payments", h.GetOrderPayments)
 		r.Post("/{orderID}/refund", h.RefundOrderPayment)
 		r.Get("/{orderID}/payments/status", h.GetOrderPaymentStatus)
 
-		// 🎯 NEW: Invoice routes
+		// Invoice routes for orders
 		r.Get("/{orderID}/invoices", h.GetOrderInvoices)
 		r.Get("/{orderID}/invoices/{invoiceID}", h.GetInvoiceByID)
 		r.Get("/{orderID}/invoices/{invoiceID}/pdf", h.GenerateInvoicePDF)
 		r.Post("/{orderID}/invoices/{invoiceID}/email", h.EmailInvoice)
 	})
 
-	// 🎯 NEW: Payment-specific invoice routes
-	r.Route("/payments", func(r chi.Router) {
-		r.Get("/{paymentID}/invoice", h.GetPaymentInvoice)
-	})
+	// 🎯 REMOVED: Payment-specific invoice routes moved to regular payment handler
+	// This was causing the route conflict - these routes should be in payment_handler.go instead
+}
+
+// 🎯 NEW: Add a method to register payment-specific invoice routes (to be called from payment handler)
+func (h *OrderPaymentHandler) RegisterPaymentInvoiceRoutes(r chi.Router) {
+	// Payment-specific invoice routes (called from payment handler to avoid conflicts)
+	r.Get("/{paymentID}/invoice", h.GetPaymentInvoice)
 }
 
 // ProcessOrderPayment processes payment for an order
@@ -163,7 +168,7 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 	// Payment successful
 	response.Message = "Payment processed successfully"
 
-	// 🎯 NEW: Try to get the generated invoice info
+	// Try to get the generated invoice info
 	if payment.Status == models.Completed {
 		if invoice, invoiceErr := h.orderPaymentService.GetPaymentInvoice(payment.ID); invoiceErr == nil && invoice != nil {
 			response.InvoiceNumber = invoice.InvoiceNumber
@@ -206,7 +211,7 @@ func (h *OrderPaymentHandler) GetOrderPayments(w http.ResponseWriter, r *http.Re
 			CreatedAt:     payment.CreatedAt,
 		}
 
-		// 🎯 NEW: Include invoice info if available
+		// Include invoice info if available
 		if invoice, invoiceErr := h.orderPaymentService.GetPaymentInvoice(payment.ID); invoiceErr == nil && invoice != nil {
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
@@ -218,7 +223,7 @@ func (h *OrderPaymentHandler) GetOrderPayments(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(responses)
 }
 
-// 🎯 NEW: GetOrderInvoices retrieves all invoices for an order
+// GetOrderInvoices retrieves all invoices for an order
 func (h *OrderPaymentHandler) GetOrderInvoices(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
 	orderID, err := uuid.Parse(orderIDStr)
@@ -251,7 +256,7 @@ func (h *OrderPaymentHandler) GetOrderInvoices(w http.ResponseWriter, r *http.Re
 			InvoiceNumber: invoice.InvoiceNumber,
 			IssueDate:     invoice.IssueDate,
 			DueDate:       invoice.DueDate,
-			Amount:        0, // Will be filled from payment if available
+			Amount:        0,
 			PaymentMethod: "",
 			Status:        "issued",
 		}
@@ -267,7 +272,7 @@ func (h *OrderPaymentHandler) GetOrderInvoices(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(responses)
 }
 
-// 🎯 NEW: GetPaymentInvoice retrieves invoice for a specific payment
+// GetPaymentInvoice retrieves invoice for a specific payment
 func (h *OrderPaymentHandler) GetPaymentInvoice(w http.ResponseWriter, r *http.Request) {
 	paymentIDStr := chi.URLParam(r, "paymentID")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -301,7 +306,7 @@ func (h *OrderPaymentHandler) GetPaymentInvoice(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(response)
 }
 
-// 🎯 NEW: GetInvoiceByID retrieves a specific invoice
+// GetInvoiceByID retrieves a specific invoice
 func (h *OrderPaymentHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
 	invoiceIDStr := chi.URLParam(r, "invoiceID")
@@ -335,7 +340,7 @@ func (h *OrderPaymentHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(response)
 }
 
-// 🎯 NEW: GenerateInvoicePDF generates and returns invoice PDF
+// GenerateInvoicePDF generates and returns invoice PDF
 func (h *OrderPaymentHandler) GenerateInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	invoiceIDStr := chi.URLParam(r, "invoiceID")
 	invoiceID, err := uuid.Parse(invoiceIDStr)
@@ -368,7 +373,7 @@ func (h *OrderPaymentHandler) GenerateInvoicePDF(w http.ResponseWriter, r *http.
 	log.Printf("📋 INVOICE: PDF generated successfully for invoice: %s", invoiceID)
 }
 
-// 🎯 NEW: EmailInvoice sends invoice via email
+// EmailInvoice sends invoice via email
 func (h *OrderPaymentHandler) EmailInvoice(w http.ResponseWriter, r *http.Request) {
 	invoiceIDStr := chi.URLParam(r, "invoiceID")
 	invoiceID, err := uuid.Parse(invoiceIDStr)
@@ -450,7 +455,7 @@ func (h *OrderPaymentHandler) RefundOrderPayment(w http.ResponseWriter, r *http.
 		Message:       "Refund processed successfully",
 	}
 
-	// 🎯 NEW: Include refund invoice/credit note info
+	// Include refund invoice/credit note info
 	if invoice, invoiceErr := h.orderPaymentService.GetPaymentInvoice(refundPayment.ID); invoiceErr == nil && invoice != nil {
 		response.InvoiceNumber = invoice.InvoiceNumber
 		log.Printf("📋 INVOICE: Refund response includes credit note: %s", invoice.InvoiceNumber)
@@ -491,7 +496,7 @@ func (h *OrderPaymentHandler) GetOrderPaymentStatus(w http.ResponseWriter, r *ht
 		}
 	}
 
-	// 🎯 NEW: Include invoice information in status
+	// Include invoice information in status
 	invoices, _ := h.orderPaymentService.GetOrderInvoices(orderID)
 	invoiceNumbers := make([]string, len(invoices))
 	for i, invoice := range invoices {
@@ -511,17 +516,13 @@ func (h *OrderPaymentHandler) GetOrderPaymentStatus(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(status)
 }
 
-// EXISTING METHODS: publishPaymentConfirmedEvent, publishPaymentFailedEvent, publishPaymentUpdatedEvent
-// ... (keep the existing methods from the previous version)
-
-// FIXED: publishPaymentConfirmedEvent - sends message in format Order Service expects
+// publishPaymentConfirmedEvent sends message in format Order Service expects
 func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payment, oldStatus models.PaymentStatus, message string) {
 	if h.kafkaService == nil {
 		log.Printf("💳 PAYMENT SERVICE: Kafka service not available")
 		return
 	}
 
-	// Create the message in the format Order Service expects
 	eventMessage := map[string]interface{}{
 		"orderId":       payment.OrderID.String(),
 		"paymentId":     payment.ID.String(),
@@ -537,7 +538,6 @@ func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payme
 	log.Printf("💳 PAYMENT SERVICE: Publishing payment confirmed event - OrderId: %s, Status: %s, Message: %s",
 		payment.OrderID.String(), payment.Status, message)
 
-	// Send directly to the payment-confirmed topic with the correct format
 	if err := h.kafkaService.PublishOrderPaymentEvent("payment-confirmed", eventMessage); err != nil {
 		log.Printf("💳 PAYMENT SERVICE: Failed to publish payment confirmed event: %v", err)
 		return
@@ -546,14 +546,13 @@ func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payme
 	log.Printf("💳 PAYMENT SERVICE: Successfully published payment-confirmed event for order %s", payment.OrderID.String())
 }
 
-// FIXED: publishPaymentFailedEvent - sends message in format Order Service expects
+// publishPaymentFailedEvent sends message in format Order Service expects
 func (h *OrderPaymentHandler) publishPaymentFailedEvent(payment *models.Payment, oldStatus models.PaymentStatus, message string) {
 	if h.kafkaService == nil {
 		log.Printf("💳 PAYMENT SERVICE: Kafka service not available")
 		return
 	}
 
-	// Create the message in the format Order Service expects
 	eventMessage := map[string]interface{}{
 		"orderId":       payment.OrderID.String(),
 		"paymentId":     payment.ID.String(),
@@ -569,7 +568,6 @@ func (h *OrderPaymentHandler) publishPaymentFailedEvent(payment *models.Payment,
 	log.Printf("💳 PAYMENT SERVICE: Publishing payment failed event - OrderId: %s, Status: %s, Message: %s",
 		payment.OrderID.String(), payment.Status, message)
 
-	// Send to payment-failed topic
 	if err := h.kafkaService.PublishOrderPaymentEvent("payment-failed", eventMessage); err != nil {
 		log.Printf("💳 PAYMENT SERVICE: Failed to publish payment failed event: %v", err)
 		return
