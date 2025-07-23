@@ -2,7 +2,7 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProperty scope="context" name="application.name" source="spring.application.name" defaultValue="unknown-service"/>
+    <springProperty scope="context" name="application.name" source="spring.application.name" defaultValue="Product_Service"/>
 
     <!-- Console appender for local debugging -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -12,20 +12,18 @@
         </encoder>
     </appender>
 
-    <!-- Kafka appender with clean JSON encoding -->
+    <!-- Kafka appender for sending logs to ELK -->
     <appender name="KAFKA" class="com.github.danielwegener.logback.kafka.KafkaAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <includeContext>true</includeContext>
             <includeMdc>true</includeMdc>
             <includeStackTrace>true</includeStackTrace>
-            <!-- Clean field mapping -->
+            <customFields>{"service_name":"${application.name}","environment":"development"}</customFields>
             <fieldNames>
                 <timestamp>@timestamp</timestamp>
                 <version>[ignore]</version>
                 <levelValue>[ignore]</levelValue>
             </fieldNames>
-            <!-- Add service name as custom field -->
-            <customFields>{"service_name":"${application.name}"}</customFields>
         </encoder>
 
         <!-- Kafka settings -->
@@ -34,7 +32,7 @@
         <deliveryStrategy class="com.github.danielwegener.logback.kafka.delivery.AsynchronousDeliveryStrategy" />
 
         <!-- Producer configuration -->
-        <producerConfig>bootstrap.servers=kafka:29092</producerConfig>
+        <producerConfig>bootstrap.servers=localhost:9092</producerConfig>
         <producerConfig>acks=1</producerConfig>
         <producerConfig>retries=3</producerConfig>
         <producerConfig>linger.ms=1000</producerConfig>
@@ -44,15 +42,15 @@
         <appender-ref ref="CONSOLE" />
     </appender>
 
-    <!-- Profile configurations -->
+    <!-- Profile-specific configurations -->
     <springProfile name="kafka">
         <root level="INFO">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="KAFKA" />
         </root>
 
-        <!-- Your application package logs -->
-        <logger name="com.ecommerce" level="DEBUG" additivity="false">
+        <!-- Product_Service  Service specific logging -->
+        <logger name="com.Ecommerce.Product_Service" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="KAFKA" />
         </logger>
@@ -61,6 +59,15 @@
         <logger name="org.springframework.web" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE" />
             <appender-ref ref="KAFKA" />
+        </logger>
+
+        <!-- Kafka-related logs (reduce noise) -->
+        <logger name="org.apache.kafka" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE" />
+        </logger>
+
+        <logger name="org.springframework.kafka" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE" />
         </logger>
     </springProfile>
 
