@@ -36,10 +36,20 @@ func NewShippingService(
 // CreateShippingRequest represents a request to create shipping
 type CreateShippingRequest struct {
 	OrderID           uuid.UUID `json:"order_id"`
+	UserID            uuid.UUID `json:"user_id"`
 	Carrier           string    `json:"carrier"`
 	ShippingAddressID uuid.UUID `json:"shipping_address_id"`
 	Weight            float64   `json:"weight"`
 	Dimensions        string    `json:"dimensions"`
+}
+
+// UserShippingStats represents shipping statistics for a user
+type UserShippingStats struct {
+	Total     int64            `json:"total"`
+	InTransit int64            `json:"in_transit"`
+	Delivered int64            `json:"delivered"`
+	Delayed   int64            `json:"delayed"`
+	ByStatus  map[string]int64 `json:"by_status"`
 }
 
 // CreateShippingWithAddress creates a new shipping with address
@@ -65,6 +75,7 @@ func (s *ShippingService) CreateShippingWithAddress(req *CreateShippingRequest) 
 	// Create new shipping
 	shipping := &models.Shipping{
 		OrderID:           req.OrderID,
+		UserID:            req.UserID, // Set UserID
 		Status:            models.StatusPending,
 		Carrier:           req.Carrier,
 		ShippingAddressID: req.ShippingAddressID,
@@ -124,8 +135,12 @@ func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*mo
 		return nil, err
 	}
 
+	// Generate a dummy user ID for backward compatibility
+	dummyUserID := uuid.New()
+
 	req := &CreateShippingRequest{
 		OrderID:           orderID,
+		UserID:            dummyUserID,
 		Carrier:           carrier,
 		ShippingAddressID: dummyAddress.ID,
 		Weight:            1.0,      // Default weight
@@ -133,6 +148,86 @@ func (s *ShippingService) CreateShipping(orderID uuid.UUID, carrier string) (*mo
 	}
 
 	return s.CreateShippingWithAddress(req)
+}
+
+// CreateShippingForUser creates a new shipping for a specific user
+func (s *ShippingService) CreateShippingForUser(orderID, userID uuid.UUID, carrier string, shippingAddressID uuid.UUID, weight float64, dimensions string) (*models.Shipping, error) {
+	req := &CreateShippingRequest{
+		OrderID:           orderID,
+		UserID:            userID,
+		Carrier:           carrier,
+		ShippingAddressID: shippingAddressID,
+		Weight:            weight,
+		Dimensions:        dimensions,
+	}
+
+	return s.CreateShippingWithAddress(req)
+}
+
+// GetShippingsByUser retrieves all shippings for a specific user
+func (s *ShippingService) GetShippingsByUser(userID uuid.UUID, limit, offset int) ([]models.Shipping, error) {
+	return s.shippingRepo.GetByUserID(userID, limit, offset)
+}
+
+// GetShippingsByUserAndStatus retrieves shippings for a user by status
+func (s *ShippingService) GetShippingsByUserAndStatus(userID uuid.UUID, status models.ShippingStatus, limit, offset int) ([]models.Shipping, error) {
+	return s.shippingRepo.GetByUserIDAndStatus(userID, status, limit, offset)
+}
+
+// GetUserShippingStats returns shipping statistics for a user
+func (s *ShippingService) GetUserShippingStats(userID uuid.UUID) (*UserShippingStats, error) {
+	// Get total count
+	total, err := s.shippingRepo.CountByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get in-transit count
+	inTransitStatuses := []models.ShippingStatus{
+		models.StatusShipped,
+		models.StatusInTransit,
+		models.StatusOutForDelivery,
+	}
+
+	var inTransit int64
+	for _, status := range inTransitStatuses {
+		count, err := s.shippingRepo.CountByUserIDAndStatus(userID, status)
+		if err != nil {
+			return nil, err
+		}
+		inTransit += count
+	}
+
+	// Get delivered count
+	delivered, err := s.shippingRepo.CountByUserIDAndStatus(userID, models.StatusDelivered)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get delayed count (for now, using failed status as proxy)
+	delayed, err := s.shippingRepo.CountByUserIDAndStatus(userID, models.StatusFailed)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get breakdown by status
+	byStatus, err := s.shippingRepo.GetUserShippingStats(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UserShippingStats{
+		Total:     total,
+		InTransit: inTransit,
+		Delivered: delivered,
+		Delayed:   delayed,
+		ByStatus:  byStatus,
+	}, nil
+}
+
+// GetUserShippingsInTransit returns user's shippings currently in transit
+func (s *ShippingService) GetUserShippingsInTransit(userID uuid.UUID) ([]models.Shipping, error) {
+	return s.shippingRepo.GetUserShippingsInTransit(userID)
 }
 
 // GetShipping retrieves shipping details by ID

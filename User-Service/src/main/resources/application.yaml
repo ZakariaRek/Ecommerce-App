@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: kafka  # ADD THIS LINE to enable Kafka logging
   config:
     import: configserver:http://localhost:8888
   application:
@@ -91,7 +93,15 @@ management:
       show-values: ALWAYS
 logging:
   level:
-    org.springframework.security: DEBUG
-    org.springframework.security.oauth2: DEBUG
-    org.springframework.boot.web.servlet: DEBUG
-    web: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: DEBUG
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.data.redis: DEBUG
+    org.springframework.web.cors: DEBUG
+    io.github.resilience4j: DEBUG
+    org.springframework.boot.autoconfigure: DEBUG
+    com.Ecommerce: DEBUG  # Your package
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,10 +1,12 @@
-// internal/controller/shipping_controller.go
+// internal/controller/shipping_controller.go - Updated with User ID parsing
 package controller
 
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -62,6 +64,12 @@ func (c *ShippingController) setupShippingRoutes(router *mux.Router) {
 	shippingRoutes.HandleFunc("/{id}", c.GetShipping).Methods("GET")
 	shippingRoutes.HandleFunc("/{id}", c.UpdateShipping).Methods("PUT")
 
+	// User-specific routes
+	shippingRoutes.HandleFunc("/user/{user_id}", c.GetShippingsByUser).Methods("GET")
+	shippingRoutes.HandleFunc("/user/{user_id}/stats", c.GetUserShippingStats).Methods("GET")
+	shippingRoutes.HandleFunc("/user/{user_id}/in-transit", c.GetUserShippingsInTransit).Methods("GET")
+	shippingRoutes.HandleFunc("/user/{user_id}/status/{status}", c.GetShippingsByUserAndStatus).Methods("GET")
+
 	// Status and tracking operations
 	shippingRoutes.HandleFunc("/{id}/status", c.UpdateStatus).Methods("PATCH")
 	shippingRoutes.HandleFunc("/{id}/status/gps", c.UpdateStatusWithGPS).Methods("PATCH")
@@ -118,9 +126,46 @@ func (c *ShippingController) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// Helper function to parse user ID to UUID
+func (c *ShippingController) parseUserIDToUUID(userIDStr string) (uuid.UUID, error) {
+	// Remove any whitespace
+	userIDStr = strings.TrimSpace(userIDStr)
+
+	// Check if it's already a valid UUID
+	if userID, err := uuid.Parse(userIDStr); err == nil {
+		return userID, nil
+	}
+
+	// Check if it's a MongoDB ObjectId (24 character hex string)
+	if matched, _ := regexp.MatchString("^[0-9a-fA-F]{24}$", userIDStr); matched && len(userIDStr) == 24 {
+		// Convert ObjectId to UUID format
+		// Pad to 32 characters and format as UUID
+		padded := userIDStr + "00000000" // Pad with 8 zeros to make 32 chars
+		uuidStr := padded[0:8] + "-" + padded[8:12] + "-4" + padded[13:16] + "-a" + padded[17:20] + "-" + padded[20:32]
+
+		if userID, err := uuid.Parse(uuidStr); err == nil {
+			return userID, nil
+		}
+	}
+
+	// If all else fails, try to create a deterministic UUID from the string
+	// Using namespace UUID for consistent conversion
+	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // Standard namespace UUID
+	return uuid.NewSHA1(namespace, []byte(userIDStr)), nil
+}
+
+// Helper function to parse user ID from request body
+func (c *ShippingController) parseUserIDFromRequest(userIDStr string) (uuid.UUID, error) {
+	if userIDStr == "" {
+		return uuid.Nil, nil // Allow empty user ID in some cases
+	}
+	return c.parseUserIDToUUID(userIDStr)
+}
+
 // Request/Response structs
 type CreateShippingRequest struct {
 	OrderID           string  `json:"order_id" validate:"required"`
+	UserID            string  `json:"user_id,omitempty"` // Changed to string
 	Carrier           string  `json:"carrier" validate:"required"`
 	ShippingAddressID string  `json:"shipping_address_id,omitempty"`
 	Weight            float64 `json:"weight,omitempty"`
@@ -129,6 +174,7 @@ type CreateShippingRequest struct {
 
 type CreateShippingWithAddressRequest struct {
 	OrderID         string               `json:"order_id" validate:"required"`
+	UserID          string               `json:"user_id,omitempty"` // Changed to string
 	Carrier         string               `json:"carrier" validate:"required"`
 	ShippingAddress CreateAddressRequest `json:"shipping_address" validate:"required"`
 	Weight          float64              `json:"weight,omitempty"`
@@ -194,7 +240,155 @@ type TrackingResponse struct {
 	TrackingHistory []models.ShipmentTracking `json:"tracking_history"`
 }
 
-// Shipping API handlers
+// User-specific API handlers
+
+// GetShippingsByUser handles retrieval of all shippings for a specific user
+func (c *ShippingController) GetShippingsByUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userIDStr := vars["user_id"]
+
+	userID, err := c.parseUserIDToUUID(userIDStr)
+	if err != nil {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
+	// Parse query parameters
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 10 // default limit
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0 // default offset
+	if offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	shippings, err := c.shippingService.GetShippingsByUser(userID, limit, offset)
+	if err != nil {
+		c.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Create response with pagination info
+	response := map[string]interface{}{
+		"shippings": shippings,
+		"pagination": map[string]interface{}{
+			"limit":  limit,
+			"offset": offset,
+			"count":  len(shippings),
+		},
+		"user_id": userID,
+	}
+
+	c.respondWithSuccess(w, http.StatusOK, response, "")
+}
+
+// GetUserShippingStats handles retrieval of shipping statistics for a user
+func (c *ShippingController) GetUserShippingStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userIDStr := vars["user_id"]
+
+	userID, err := c.parseUserIDToUUID(userIDStr)
+	if err != nil {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
+	stats, err := c.shippingService.GetUserShippingStats(userID)
+	if err != nil {
+		c.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.respondWithSuccess(w, http.StatusOK, stats, "")
+}
+
+// GetUserShippingsInTransit handles retrieval of user's in-transit shippings
+func (c *ShippingController) GetUserShippingsInTransit(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userIDStr := vars["user_id"]
+
+	userID, err := c.parseUserIDToUUID(userIDStr)
+	if err != nil {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
+	shippings, err := c.shippingService.GetUserShippingsInTransit(userID)
+	if err != nil {
+		c.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.respondWithSuccess(w, http.StatusOK, shippings, "")
+}
+
+// GetShippingsByUserAndStatus handles retrieval of user's shippings by status
+func (c *ShippingController) GetShippingsByUserAndStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userIDStr := vars["user_id"]
+
+	userID, err := c.parseUserIDToUUID(userIDStr)
+	if err != nil {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
+	statusStr := vars["status"]
+	status := models.ShippingStatus(statusStr)
+	if !status.IsValid() {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid shipping status")
+		return
+	}
+
+	// Parse pagination parameters
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 10
+	offset := 0
+
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	shippings, err := c.shippingService.GetShippingsByUserAndStatus(userID, status, limit, offset)
+	if err != nil {
+		c.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := map[string]interface{}{
+		"shippings": shippings,
+		"pagination": map[string]interface{}{
+			"limit":  limit,
+			"offset": offset,
+			"count":  len(shippings),
+		},
+		"user_id": userID,
+		"status":  status,
+	}
+
+	c.respondWithSuccess(w, http.StatusOK, response, "")
+}
+
+// Existing API handlers (updated to support UserID)
 
 // CreateShipping handles the creation of a new shipping (backward compatibility)
 func (c *ShippingController) CreateShipping(w http.ResponseWriter, r *http.Request) {
@@ -222,11 +416,36 @@ func (c *ShippingController) CreateShipping(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// For backward compatibility, create shipping with default address
-	shipping, err := c.shippingService.CreateShipping(orderID, req.Carrier)
-	if err != nil {
-		c.respondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+	// Parse user ID if provided
+	var userID uuid.UUID
+	if req.UserID != "" {
+		userID, err = c.parseUserIDFromRequest(req.UserID)
+		if err != nil {
+			c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+			return
+		}
+	}
+
+	// For backward compatibility, create shipping with or without user ID
+	var shipping *models.Shipping
+	if req.UserID != "" && req.ShippingAddressID != "" {
+		shippingAddressID, err := uuid.Parse(req.ShippingAddressID)
+		if err != nil {
+			c.respondWithError(w, http.StatusBadRequest, "Invalid shipping address ID format")
+			return
+		}
+
+		shipping, err = c.shippingService.CreateShippingForUser(orderID, userID, req.Carrier, shippingAddressID, req.Weight, req.Dimensions)
+		if err != nil {
+			c.respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		shipping, err = c.shippingService.CreateShipping(orderID, req.Carrier)
+		if err != nil {
+			c.respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	c.respondWithSuccess(w, http.StatusCreated, shipping, "Shipping created successfully")
@@ -258,6 +477,19 @@ func (c *ShippingController) CreateShippingWithAddress(w http.ResponseWriter, r 
 		return
 	}
 
+	// Parse user ID (required for this endpoint)
+	var userID uuid.UUID
+	if req.UserID == "" {
+		c.respondWithError(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+
+	userID, err = c.parseUserIDFromRequest(req.UserID)
+	if err != nil {
+		c.respondWithError(w, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
 	// Create shipping address first
 	addressReq := &service.CreateAddressRequest{
 		FirstName:    req.ShippingAddress.FirstName,
@@ -281,9 +513,10 @@ func (c *ShippingController) CreateShippingWithAddress(w http.ResponseWriter, r 
 		return
 	}
 
-	// Create shipping with address
+	// Create shipping with address and user ID
 	shippingReq := &service.CreateShippingRequest{
 		OrderID:           orderID,
+		UserID:            userID,
 		Carrier:           req.Carrier,
 		ShippingAddressID: address.ID,
 		Weight:            req.Weight,
@@ -820,7 +1053,7 @@ func (c *ShippingController) serviceInfo(w http.ResponseWriter, r *http.Request)
 	w.Write([]byte(`{
 		"service": "shipping-service",
 		"version": "1.0.0",
-		"description": "Enhanced shipping and address service for e-commerce platform"
+		"description": "Enhanced shipping and address service for e-commerce platform with user support"
 	}`))
 }
 
