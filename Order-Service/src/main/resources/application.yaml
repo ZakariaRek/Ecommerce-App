@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: kafka  # ADD THIS LINE to enable Kafka logging
   config:
     import: configserver:http://localhost:8888
   application:
