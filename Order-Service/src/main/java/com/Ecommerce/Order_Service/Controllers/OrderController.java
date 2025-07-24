@@ -351,12 +351,11 @@ private PaymentIntegrationService paymentIntegrationService;
             // Get order to validate
             Order order = orderService.getOrderById(orderId);
 
-            if (order.getStatus() != OrderStatus.PENDING) {
-                log.warn("💳 Order {} is not in PENDING status. Current status: {}", orderId, order.getStatus());
+            if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
+                log.warn("💳 Order {} is not in PENDING or Confitmed status. Current status: {}", orderId, order.getStatus());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Order must be in PENDING status to process payment. Current status: " + order.getStatus());
             }
-
             // Validate payment request
             if (paymentRequest.getPaymentMethod() == null || paymentRequest.getPaymentMethod().trim().isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment method is required");

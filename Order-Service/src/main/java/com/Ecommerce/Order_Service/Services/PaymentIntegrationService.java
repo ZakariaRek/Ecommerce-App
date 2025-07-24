@@ -117,7 +117,7 @@ public class PaymentIntegrationService {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
 
-            if (order.getStatus() != OrderStatus.PENDING) {
+            if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
                 throw new RuntimeException("Order is not in pending status. Current status: " + order.getStatus());
             }
 

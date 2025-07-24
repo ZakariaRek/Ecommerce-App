@@ -3,6 +3,7 @@ module github.com/ZakariaRek/Ecommerce-App/Payment-Service
 go 1.24.2
 
 require (
+	github.com/IBM/sarama v1.45.1
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/hudl/fargo v1.4.0
@@ -12,7 +13,6 @@ require (
 )
 
 require (
-	github.com/IBM/sarama v1.45.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
