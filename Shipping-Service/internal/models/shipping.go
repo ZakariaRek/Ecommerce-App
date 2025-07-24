@@ -1,4 +1,4 @@
-// Shipping-Service/internal/models/shipping.go - Debug Version
+// Shipping-Service/internal/models/shipping.go - Updated with UserID
 package models
 
 import (
@@ -103,10 +103,11 @@ func (a *Address) GetFullName() string {
 	return a.FirstName + " " + a.LastName
 }
 
-// Shipping model with address support
+// Shipping model with address support and UserID
 type Shipping struct {
 	ID             uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
 	OrderID        uuid.UUID      `gorm:"type:uuid;not null" json:"order_id"`
+	UserID         uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"` // Added UserID field
 	Status         ShippingStatus `gorm:"type:varchar(20);not null;default:'PENDING'" json:"status"`
 	Carrier        string         `gorm:"type:varchar(100)" json:"carrier"`
 	TrackingNumber string         `gorm:"type:varchar(100)" json:"tracking_number"`
