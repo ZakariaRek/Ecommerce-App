@@ -1,4 +1,4 @@
-// Payment-Service/internal/config/config.go
+// Payment-Service/internal/config/config.go - FIXED DEFAULT PORT
 package config
 
 import (
@@ -57,7 +57,7 @@ func LoadConfig() *Config {
 
 	// Initialize config with defaults and environment variables
 	config := &Config{
-		ServerPort:  getEnv("SERVER_PORT", "8080"),
+		ServerPort:  getEnv("SERVER_PORT", "8099"), // 🔧 FIXED: Changed default from 8080 to 8099
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		DBUser:      getEnv("DB_USER", "postgres"),
