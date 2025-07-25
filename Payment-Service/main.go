@@ -1,3 +1,4 @@
+// Payment-Service/main.go - SIMPLIFIED VERSION WITH TRANSACTIONS
 package main
 
 import (
@@ -41,20 +42,13 @@ func main() {
 	txRepo := repository.NewPaymentTransactionRepository(db)
 	invoiceRepo := repository.NewInvoiceRepository(db)
 
-	// 🎯 FIXED: Initialize services with correct parameters
-	// Fix: Pass both invoiceRepo and paymentRepo to invoice service
+	// Initialize services
 	invoiceService := service.NewInvoiceService(invoiceRepo, paymentRepo)
-	// Use enhanced payment service with auto-invoice generation
 	paymentService := service.NewEnhancedPaymentService(paymentRepo, txRepo, invoiceService)
-
-	// Initialize enhanced order payment service with invoice support
-	//orderPaymentService := service.NewOrderPaymentService(
-	//	paymentRepo,
-	//	txRepo,
-	//	invoiceRepo,
-	//	invoiceService,
-	//)
 	orderPaymentService := service.NewOrderPaymentService(paymentRepo, txRepo, invoiceRepo, invoiceService)
+
+	// 🎯 NEW: Initialize transaction service
+	transactionService := service.NewTransactionService(txRepo, paymentRepo)
 
 	// Setup Kafka
 	paymentKafka, producer := setupKafka(cfg)
@@ -64,7 +58,7 @@ func main() {
 		paymentListener := listeners.NewPaymentListener(paymentKafka)
 		paymentListener.RegisterCallbacks(db)
 
-		// Register invoice listeners for invoice events
+		// Register invoice listeners
 		invoiceTopics := map[string]string{
 			"created": getEnv("KAFKA_INVOICE_CREATED_TOPIC", "invoice-created"),
 			"updated": getEnv("KAFKA_INVOICE_UPDATED_TOPIC", "invoice-updated"),
@@ -79,27 +73,59 @@ func main() {
 			log.Printf("📋 INVOICE: GORM listeners registered for invoice events")
 		}
 
-		log.Printf("💳 PAYMENT SERVICE: GORM listeners registered for payment events")
+		// 🎯 NEW: Register transaction listeners
+		transactionTopics := map[string]string{
+			"created": getEnv("KAFKA_TRANSACTION_CREATED_TOPIC", "transaction-created"),
+			"updated": getEnv("KAFKA_TRANSACTION_UPDATED_TOPIC", "transaction-updated"),
+			"changed": getEnv("KAFKA_TRANSACTION_STATUS_CHANGED_TOPIC", "transaction-status-changed"),
+			"deleted": getEnv("KAFKA_TRANSACTION_DELETED_TOPIC", "transaction-deleted"),
+		}
+
+		if len(transactionTopics) > 0 && producer != nil {
+			transactionKafka := kafka.NewTransactionKafkaService(producer, transactionTopics)
+			transactionListener := listeners.NewTransactionListener(transactionKafka)
+			transactionListener.RegisterCallbacks(db)
+			log.Printf("💳 TRANSACTION: GORM listeners registered for transaction events")
+		}
+
+		log.Printf("💳 PAYMENT SERVICE: All GORM listeners registered successfully")
 	}
 
 	// Initialize handlers
-	paymentHandler := handler.NewPaymentHandler(paymentService)
+	paymentHandler := handler.NewPaymentHandler(
+		paymentService,
+		orderPaymentService,
+		invoiceService,
+	)
+
 	orderPaymentHandler := handler.NewOrderPaymentHandler(
 		orderPaymentService,
 		invoiceService,
 		paymentKafka,
 	)
 
+	analyticsHandler := handler.NewAnalyticsHandler(
+		paymentService,
+		orderPaymentService,
+		invoiceService,
+	)
+
+	// 🎯 NEW: Initialize transaction handler
+	transactionHandler := handler.NewTransactionHandler(
+		transactionService,
+		paymentService,
+	)
+
 	// Setup Chi router
 	r := chi.NewRouter()
 
-	// Middleware
+	// Basic middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 
-	// Add CORS middleware
+	// Simple CORS middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -117,28 +143,35 @@ func main() {
 
 	// Routes
 	r.Route("/api", func(r chi.Router) {
-		// 🎯 FIXED: Regular payment routes use /payments prefix
+		// Payment routes
 		paymentHandler.RegisterRoutes(r)
 
-		// Order-specific payment routes use /orders prefix
+		// Order-specific payment routes
 		orderPaymentHandler.RegisterRoutes(r)
+
+		// Analytics routes
+		analyticsHandler.RegisterRoutes(r)
+
+		// 🎯 NEW: Transaction routes
+		transactionHandler.RegisterRoutes(r)
 	})
 
 	// Test endpoint
 	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"Payment Service with Auto-Invoice Generation","port":"` + cfg.ServerPort + `"}`))
+		w.Write([]byte(`{"message":"Payment Service with Transactions & Analytics","port":"` + cfg.ServerPort + `","version":"2.1"}`))
 	})
 
-	// Health check
+	// Enhanced health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		response := fmt.Sprintf(`{
 			"status":"UP",
 			"service":"payment-service",
-			"features":["payments","auto-invoices","kafka"],
+			"version":"2.1",
+			"features":["payments","auto-invoices","kafka","analytics","transactions"],
 			"port":"%s",
 			"timestamp":"%s",
 			"endpoints":{
@@ -151,7 +184,25 @@ func main() {
 					"GET /api/payments/order/{orderID}",
 					"POST /api/payments/{id}/process",
 					"POST /api/payments/{id}/refund",
-					"GET /api/payments/{id}/status"
+					"GET /api/payments/{id}/status",
+					"GET /api/payments/{id}/invoice",
+					"GET /api/payments/{id}/invoice/pdf",
+					"POST /api/payments/{id}/invoice/email",
+					"GET /api/payments/{id}/transactions"
+				],
+				"transactions":[
+					"POST /api/transactions",
+					"GET /api/transactions/{id}",
+					"PUT /api/transactions/{id}",
+					"POST /api/transactions/{id}/verify",
+					"POST /api/transactions/{id}/retry",
+					"GET /api/transactions",
+					"GET /api/transactions/payment/{paymentID}",
+					"GET /api/transactions/gateway/{gateway}",
+					"GET /api/transactions/failed",
+					"GET /api/transactions/analytics",
+					"POST /api/transactions/bulk/retry",
+					"POST /api/transactions/bulk/verify"
 				],
 				"order_payments":[
 					"POST /api/orders/{orderID}/payments",
@@ -163,12 +214,73 @@ func main() {
 					"GET /api/orders/{orderID}/invoices",
 					"GET /api/orders/{orderID}/invoices/{invoiceID}",
 					"GET /api/orders/{orderID}/invoices/{invoiceID}/pdf",
-					"POST /api/orders/{orderID}/invoices/{invoiceID}/email",
-					"GET /api/payments/{paymentID}/invoice"
+					"POST /api/orders/{orderID}/invoices/{invoiceID}/email"
+				],
+				"analytics":[
+					"GET /api/analytics/dashboard",
+					"GET /api/analytics/dashboard/{period}",
+					"GET /api/analytics/revenue",
+					"GET /api/analytics/revenue/{period}",
+					"GET /api/analytics/transactions",
+					"GET /api/analytics/transactions/success-rate",
+					"GET /api/analytics/transactions/methods",
+					"GET /api/analytics/gateways",
+					"GET /api/analytics/customers",
+					"GET /api/analytics/reports/daily",
+					"GET /api/analytics/reports/weekly",
+					"GET /api/analytics/reports/monthly",
+					"GET /api/analytics/export/payments",
+					"GET /api/analytics/export/revenue"
 				]
 			}
 		}`, cfg.ServerPort, time.Now().Format(time.RFC3339))
 		w.Write([]byte(response))
+	})
+
+	// Admin dashboard information endpoint
+	r.Get("/admin/info", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		adminInfo := fmt.Sprintf(`{
+			"service": "Payment Service with Transaction Management",
+			"version": "2.1",
+			"features": {
+				"payment_processing": true,
+				"transaction_management": true,
+				"analytics": true,
+				"export_capabilities": true,
+				"invoice_management": true,
+				"refund_processing": true,
+				"gateway_monitoring": true,
+				"transaction_retry": true,
+				"bulk_operations": true
+			},
+			"supported_formats": ["json", "csv"],
+			"supported_periods": ["today", "week", "month", "custom"],
+			"payment_methods": ["CREDIT_CARD", "DEBIT_CARD", "PAYPAL", "BANK_TRANSFER", "CRYPTO", "POINTS", "GIFT_CARD"],
+			"payment_statuses": ["PENDING", "COMPLETED", "FAILED", "REFUNDED", "PARTIALLY_REFUNDED"],
+			"transaction_statuses": ["pending", "authorized", "captured", "completed", "failed", "retry_failed", "verified"],
+			"quick_actions": [
+				"Process bulk refunds",
+				"Retry failed transactions",
+				"Send invoice emails",
+				"Generate reports",
+				"Export data",
+				"Monitor gateways",
+				"Verify transactions"
+			],
+			"dashboard_widgets": [
+				"Revenue metrics",
+				"Transaction counts",
+				"Success rates",
+				"Recent transactions",
+				"Failed transactions",
+				"Gateway performance",
+				"Payment method analytics",
+				"Transaction analytics"
+			]
+		}`)
+		w.Write([]byte(adminInfo))
 	})
 
 	// Create HTTP server
@@ -189,21 +301,39 @@ func main() {
 
 	// Start the server
 	go func() {
-		fmt.Printf("🚀 Payment Service with Auto-Invoice Generation starting on port %s...\n", cfg.ServerPort)
+		fmt.Printf("🚀 Payment Service v2.1 with Transaction Management starting on port %s...\n", cfg.ServerPort)
 		fmt.Printf("📋 Service available at: http://localhost:%s\n", cfg.ServerPort)
 		fmt.Printf("🏥 Health check: http://localhost:%s/health\n", cfg.ServerPort)
 		fmt.Printf("🧪 Test endpoint: http://localhost:%s/test\n", cfg.ServerPort)
+		fmt.Printf("👨‍💼 Admin info: http://localhost:%s/admin/info\n", cfg.ServerPort)
 
 		log.Printf("💳 Payment endpoints:")
 		log.Printf("  POST http://localhost:%s/api/payments - Create payment", cfg.ServerPort)
 		log.Printf("  GET  http://localhost:%s/api/payments/{id} - Get payment", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/payments/{id}/invoice - Get payment invoice", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/payments/{id}/transactions - Get payment transactions", cfg.ServerPort)
 		log.Printf("  POST http://localhost:%s/api/payments/{id}/process - Process payment", cfg.ServerPort)
 		log.Printf("  POST http://localhost:%s/api/payments/{id}/refund - Refund payment", cfg.ServerPort)
 
+		log.Printf("💳 Transaction endpoints:")
+		log.Printf("  POST http://localhost:%s/api/transactions - Create transaction", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/transactions/{id} - Get transaction", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/transactions/{id}/verify - Verify transaction", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/transactions/{id}/retry - Retry failed transaction", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/transactions/failed - Get failed transactions", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/transactions/analytics - Get transaction analytics", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/transactions/bulk/retry - Bulk retry transactions", cfg.ServerPort)
+
 		log.Printf("📋 Order Payment endpoints:")
-		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/payments - Process order payment (Auto-generates invoice)", cfg.ServerPort)
+		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/payments - Process order payment", cfg.ServerPort)
 		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/payments - Get order payments", cfg.ServerPort)
 		log.Printf("  POST http://localhost:%s/api/orders/{orderID}/refund - Refund order payment", cfg.ServerPort)
+
+		log.Printf("📊 Analytics endpoints:")
+		log.Printf("  GET  http://localhost:%s/api/analytics/dashboard - Dashboard metrics", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/analytics/revenue - Revenue analytics", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/analytics/transactions - Transaction analytics", cfg.ServerPort)
+		log.Printf("  GET  http://localhost:%s/api/analytics/gateways - Gateway performance", cfg.ServerPort)
 
 		log.Printf("📋 Invoice endpoints:")
 		log.Printf("  GET  http://localhost:%s/api/orders/{orderID}/invoices - Get order invoices", cfg.ServerPort)
@@ -411,4 +541,4 @@ func deregisterFromEureka(eurekaConn *fargo.EurekaConnection, cfg *config.Config
 
 	log.Printf("Successfully deregistered instance: %s", cfg.EurekaInstanceId)
 	return nil
-}
+}l
