@@ -1,6 +1,5 @@
 package com.Ecommerce.Notification_Service.Services.Kafka;
 
-import com.Ecommerce.Notification_Service.Config.KafkaProducerConfig;
 import com.Ecommerce.Notification_Service.Models.NotificationType;
 import com.Ecommerce.Notification_Service.Services.NotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,8 +13,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Service for consuming events from Kafka topics from other services
- * and creating notifications based on those events.
+ * Enhanced Kafka consumer to handle all product service events and convert them to notifications
  */
 @Service
 @RequiredArgsConstructor
@@ -25,10 +23,275 @@ public class KafkaConsumerService {
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Listen for order status change events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_ORDER_STATUS_CHANGED, groupId = "${spring.kafka.consumer.group-id}")
+    // ================ PRODUCT EVENTS ================
+
+    @KafkaListener(topics = "product-created", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleProductCreated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("name").asText();
+            String productId = event.path("productId").asText();
+
+            // Notify admin users about new product
+            UUID adminUserId = getAdminUserId(); // Implement this method
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.PRODUCT_CREATED,
+                    String.format("New product '%s' has been created", productName),
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            log.info("Created notification for product created: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing product created event", e);
+        }
+    }
+
+    @KafkaListener(topics = "product-updated", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleProductUpdated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("name").asText();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.PRODUCT_UPDATED,
+                    String.format("Product '%s' has been updated", productName),
+                    LocalDateTime.now().plusDays(3)
+            );
+
+            log.info("Created notification for product updated: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing product updated event", e);
+        }
+    }
+
+    @KafkaListener(topics = "product-price-changed", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleProductPriceChanged(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("name").asText();
+            String previousPrice = event.path("previousPrice").asText();
+            String newPrice = event.path("newPrice").asText();
+
+            // Notify interested users about price changes
+            notificationService.broadcastSystemNotification(
+                    "Price Update",
+                    String.format("Price of '%s' changed from %s to %s", productName, previousPrice, newPrice),
+                    NotificationType.PRODUCT_PRICE_CHANGED
+            );
+
+            log.info("Created notification for product price changed: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing product price changed event", e);
+        }
+    }
+
+    @KafkaListener(topics = "product-status-changed", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleProductStatusChanged(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("name").asText();
+            String newStatus = event.path("newStatus").asText();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.PRODUCT_STATUS_CHANGED,
+                    String.format("Product '%s' status changed to %s", productName, newStatus),
+                    LocalDateTime.now().plusDays(5)
+            );
+
+            log.info("Created notification for product status changed: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing product status changed event", e);
+        }
+    }
+
+    // ================ INVENTORY EVENTS ================
+
+    @KafkaListener(topics = "inventory-low-stock", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleInventoryLowStock(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            int currentQuantity = event.path("currentQuantity").asInt();
+            int threshold = event.path("lowStockThreshold").asInt();
+            String warehouseLocation = event.path("warehouseLocation").asText();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createInventoryNotification(
+                    adminUserId,
+                    NotificationType.INVENTORY_LOW_STOCK,
+                    productName,
+                    currentQuantity,
+                    threshold,
+                    warehouseLocation
+            );
+
+            log.info("Created low stock notification for product: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing inventory low stock event", e);
+        }
+    }
+
+    @KafkaListener(topics = "inventory-restocked", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleInventoryRestocked(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            int newQuantity = event.path("newQuantity").asInt();
+            String warehouseLocation = event.path("warehouseLocation").asText();
+
+            // Notify users who were interested in this out-of-stock product
+            notificationService.broadcastSystemNotification(
+                    "Stock Replenished",
+                    String.format("'%s' is back in stock! New quantity: %d (Location: %s)",
+                            productName, newQuantity, warehouseLocation),
+                    NotificationType.INVENTORY_RESTOCKED
+            );
+
+            log.info("Created restock notification for product: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing inventory restocked event", e);
+        }
+    }
+
+    // ================ DISCOUNT EVENTS ================
+
+    @KafkaListener(topics = "discount-activated", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleDiscountActivated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            String discountValue = event.path("discountValue").asText();
+            String discountType = event.path("discountType").asText();
+
+            // Notify all users about new discount
+            notificationService.broadcastSystemNotification(
+                    "New Discount Available",
+                    String.format("Special %s discount of %s now available for '%s'!",
+                            discountType, discountValue, productName),
+                    NotificationType.DISCOUNT_ACTIVATED
+            );
+
+            log.info("Created discount activation notification for product: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing discount activated event", e);
+        }
+    }
+
+    @KafkaListener(topics = "discount-expired", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleDiscountExpired(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            String discountType = event.path("discountType").asText();
+
+            // Notify users that discount has expired
+            notificationService.broadcastSystemNotification(
+                    "Discount Expired",
+                    String.format("The %s discount for '%s' has expired", discountType, productName),
+                    NotificationType.DISCOUNT_EXPIRED
+            );
+
+            log.info("Created discount expiration notification for product: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing discount expired event", e);
+        }
+    }
+
+    // ================ CATEGORY EVENTS ================
+
+    @KafkaListener(topics = "category-created", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleCategoryCreated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String categoryName = event.path("name").asText();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.CATEGORY_CREATED,
+                    String.format("New category '%s' has been created", categoryName),
+                    LocalDateTime.now().plusDays(3)
+            );
+
+            log.info("Created notification for category created: {}", categoryName);
+        } catch (Exception e) {
+            log.error("Error processing category created event", e);
+        }
+    }
+
+    // ================ REVIEW EVENTS ================
+
+    @KafkaListener(topics = "review-created", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleReviewCreated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            int rating = event.path("rating").asInt();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.REVIEW_CREATED,
+                    String.format("New %d-star review created for '%s'", rating, productName),
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            log.info("Created notification for review created: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing review created event", e);
+        }
+    }
+
+    @KafkaListener(topics = "review-verified", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleReviewVerified(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            UUID userId = UUID.fromString(event.path("userId").asText());
+
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.REVIEW_VERIFIED,
+                    String.format("Your review for '%s' has been verified", productName),
+                    LocalDateTime.now().plusDays(30)
+            );
+
+            log.info("Created notification for review verified: {}", productName);
+        } catch (Exception e) {
+            log.error("Error processing review verified event", e);
+        }
+    }
+
+    // ================ SUPPLIER EVENTS ================
+
+    @KafkaListener(topics = "supplier-created", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleSupplierCreated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String supplierName = event.path("name").asText();
+
+            UUID adminUserId = getAdminUserId();
+            notificationService.createNotification(
+                    adminUserId,
+                    NotificationType.SUPPLIER_CREATED,
+                    String.format("New supplier '%s' has been added", supplierName),
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            log.info("Created notification for supplier created: {}", supplierName);
+        } catch (Exception e) {
+            log.error("Error processing supplier created event", e);
+        }
+    }
+
+    // ================ EXISTING EVENTS (Enhanced) ================
+
+    @KafkaListener(topics = "order-status-changed", groupId = "${spring.kafka.consumer.group-id}")
     public void listenOrderStatusChanged(String message) {
         try {
             JsonNode eventNode = objectMapper.readTree(message);
@@ -38,7 +301,6 @@ public class KafkaConsumerService {
 
             String content = String.format("Your order #%s has been updated to status: %s", orderId, newStatus);
 
-            // Create notification for the user
             notificationService.createNotification(
                     userId,
                     NotificationType.ORDER_STATUS,
@@ -52,10 +314,7 @@ public class KafkaConsumerService {
         }
     }
 
-    /**
-     * Listen for payment confirmation events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_PAYMENT_CONFIRMED, groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(topics = "payment-confirmed", groupId = "${spring.kafka.consumer.group-id}")
     public void listenPaymentConfirmed(String message) {
         try {
             JsonNode eventNode = objectMapper.readTree(message);
@@ -65,7 +324,6 @@ public class KafkaConsumerService {
 
             String content = String.format("Payment of %s has been confirmed for order #%s. Thank you for your purchase!", amount, orderId);
 
-            // Create notification for the user
             notificationService.createNotification(
                     userId,
                     NotificationType.PAYMENT_CONFIRMATION,
@@ -79,104 +337,7 @@ public class KafkaConsumerService {
         }
     }
 
-    /**
-     * Listen for product restock events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_PRODUCT_RESTOCKED, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenProductRestocked(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID productId = UUID.fromString(eventNode.path("productId").asText());
-            String productName = eventNode.path("productName").asText();
-            JsonNode interestedUsersNode = eventNode.path("interestedUsers");
-
-            if (interestedUsersNode.isArray()) {
-                for (JsonNode userNode : interestedUsersNode) {
-                    UUID userId = UUID.fromString(userNode.asText());
-                    String content = String.format("Good news! %s is back in stock. Get it before it's gone again!", productName);
-
-                    // Create notification for each interested user
-                    notificationService.createNotification(
-                            userId,
-                            NotificationType.PRODUCT_RESTOCKED,
-                            content,
-                            LocalDateTime.now().plusDays(3)
-                    );
-                }
-
-                log.info("Created restock notifications for product: {}", productName);
-            }
-        } catch (Exception e) {
-            log.error("Error processing product restock event", e);
-        }
-    }
-
-    /**
-     * Listen for price drop events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_PRICE_DROP, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenPriceDrop(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID productId = UUID.fromString(eventNode.path("productId").asText());
-            String productName = eventNode.path("productName").asText();
-            String oldPrice = eventNode.path("oldPrice").asText();
-            String newPrice = eventNode.path("newPrice").asText();
-            JsonNode interestedUsersNode = eventNode.path("interestedUsers");
-
-            if (interestedUsersNode.isArray()) {
-                for (JsonNode userNode : interestedUsersNode) {
-                    UUID userId = UUID.fromString(userNode.asText());
-                    String content = String.format("Price drop alert! %s is now %s (was %s). Grab it while it's on sale!",
-                            productName, newPrice, oldPrice);
-
-                    // Create notification for each interested user
-                    notificationService.createNotification(
-                            userId,
-                            NotificationType.PRICE_DROP,
-                            content,
-                            LocalDateTime.now().plusDays(3)
-                    );
-                }
-
-                log.info("Created price drop notifications for product: {}", productName);
-            }
-        } catch (Exception e) {
-            log.error("Error processing price drop event", e);
-        }
-    }
-
-    /**
-     * Listen for cart abandoned events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_CART_ABANDONED, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenCartAbandoned(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(eventNode.path("userId").asText());
-            int itemCount = eventNode.path("itemCount").asInt();
-
-            String content = String.format("You have %d items waiting in your cart. Complete your purchase now to avoid missing out!", itemCount);
-
-            // Create notification for the user after a delay (e.g., 1 day)
-            // In a real implementation, this might be scheduled rather than immediate
-            notificationService.createNotification(
-                    userId,
-                    NotificationType.ACCOUNT_ACTIVITY,
-                    content,
-                    LocalDateTime.now().plusDays(3)
-            );
-
-            log.info("Created cart abandoned notification for user: {}", userId);
-        } catch (Exception e) {
-            log.error("Error processing cart abandoned event", e);
-        }
-    }
-
-    /**
-     * Listen for shipping update events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_SHIPPING_UPDATE, groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(topics = "shipping-update", groupId = "${spring.kafka.consumer.group-id}")
     public void listenShippingUpdate(String message) {
         try {
             JsonNode eventNode = objectMapper.readTree(message);
@@ -193,7 +354,6 @@ public class KafkaConsumerService {
                 content = String.format("Shipping update for order #%s: %s", orderId, status);
             }
 
-            // Create notification for the user
             notificationService.createNotification(
                     userId,
                     NotificationType.SHIPPING_UPDATE,
@@ -205,5 +365,16 @@ public class KafkaConsumerService {
         } catch (Exception e) {
             log.error("Error processing shipping update event", e);
         }
+    }
+
+    // ================ HELPER METHODS ================
+
+    /**
+     * Get admin user ID - implement based on your user management system
+     */
+    private UUID getAdminUserId() {
+        // TODO: Implement this based on your user management
+        // For now, returning a fixed UUID - replace with actual admin user lookup
+        return UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 }
