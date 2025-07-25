@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/models"
+	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/repository"
 	"github.com/ZakariaRek/Ecommerce-App/Payment-Service/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -15,6 +17,7 @@ import (
 // PaymentHandler handles payment-related HTTP requests
 type PaymentHandler struct {
 	paymentService      service.PaymentService
+	enhancedRepo        repository.EnhancedPaymentRepository // 🎯 FIXED: Add enhanced repo
 	orderPaymentService service.OrderPaymentService
 	invoiceService      service.InvoiceService
 }
@@ -22,11 +25,13 @@ type PaymentHandler struct {
 // NewPaymentHandler creates a new payment handler
 func NewPaymentHandler(
 	paymentService service.PaymentService,
+	enhancedRepo repository.EnhancedPaymentRepository, // 🎯 FIXED: Add enhanced repo parameter
 	orderPaymentService service.OrderPaymentService,
 	invoiceService service.InvoiceService,
 ) *PaymentHandler {
 	return &PaymentHandler{
 		paymentService:      paymentService,
+		enhancedRepo:        enhancedRepo, // 🎯 FIXED: Store enhanced repo
 		orderPaymentService: orderPaymentService,
 		invoiceService:      invoiceService,
 	}
@@ -40,20 +45,183 @@ func (h *PaymentHandler) RegisterRoutes(r chi.Router) {
 		r.Get("/{id}", h.GetPayment)
 		r.Put("/{id}", h.UpdatePayment)
 		r.Delete("/{id}", h.DeletePayment)
-		r.Get("/", h.GetAllPayments)
+		r.Get("/", h.GetAllPayments) // 🎯 FIXED: This is the correct endpoint
 		r.Get("/order/{orderID}", h.GetPaymentsByOrder)
 		r.Post("/{id}/process", h.ProcessPayment)
 		r.Post("/{id}/refund", h.RefundPayment)
 		r.Get("/{id}/status", h.GetPaymentStatus)
 
-		// 🎯 FIXED: Add invoice routes for payments
+		// Invoice routes for payments
 		r.Get("/{id}/invoice", h.GetPaymentInvoice)
 		r.Get("/{id}/invoice/pdf", h.GetPaymentInvoicePDF)
 		r.Post("/{id}/invoice/email", h.EmailPaymentInvoice)
 
-		// 🎯 NEW: Add transaction routes
+		// Transaction routes
 		r.Get("/{id}/transactions", h.GetPaymentTransactions)
 	})
+}
+
+// GetAllPayments gets all payments with proper pagination and filters
+func (h *PaymentHandler) GetAllPayments(w http.ResponseWriter, r *http.Request) {
+	// Parse pagination parameters
+	page := 1
+	limit := 50
+
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	// 🎯 FIXED: Parse and validate filters
+	filters := repository.PaymentFilters{}
+
+	// Parse status filter
+	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
+		status := models.PaymentStatus(statusStr)
+		// Validate status
+		if h.isValidStatus(status) {
+			filters.Status = &status
+		} else {
+			http.Error(w, "Invalid status value. Valid values: PENDING, COMPLETED, FAILED, REFUNDED, PARTIALLY_REFUNDED", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse method filter
+	if methodStr := r.URL.Query().Get("method"); methodStr != "" {
+		method := models.PaymentMethod(methodStr)
+		// Validate method
+		if h.isValidMethod(method) {
+			filters.Method = &method
+		} else {
+			http.Error(w, "Invalid method value. Valid values: CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER, CRYPTO, POINTS, GIFT_CARD", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse date filters
+	if dateFromStr := r.URL.Query().Get("dateFrom"); dateFromStr != "" {
+		if dateFrom, err := time.Parse("2006-01-02", dateFromStr); err == nil {
+			filters.StartDate = &dateFrom
+		} else {
+			http.Error(w, "Invalid dateFrom format. Use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if dateToStr := r.URL.Query().Get("dateTo"); dateToStr != "" {
+		if dateTo, err := time.Parse("2006-01-02", dateToStr); err == nil {
+			// Set to end of day
+			dateTo = dateTo.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			filters.EndDate = &dateTo
+		} else {
+			http.Error(w, "Invalid dateTo format. Use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse amount filters
+	if amountMinStr := r.URL.Query().Get("amountMin"); amountMinStr != "" {
+		if amountMin, err := strconv.ParseFloat(amountMinStr, 64); err == nil && amountMin >= 0 {
+			filters.AmountMin = &amountMin
+		} else {
+			http.Error(w, "Invalid amountMin value", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if amountMaxStr := r.URL.Query().Get("amountMax"); amountMaxStr != "" {
+		if amountMax, err := strconv.ParseFloat(amountMaxStr, 64); err == nil && amountMax >= 0 {
+			filters.AmountMax = &amountMax
+		} else {
+			http.Error(w, "Invalid amountMax value", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse orderID filter
+	if orderIDStr := r.URL.Query().Get("orderID"); orderIDStr != "" {
+		if orderID, err := uuid.Parse(orderIDStr); err == nil {
+			filters.OrderID = &orderID
+		} else {
+			http.Error(w, "Invalid orderID format", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// 🎯 FIXED: Use enhanced repository with proper filtering and pagination
+	paginatedResult, err := h.enhancedRepo.FindWithPagination(page, limit, filters)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 🎯 FIXED: Return properly structured response
+	response := map[string]interface{}{
+		"payments": paginatedResult.Payments,
+		"pagination": map[string]interface{}{
+			"page":       paginatedResult.Page,
+			"limit":      paginatedResult.Limit,
+			"total":      paginatedResult.Total,
+			"totalPages": paginatedResult.TotalPages,
+		},
+		"filters": map[string]interface{}{
+			"status":    r.URL.Query().Get("status"),
+			"method":    r.URL.Query().Get("method"),
+			"dateFrom":  r.URL.Query().Get("dateFrom"),
+			"dateTo":    r.URL.Query().Get("dateTo"),
+			"amountMin": r.URL.Query().Get("amountMin"),
+			"amountMax": r.URL.Query().Get("amountMax"),
+			"orderID":   r.URL.Query().Get("orderID"),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// 🎯 FIXED: Add validation helper methods
+func (h *PaymentHandler) isValidStatus(status models.PaymentStatus) bool {
+	validStatuses := []models.PaymentStatus{
+		models.Pending,
+		models.Completed,
+		models.Failed,
+		models.Refunded,
+		models.PartiallyRefunded,
+	}
+
+	for _, validStatus := range validStatuses {
+		if status == validStatus {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *PaymentHandler) isValidMethod(method models.PaymentMethod) bool {
+	validMethods := []models.PaymentMethod{
+		models.CreditCard,
+		models.DebitCard,
+		models.PayPal,
+		models.BankTransfer,
+		models.Crypto,
+		models.Points,
+		models.GiftCard,
+	}
+
+	for _, validMethod := range validMethods {
+		if method == validMethod {
+			return true
+		}
+	}
+	return false
 }
 
 // CreatePayment creates a new payment
@@ -135,60 +303,6 @@ func (h *PaymentHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetAllPayments gets all payments with pagination and filters
-func (h *PaymentHandler) GetAllPayments(w http.ResponseWriter, r *http.Request) {
-	// 🎯 NEW: Add pagination and filtering
-	page := 1
-	limit := 50
-
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
-
-	// Get filters
-	status := r.URL.Query().Get("status")
-	method := r.URL.Query().Get("method")
-	dateFrom := r.URL.Query().Get("dateFrom")
-	dateTo := r.URL.Query().Get("dateTo")
-
-	// For now, get all payments (you should implement filtered repository method)
-	payments, err := h.paymentService.GetAllPayments()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 🎯 TODO: Implement actual filtering and pagination in repository
-	// This is a simplified version - you should add these methods to your repository
-
-	response := map[string]interface{}{
-		"payments": payments,
-		"pagination": map[string]interface{}{
-			"page":       page,
-			"limit":      limit,
-			"total":      len(payments),
-			"totalPages": (len(payments) + limit - 1) / limit,
-		},
-		"filters": map[string]interface{}{
-			"status":   status,
-			"method":   method,
-			"dateFrom": dateFrom,
-			"dateTo":   dateTo,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
 // GetPaymentsByOrder gets payments by order ID
 func (h *PaymentHandler) GetPaymentsByOrder(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
@@ -248,7 +362,7 @@ func (h *PaymentHandler) RefundPayment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// 🎯 TODO: Implement partial refund in service
+		// TODO: Implement partial refund in service
 		if err := h.paymentService.RefundPayment(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -284,7 +398,7 @@ func (h *PaymentHandler) GetPaymentStatus(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(response)
 }
 
-// 🎯 NEW: GetPaymentInvoice gets the invoice for a payment
+// GetPaymentInvoice gets the invoice for a payment
 func (h *PaymentHandler) GetPaymentInvoice(w http.ResponseWriter, r *http.Request) {
 	paymentIDStr := chi.URLParam(r, "id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -313,7 +427,7 @@ func (h *PaymentHandler) GetPaymentInvoice(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(response)
 }
 
-// 🎯 NEW: GetPaymentInvoicePDF generates and returns the invoice PDF
+// GetPaymentInvoicePDF generates and returns the invoice PDF
 func (h *PaymentHandler) GetPaymentInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	paymentIDStr := chi.URLParam(r, "id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -345,7 +459,7 @@ func (h *PaymentHandler) GetPaymentInvoicePDF(w http.ResponseWriter, r *http.Req
 	w.Write(pdfData)
 }
 
-// 🎯 NEW: EmailPaymentInvoice sends the invoice via email
+// EmailPaymentInvoice sends the invoice via email
 func (h *PaymentHandler) EmailPaymentInvoice(w http.ResponseWriter, r *http.Request) {
 	paymentIDStr := chi.URLParam(r, "id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -390,7 +504,7 @@ func (h *PaymentHandler) EmailPaymentInvoice(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(response)
 }
 
-// 🎯 NEW: GetPaymentTransactions gets all transactions for a payment
+// GetPaymentTransactions gets all transactions for a payment
 func (h *PaymentHandler) GetPaymentTransactions(w http.ResponseWriter, r *http.Request) {
 	paymentIDStr := chi.URLParam(r, "id")
 	paymentID, err := uuid.Parse(paymentIDStr)
@@ -399,7 +513,7 @@ func (h *PaymentHandler) GetPaymentTransactions(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// 🎯 TODO: You'll need to add this method to your service
+	// TODO: You'll need to add this method to your service
 	// For now, return empty array
 	response := map[string]interface{}{
 		"paymentID":    paymentID.String(),
