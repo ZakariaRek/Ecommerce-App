@@ -5,7 +5,6 @@ public enum NotificationType {
     PAYMENT_CONFIRMATION,
     SHIPPING_UPDATE,
     PRODUCT_RESTOCKED,
-    PRICE_DROP,
     ACCOUNT_ACTIVITY,
     PROMOTION
 }

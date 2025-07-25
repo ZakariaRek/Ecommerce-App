@@ -42,8 +42,7 @@ public class KafkaProducerConfig {
     public static final String TOPIC_ORDER_STATUS_CHANGED = "order-status-changed";
     public static final String TOPIC_PAYMENT_CONFIRMED = "payment-confirmed";
     public static final String TOPIC_PRODUCT_RESTOCKED = "product-restocked";
-    public static final String TOPIC_PRICE_DROP = "price-drop";
-    public static final String TOPIC_CART_ABANDONED = "cart-abandoned";
+
     public static final String TOPIC_SHIPPING_UPDATE = "shipping-update";
 
     /**

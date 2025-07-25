@@ -111,67 +111,8 @@ public class KafkaConsumerService {
         }
     }
 
-    /**
-     * Listen for price drop events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_PRICE_DROP, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenPriceDrop(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID productId = UUID.fromString(eventNode.path("productId").asText());
-            String productName = eventNode.path("productName").asText();
-            String oldPrice = eventNode.path("oldPrice").asText();
-            String newPrice = eventNode.path("newPrice").asText();
-            JsonNode interestedUsersNode = eventNode.path("interestedUsers");
 
-            if (interestedUsersNode.isArray()) {
-                for (JsonNode userNode : interestedUsersNode) {
-                    UUID userId = UUID.fromString(userNode.asText());
-                    String content = String.format("Price drop alert! %s is now %s (was %s). Grab it while it's on sale!",
-                            productName, newPrice, oldPrice);
 
-                    // Create notification for each interested user
-                    notificationService.createNotification(
-                            userId,
-                            NotificationType.PRICE_DROP,
-                            content,
-                            LocalDateTime.now().plusDays(3)
-                    );
-                }
-
-                log.info("Created price drop notifications for product: {}", productName);
-            }
-        } catch (Exception e) {
-            log.error("Error processing price drop event", e);
-        }
-    }
-
-    /**
-     * Listen for cart abandoned events
-     */
-    @KafkaListener(topics = KafkaProducerConfig.TOPIC_CART_ABANDONED, groupId = "${spring.kafka.consumer.group-id}")
-    public void listenCartAbandoned(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(eventNode.path("userId").asText());
-            int itemCount = eventNode.path("itemCount").asInt();
-
-            String content = String.format("You have %d items waiting in your cart. Complete your purchase now to avoid missing out!", itemCount);
-
-            // Create notification for the user after a delay (e.g., 1 day)
-            // In a real implementation, this might be scheduled rather than immediate
-            notificationService.createNotification(
-                    userId,
-                    NotificationType.ACCOUNT_ACTIVITY,
-                    content,
-                    LocalDateTime.now().plusDays(3)
-            );
-
-            log.info("Created cart abandoned notification for user: {}", userId);
-        } catch (Exception e) {
-            log.error("Error processing cart abandoned event", e);
-        }
-    }
 
     /**
      * Listen for shipping update events

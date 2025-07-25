@@ -1,4 +1,8 @@
 spring:
+  profiles:
+    active: kafka  # ADD THIS LINE to enable Kafka logging
+  config:
+    import: configserver:http://localhost:8888
   data:
     mongodb:
       database: Notification-service  # Ensure this is your intended database name
