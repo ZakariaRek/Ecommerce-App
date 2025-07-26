@@ -2,6 +2,7 @@ package com.Ecommerce.Notification_Service.Services.Kafka;
 
 import com.Ecommerce.Notification_Service.Models.NotificationType;
 import com.Ecommerce.Notification_Service.Services.NotificationService;
+import com.Ecommerce.Notification_Service.Services.SSENotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -10,10 +11,12 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Enhanced Kafka consumer to handle all product service events and convert them to notifications
+ * Now sends notifications to all connected SSE users instead of hardcoded admin
  */
 @Service
 @RequiredArgsConstructor
@@ -21,6 +24,7 @@ import java.util.UUID;
 public class KafkaConsumerService {
 
     private final NotificationService notificationService;
+    private final SSENotificationService sseNotificationService;
     private final ObjectMapper objectMapper;
 
     // ================ PRODUCT EVENTS ================
@@ -32,10 +36,8 @@ public class KafkaConsumerService {
             String productName = event.path("name").asText();
             String productId = event.path("productId").asText();
 
-            // Notify admin users about new product
-            UUID adminUserId = getAdminUserId(); // Implement this method
-            notificationService.createNotification(
-                    adminUserId,
+            // Send to all connected users
+            sendNotificationToConnectedUsers(
                     NotificationType.PRODUCT_CREATED,
                     String.format("New product '%s' has been created", productName),
                     LocalDateTime.now().plusDays(7)
@@ -53,9 +55,7 @@ public class KafkaConsumerService {
             JsonNode event = objectMapper.readTree(message);
             String productName = event.path("name").asText();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createNotification(
-                    adminUserId,
+            sendNotificationToConnectedUsers(
                     NotificationType.PRODUCT_UPDATED,
                     String.format("Product '%s' has been updated", productName),
                     LocalDateTime.now().plusDays(3)
@@ -95,9 +95,7 @@ public class KafkaConsumerService {
             String productName = event.path("name").asText();
             String newStatus = event.path("newStatus").asText();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createNotification(
-                    adminUserId,
+            sendNotificationToConnectedUsers(
                     NotificationType.PRODUCT_STATUS_CHANGED,
                     String.format("Product '%s' status changed to %s", productName, newStatus),
                     LocalDateTime.now().plusDays(5)
@@ -120,9 +118,8 @@ public class KafkaConsumerService {
             int threshold = event.path("lowStockThreshold").asInt();
             String warehouseLocation = event.path("warehouseLocation").asText();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createInventoryNotification(
-                    adminUserId,
+            // Send inventory notifications to all connected users
+            sendInventoryNotificationToConnectedUsers(
                     NotificationType.INVENTORY_LOW_STOCK,
                     productName,
                     currentQuantity,
@@ -210,9 +207,7 @@ public class KafkaConsumerService {
             JsonNode event = objectMapper.readTree(message);
             String categoryName = event.path("name").asText();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createNotification(
-                    adminUserId,
+            sendNotificationToConnectedUsers(
                     NotificationType.CATEGORY_CREATED,
                     String.format("New category '%s' has been created", categoryName),
                     LocalDateTime.now().plusDays(3)
@@ -233,9 +228,7 @@ public class KafkaConsumerService {
             String productName = event.path("productName").asText();
             int rating = event.path("rating").asInt();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createNotification(
-                    adminUserId,
+            sendNotificationToConnectedUsers(
                     NotificationType.REVIEW_CREATED,
                     String.format("New %d-star review created for '%s'", rating, productName),
                     LocalDateTime.now().plusDays(7)
@@ -254,6 +247,7 @@ public class KafkaConsumerService {
             String productName = event.path("productName").asText();
             UUID userId = UUID.fromString(event.path("userId").asText());
 
+            // This is user-specific, so send only to the specific user
             notificationService.createNotification(
                     userId,
                     NotificationType.REVIEW_VERIFIED,
@@ -275,9 +269,7 @@ public class KafkaConsumerService {
             JsonNode event = objectMapper.readTree(message);
             String supplierName = event.path("name").asText();
 
-            UUID adminUserId = getAdminUserId();
-            notificationService.createNotification(
-                    adminUserId,
+            sendNotificationToConnectedUsers(
                     NotificationType.SUPPLIER_CREATED,
                     String.format("New supplier '%s' has been added", supplierName),
                     LocalDateTime.now().plusDays(7)
@@ -289,7 +281,7 @@ public class KafkaConsumerService {
         }
     }
 
-    // ================ EXISTING EVENTS (Enhanced) ================
+    // ================ EXISTING EVENTS (User-specific) ================
 
     @KafkaListener(topics = "order-status-changed", groupId = "${spring.kafka.consumer.group-id}")
     public void listenOrderStatusChanged(String message) {
@@ -370,11 +362,81 @@ public class KafkaConsumerService {
     // ================ HELPER METHODS ================
 
     /**
-     * Get admin user ID - implement based on your user management system
+     * Send notification to all currently connected SSE users
      */
-    private UUID getAdminUserId() {
-        // TODO: Implement this based on your user management
-        // For now, returning a fixed UUID - replace with actual admin user lookup
-        return UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private void sendNotificationToConnectedUsers(NotificationType type, String content, LocalDateTime expiresAt) {
+        Set<UUID> connectedUsers = sseNotificationService.getConnectedUsers();
+
+        if (connectedUsers.isEmpty()) {
+            log.debug("No connected users found for notification type: {}", type);
+            return;
+        }
+
+        log.info("Sending notification to {} connected users for type: {}", connectedUsers.size(), type);
+
+        for (UUID userId : connectedUsers) {
+            try {
+                notificationService.createNotification(userId, type, content, expiresAt);
+            } catch (Exception e) {
+                log.error("Error creating notification for user: {}", userId, e);
+            }
+        }
+    }
+
+    /**
+     * Send inventory notification to all connected users
+     */
+    private void sendInventoryNotificationToConnectedUsers(NotificationType type, String productName,
+                                                           Integer currentStock, Integer threshold, String warehouseLocation) {
+        Set<UUID> connectedUsers = sseNotificationService.getConnectedUsers();
+
+        if (connectedUsers.isEmpty()) {
+            log.debug("No connected users found for inventory notification");
+            return;
+        }
+
+        log.info("Sending inventory notification to {} connected users for product: {}", connectedUsers.size(), productName);
+
+        for (UUID userId : connectedUsers) {
+            try {
+                notificationService.createInventoryNotification(userId, type, productName, currentStock, threshold, warehouseLocation);
+            } catch (Exception e) {
+                log.error("Error creating inventory notification for user: {}", userId, e);
+            }
+        }
+    }
+
+    /**
+     * Send product notification to all connected users
+     */
+    private void sendProductNotificationToConnectedUsers(NotificationType type, String content,
+                                                         String productId, String productName, LocalDateTime expiresAt) {
+        Set<UUID> connectedUsers = sseNotificationService.getConnectedUsers();
+
+        if (connectedUsers.isEmpty()) {
+            log.debug("No connected users found for product notification");
+            return;
+        }
+
+        log.info("Sending product notification to {} connected users for product: {}", connectedUsers.size(), productName);
+
+        for (UUID userId : connectedUsers) {
+            try {
+                notificationService.createProductNotification(userId, type, content, productId, productName, expiresAt);
+            } catch (Exception e) {
+                log.error("Error creating product notification for user: {}", userId, e);
+            }
+        }
+    }
+
+    /**
+     * Get connection statistics for logging
+     */
+    private void logConnectionStats() {
+        Set<UUID> connectedUsers = sseNotificationService.getConnectedUsers();
+        int totalConnections = sseNotificationService.getTotalConnections();
+
+        log.info("SSE Connection Stats - Connected Users: {}, Total Connections: {}",
+                connectedUsers.size(), totalConnections);
     }
 }

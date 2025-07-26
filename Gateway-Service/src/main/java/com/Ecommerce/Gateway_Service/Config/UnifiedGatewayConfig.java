@@ -346,17 +346,17 @@ public class UnifiedGatewayConfig {
                                 .filter(jwtAuthenticationFilterFactory.apply(new JwtAuthenticationFilterFactory.Config()))
                                 .filter(customRateLimitFilterFactory.apply(createConfig(30, 60, CustomRateLimitFilterFactory.KeyType.USER)))
                                 .circuitBreaker(config -> config.setName("notification-cb")))
-                        .uri("lb://NOTIFICATION-SERVICE"))
+                        .uri("lb://notification-service"))
 
                 .route("notification-service-swagger-ui", r -> r
                         .path("/notification-service/swagger-ui/**")
                         .filters(f -> f.rewritePath("/notification-service/swagger-ui/(?<segment>.*)", "/swagger-ui/${segment}"))
-                        .uri("lb://NOTIFICATION-SERVICE"))
+                        .uri("lb://notification-service"))
 
                 .route("notification-service-api-docs", r -> r
                         .path("/notification-service/v3/api-docs/**")
                         .filters(f -> f.rewritePath("/notification-service/v3/api-docs/(?<segment>.*)", "/v3/api-docs/${segment}"))
-                        .uri("lb://NOTIFICATION-SERVICE"))
+                        .uri("lb://notification-service"))
 
                 // Shipping Service Routes (Go service)
                 .route("shipping-service-api", r -> r

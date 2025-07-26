@@ -10,9 +10,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -26,6 +24,82 @@ public class SSENotificationService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    // Add this method to your SSENotificationService class
+
+    /**
+     * Get all connected user IDs
+     */
+    public Set<UUID> getConnectedUsers() {
+        return new HashSet<>(userConnections.keySet());
+    }
+
+    /**
+     * Check if a specific user is connected
+     */
+    public boolean isUserConnected(UUID userId) {
+        List<SseEmitter> connections = userConnections.get(userId);
+        return connections != null && !connections.isEmpty();
+    }
+
+    /**
+     * Get all user connections for admin purposes
+     */
+    public Map<UUID, Integer> getUserConnectionCounts() {
+        Map<UUID, Integer> connectionCounts = new HashMap<>();
+        for (Map.Entry<UUID, List<SseEmitter>> entry : userConnections.entrySet()) {
+            connectionCounts.put(entry.getKey(), entry.getValue().size());
+        }
+        return connectionCounts;
+    }
+
+    /**
+     * Send notification to multiple specific users
+     */
+    public void sendNotificationToUsers(Set<UUID> userIds, Notification notification) {
+        for (UUID userId : userIds) {
+            sendNotificationToUser(userId, notification);
+        }
+    }
+
+    /**
+     * Send custom SSE message to specific user
+     */
+    public void sendCustomMessageToUser(UUID userId, String eventName, Object data) {
+        List<SseEmitter> userEmitters = userConnections.get(userId);
+
+        if (userEmitters == null || userEmitters.isEmpty()) {
+            log.debug("No SSE connections found for user: {}", userId);
+            return;
+        }
+
+        String jsonData;
+        try {
+            jsonData = objectMapper.writeValueAsString(data);
+        } catch (Exception e) {
+            log.error("Error serializing custom message for SSE: {}", eventName, e);
+            return;
+        }
+
+        List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
+
+        for (SseEmitter emitter : userEmitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name(eventName)
+                        .data(jsonData));
+
+                log.debug("Custom message sent via SSE to user: {} - event: {}", userId, eventName);
+            } catch (IOException e) {
+                log.warn("Failed to send custom SSE message to user: {} - marking emitter as dead", userId, e);
+                deadEmitters.add(emitter);
+            }
+        }
+
+        // Remove dead connections
+        for (SseEmitter deadEmitter : deadEmitters) {
+            removeConnection(deadEmitter);
+        }
+    }
     /**
      * Create SSE connection for a user
      */
