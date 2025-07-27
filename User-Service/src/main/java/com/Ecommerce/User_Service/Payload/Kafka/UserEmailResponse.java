@@ -15,7 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UserEmailResponse {
     private String requestId;
-    private UUID userId;
+    private String userId;
     private String email;
     private String firstName;
     private String lastName;
@@ -26,7 +26,7 @@ public class UserEmailResponse {
     private String status; // "SUCCESS", "USER_NOT_FOUND", "EMAIL_NOT_AVAILABLE"
     private String errorMessage;
 
-    public static UserEmailResponse success(String requestId, UUID userId, String email) {
+    public static UserEmailResponse success(String requestId, String userId, String email) {
         return UserEmailResponse.builder()
                 .requestId(requestId)
                 .userId(userId)
@@ -38,7 +38,7 @@ public class UserEmailResponse {
                 .build();
     }
 
-    public static UserEmailResponse notFound(String requestId, UUID userId) {
+    public static UserEmailResponse notFound(String requestId, String userId) {
         return UserEmailResponse.builder()
                 .requestId(requestId)
                 .userId(userId)
@@ -48,7 +48,7 @@ public class UserEmailResponse {
                 .build();
     }
 
-    public static UserEmailResponse error(String requestId, UUID userId, String errorMessage) {
+    public static UserEmailResponse error(String requestId, String userId, String errorMessage) {
         return UserEmailResponse.builder()
                 .requestId(requestId)
                 .userId(userId)

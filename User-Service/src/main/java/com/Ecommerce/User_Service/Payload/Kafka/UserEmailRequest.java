@@ -17,12 +17,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UserEmailRequest {
     private String requestId;
-    private UUID userId;
+    private String userId;
     private String requestingService;
     private LocalDateTime requestTime;
     private String purpose; // "EMAIL_NOTIFICATION", "BULK_EMAIL", etc.
 
-    public static UserEmailRequest create(UUID userId, String purpose) {
+    public static UserEmailRequest create(String userId, String purpose) {
         return UserEmailRequest.builder()
                 .requestId(UUID.randomUUID().toString())
                 .userId(userId)

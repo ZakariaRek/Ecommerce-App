@@ -299,7 +299,7 @@ public class UserEmailService {
             if (bulkResponse != null && bulkResponse.getUsers() != null) {
                 for (UserInfoResponse userResponse : bulkResponse.getUsers()) {
                     if ("SUCCESS".equals(userResponse.getStatus_response())) {
-                        allResults.put(userResponse.getUserId(), userResponse);
+                        allResults.put(UUID.fromString(String.valueOf(userResponse.getUserId())), userResponse);
                     }
                 }
             }
@@ -371,7 +371,7 @@ public class UserEmailService {
             // Cache successful responses
             if ("SUCCESS".equals(response.getStatus_response())) {
                 CachedUserInfo cached = CachedUserInfo.fromResponse(response);
-                userInfoCache.put(response.getUserId(), cached);
+                userInfoCache.put(UUID.fromString(String.valueOf(response.getUserId())), cached);
                 log.debug("Cached user info: {}", response.getUserId());
             }
 
@@ -395,7 +395,7 @@ public class UserEmailService {
                 for (UserInfoResponse userResponse : response.getUsers()) {
                     if ("SUCCESS".equals(userResponse.getStatus_response())) {
                         CachedUserInfo cached = CachedUserInfo.fromResponse(userResponse);
-                        userInfoCache.put(userResponse.getUserId(), cached);
+                        userInfoCache.put(UUID.fromString(String.valueOf(userResponse.getUserId())), cached);
                     }
                 }
                 log.debug("Cached {} user info from bulk response",
