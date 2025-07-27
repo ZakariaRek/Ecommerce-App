@@ -29,17 +29,86 @@ public class EmailKafkaConsumer {
 
     // ================ PAYMENT SERVICE EVENTS ================
 
+
+    private UUID parseOrConvertToUUID(String userId) {
+        try {
+            // Try to parse as UUID first
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            // If not a UUID, convert from MongoDB ObjectId using REVERSIBLE method
+            return convertObjectIdToUuidReversible(userId);
+        }
+    }
+
+    /**
+     * Convert MongoDB ObjectId to UUID using a REVERSIBLE approach
+     * This allows the User Service to convert back to original ObjectId
+     */
+    private UUID convertObjectIdToUuidReversible(String objectId) {
+        try {
+            // Validate ObjectId format (24 hex characters)
+            if (objectId == null || !objectId.matches("^[0-9a-fA-F]{24}$")) {
+                throw new IllegalArgumentException("Invalid ObjectId format: " + objectId);
+            }
+
+            // Convert ObjectId to bytes (12 bytes from 24 hex chars)
+            byte[] objectIdBytes = hexStringToBytes(objectId);
+
+            // Pad to 16 bytes for UUID (add 4 zero bytes)
+            byte[] uuidBytes = new byte[16];
+            System.arraycopy(objectIdBytes, 0, uuidBytes, 0, 12);
+            // Last 4 bytes remain zero as padding
+
+            // Create UUID from bytes
+            long mostSigBits = 0;
+            long leastSigBits = 0;
+
+            for (int i = 0; i < 8; i++) {
+                mostSigBits = (mostSigBits << 8) | (uuidBytes[i] & 0xff);
+            }
+            for (int i = 8; i < 16; i++) {
+                leastSigBits = (leastSigBits << 8) | (uuidBytes[i] & 0xff);
+            }
+
+            UUID convertedUuid = new UUID(mostSigBits, leastSigBits);
+            log.debug("Converted ObjectId {} to UUID {}", objectId, convertedUuid);
+
+            return convertedUuid;
+
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid ObjectId format: " + objectId, e);
+        }
+    }
+
+    /**
+     * Convert hex string to bytes
+     */
+    private byte[] hexStringToBytes(String hex) {
+        int len = hex.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                    + Character.digit(hex.charAt(i + 1), 16));
+        }
+        return data;
+    }
+
+
+
+
+// ================ PAYMENT SERVICE EVENTS ================
+
     @KafkaListener(topics = "payment-confirmed", groupId = "${spring.kafka.consumer.group-id}")
     public void handlePaymentConfirmed(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String amount = event.path("amount").asText();
             String paymentMethod = event.path("paymentMethod").asText("Credit Card");
 
             String content = String.format("Payment of %s has been confirmed for order #%s. Thank you for your purchase!", amount, orderId);
-                log.info("id user  :-----------" + userId);
+            log.info("id user  :-----------" + userId);
 
             // Create in-app notification
 //            notificationService.createNotification(
@@ -61,45 +130,12 @@ public class EmailKafkaConsumer {
             log.error("Error processing payment confirmation event", e);
         }
     }
-    private UUID parseOrConvertToUUID(String userId) {
-        try {
-            // Try to parse as UUID
-            return UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            // If not a UUID, convert from MongoDB ObjectId
-            return convertObjectIdToUuid(userId);
-        }
-    }
-    private UUID convertObjectIdToUuid(String objectId) {
-        // Convert MongoDB ObjectId to UUID using a deterministic approach
-        // This ensures the same ObjectId always maps to the same UUID
-        try {
-            // Use a hash-based approach to convert ObjectId to UUID
-            byte[] bytes = objectId.getBytes(StandardCharsets.UTF_8);
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(bytes);
 
-            // Create UUID from hash bytes
-            long mostSigBits = 0;
-            long leastSigBits = 0;
-
-            for (int i = 0; i < 8; i++) {
-                mostSigBits = (mostSigBits << 8) | (hash[i] & 0xff);
-            }
-            for (int i = 8; i < 16; i++) {
-                leastSigBits = (leastSigBits << 8) | (hash[i] & 0xff);
-            }
-
-            return new UUID(mostSigBits, leastSigBits);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid user ID format: " + objectId, e);
-        }
-    }
     @KafkaListener(topics = "payment-failed", groupId = "order-service-group")
     public void handlePaymentFailed(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String reason = event.path("reason").asText("Payment processing error");
 
@@ -130,7 +166,7 @@ public class EmailKafkaConsumer {
     public void handlePaymentUpdated(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String paymentId = event.path("paymentId").asText();
             String status = event.path("status").asText();
@@ -161,13 +197,13 @@ public class EmailKafkaConsumer {
         }
     }
 
-    // ================ SHIPPING SERVICE EVENTS ================
+// ================ SHIPPING SERVICE EVENTS ================
 
     @KafkaListener(topics = "shipping-created", groupId = "${spring.kafka.consumer.group-id}")
     public void handleShippingCreated(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String shippingId = event.path("shippingId").asText();
             String carrier = event.path("carrier").asText("Standard Carrier");
@@ -199,7 +235,7 @@ public class EmailKafkaConsumer {
     public void handleShippingUpdate(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String status = event.path("status").asText();
             String trackingNumber = event.path("trackingNumber").asText("");
@@ -232,12 +268,11 @@ public class EmailKafkaConsumer {
         }
     }
 
-
     @KafkaListener(topics = "shipping-delivered", groupId = "${spring.kafka.consumer.group-id}")
     public void handleShippingDelivered(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String deliveryDate = event.path("deliveryDate").asText("");
 
@@ -264,13 +299,13 @@ public class EmailKafkaConsumer {
         }
     }
 
-    // ================ ORDER SERVICE EVENTS ================
+// ================ ORDER SERVICE EVENTS ================
 
     @KafkaListener(topics = "order-status-changed", groupId = "${spring.kafka.consumer.group-id}")
     public void handleOrderStatusChanged(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String oldStatus = event.path("oldStatus").asText("");
             String newStatus = event.path("newStatus").asText();
@@ -304,7 +339,7 @@ public class EmailKafkaConsumer {
     public void handleOrderCancelled(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(event.path("userId").asText());
+            UUID userId = parseOrConvertToUUID(event.path("userId").asText()); // FIXED: Use helper method
             String orderId = event.path("orderId").asText();
             String reason = event.path("reason").asText("Order cancelled");
 
@@ -331,6 +366,8 @@ public class EmailKafkaConsumer {
         }
     }
 
+// Continue with other event handlers following the same pattern...
+// All other methods that use UUID.fromString(event.path("userId").asText()) need to be updated similarly
     // ================ INVENTORY SERVICE EVENTS ================
 
     @KafkaListener(topics = "inventory-low-stock", groupId = "${spring.kafka.consumer.group-id}")

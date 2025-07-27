@@ -1,6 +1,7 @@
 package com.Ecommerce.Notification_Service.Services;
 
 import com.Ecommerce.Notification_Service.Payload.Kafka.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +15,7 @@ import java.util.concurrent.*;
 
 /**
  * Enhanced service for communicating with User Service to fetch user information via Kafka
- * Supports both email-only and full user information requests
+ * Updated to handle String-based deserialization
  */
 @Service
 @Slf4j
@@ -22,6 +23,7 @@ import java.util.concurrent.*;
 public class UserEmailService {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper; // Add ObjectMapper for manual deserialization
 
     // Cache for user emails (in-memory cache)
     private final Map<UUID, CachedUserEmail> emailCache = new ConcurrentHashMap<>();
@@ -308,103 +310,131 @@ public class UserEmailService {
         });
     }
 
-    // ===================== KAFKA LISTENERS =====================
+    // ===================== KAFKA LISTENERS (UPDATED FOR STRING PAYLOADS) =====================
 
     /**
      * Listen for user email responses from User Service
+     * UPDATED: Now accepts String payload and manually deserializes
      */
     @KafkaListener(topics = TOPIC_USER_EMAIL_RESPONSE, groupId = "notification-service-user-email")
-    public void handleUserEmailResponse(UserEmailResponse response) {
-        log.debug("Received user email response: {}", response.getRequestId());
+    public void handleUserEmailResponse(String payload) {
+        try {
+            // Manual deserialization from JSON string
+            UserEmailResponse response = objectMapper.readValue(payload, UserEmailResponse.class);
+            log.debug("Received user email response: {}", response.getRequestId());
 
-        CompletableFuture<UserEmailResponse> future = pendingEmailRequests.remove(response.getRequestId());
-        if (future != null) {
-            // Cache successful responses
-            if ("SUCCESS".equals(response.getStatus()) && response.getEmail() != null) {
-                CachedUserEmail cached = CachedUserEmail.fromResponse(response);
-                emailCache.put(response.getUserId(), cached);
-                log.debug("Cached user email: {}", response.getUserId());
+            CompletableFuture<UserEmailResponse> future = pendingEmailRequests.remove(response.getRequestId());
+            if (future != null) {
+                // Cache successful responses
+                if ("SUCCESS".equals(response.getStatus()) && response.getEmail() != null) {
+                    CachedUserEmail cached = CachedUserEmail.fromResponse(response);
+                    emailCache.put(response.getUserId(), cached);
+                    log.debug("Cached user email: {}", response.getUserId());
+                }
+
+                future.complete(response);
+            } else {
+                log.warn("Received response for unknown request: {}", response.getRequestId());
             }
-
-            future.complete(response);
-        } else {
-            log.warn("Received response for unknown request: {}", response.getRequestId());
+        } catch (Exception e) {
+            log.error("Error processing user email response: {}", payload, e);
         }
     }
 
     /**
      * Listen for bulk user email responses from User Service
+     * UPDATED: Now accepts String payload and manually deserializes
      */
     @KafkaListener(topics = TOPIC_BULK_USER_EMAIL_RESPONSE, groupId = "notification-service-bulk-user-email")
-    public void handleBulkUserEmailResponse(BulkUserEmailResponse response) {
-        log.debug("Received bulk user email response: {} users", response.getTotalFound());
+    public void handleBulkUserEmailResponse(String payload) {
+        try {
+            // Manual deserialization from JSON string
+            BulkUserEmailResponse response = objectMapper.readValue(payload, BulkUserEmailResponse.class);
+            log.debug("Received bulk user email response: {} users", response.getTotalFound());
 
-        CompletableFuture<BulkUserEmailResponse> future = pendingBulkEmailRequests.remove(response.getRequestId());
-        if (future != null) {
-            // Cache successful responses
-            if (response.getUsers() != null) {
-                for (UserEmailResponse userResponse : response.getUsers()) {
-                    if ("SUCCESS".equals(userResponse.getStatus()) && userResponse.getEmail() != null) {
-                        CachedUserEmail cached = CachedUserEmail.fromResponse(userResponse);
-                        emailCache.put(userResponse.getUserId(), cached);
+            CompletableFuture<BulkUserEmailResponse> future = pendingBulkEmailRequests.remove(response.getRequestId());
+            if (future != null) {
+                // Cache successful responses
+                if (response.getUsers() != null) {
+                    for (UserEmailResponse userResponse : response.getUsers()) {
+                        if ("SUCCESS".equals(userResponse.getStatus()) && userResponse.getEmail() != null) {
+                            CachedUserEmail cached = CachedUserEmail.fromResponse(userResponse);
+                            emailCache.put(userResponse.getUserId(), cached);
+                        }
                     }
+                    log.debug("Cached {} user emails from bulk response",
+                            response.getUsers().stream().mapToInt(u -> "SUCCESS".equals(u.getStatus()) ? 1 : 0).sum());
                 }
-                log.debug("Cached {} user emails from bulk response",
-                        response.getUsers().stream().mapToInt(u -> "SUCCESS".equals(u.getStatus()) ? 1 : 0).sum());
-            }
 
-            future.complete(response);
-        } else {
-            log.warn("Received bulk response for unknown request: {}", response.getRequestId());
+                future.complete(response);
+            } else {
+                log.warn("Received bulk response for unknown request: {}", response.getRequestId());
+            }
+        } catch (Exception e) {
+            log.error("Error processing bulk user email response: {}", payload, e);
         }
     }
 
     /**
      * Listen for user info responses from User Service
+     * UPDATED: Now accepts String payload and manually deserializes
      */
     @KafkaListener(topics = TOPIC_USER_INFO_RESPONSE, groupId = "notification-service-user-info")
-    public void handleUserInfoResponse(UserInfoResponse response) {
-        log.debug("Received user info response: {}", response.getRequestId());
+    public void handleUserInfoResponse(String payload) {
+        try {
+            // Manual deserialization from JSON string
+            UserInfoResponse response = objectMapper.readValue(payload, UserInfoResponse.class);
+            log.debug("Received user info response: {}", response.getRequestId());
 
-        CompletableFuture<UserInfoResponse> future = pendingUserInfoRequests.remove(response.getRequestId());
-        if (future != null) {
-            // Cache successful responses
-            if ("SUCCESS".equals(response.getStatus_response())) {
-                CachedUserInfo cached = CachedUserInfo.fromResponse(response);
-                userInfoCache.put(UUID.fromString(String.valueOf(response.getUserId())), cached);
-                log.debug("Cached user info: {}", response.getUserId());
+            CompletableFuture<UserInfoResponse> future = pendingUserInfoRequests.remove(response.getRequestId());
+            if (future != null) {
+                // Cache successful responses
+                if ("SUCCESS".equals(response.getStatus_response())) {
+                    CachedUserInfo cached = CachedUserInfo.fromResponse(response);
+                    userInfoCache.put(UUID.fromString(String.valueOf(response.getUserId())), cached);
+                    log.debug("Cached user info: {}", response.getUserId());
+                }
+
+                future.complete(response);
+            } else {
+                log.warn("Received response for unknown request: {}", response.getRequestId());
             }
-
-            future.complete(response);
-        } else {
-            log.warn("Received response for unknown request: {}", response.getRequestId());
+        } catch (Exception e) {
+            log.error("Error processing user info response: {}", payload, e);
         }
     }
 
     /**
      * Listen for bulk user info responses from User Service
+     * UPDATED: Now accepts String payload and manually deserializes
      */
     @KafkaListener(topics = TOPIC_BULK_USER_INFO_RESPONSE, groupId = "notification-service-bulk-user-info")
-    public void handleBulkUserInfoResponse(BulkUserInfoResponse response) {
-        log.debug("Received bulk user info response: {} users", response.getTotalFound());
+    public void handleBulkUserInfoResponse(String payload) {
+        try {
+            // Manual deserialization from JSON string
+            BulkUserInfoResponse response = objectMapper.readValue(payload, BulkUserInfoResponse.class);
+            log.debug("Received bulk user info response: {} users", response.getTotalFound());
 
-        CompletableFuture<BulkUserInfoResponse> future = pendingBulkUserInfoRequests.remove(response.getRequestId());
-        if (future != null) {
-            // Cache successful responses
-            if (response.getUsers() != null) {
-                for (UserInfoResponse userResponse : response.getUsers()) {
-                    if ("SUCCESS".equals(userResponse.getStatus_response())) {
-                        CachedUserInfo cached = CachedUserInfo.fromResponse(userResponse);
-                        userInfoCache.put(UUID.fromString(String.valueOf(userResponse.getUserId())), cached);
+            CompletableFuture<BulkUserInfoResponse> future = pendingBulkUserInfoRequests.remove(response.getRequestId());
+            if (future != null) {
+                // Cache successful responses
+                if (response.getUsers() != null) {
+                    for (UserInfoResponse userResponse : response.getUsers()) {
+                        if ("SUCCESS".equals(userResponse.getStatus_response())) {
+                            CachedUserInfo cached = CachedUserInfo.fromResponse(userResponse);
+                            userInfoCache.put(UUID.fromString(String.valueOf(userResponse.getUserId())), cached);
+                        }
                     }
+                    log.debug("Cached {} user info from bulk response",
+                            response.getUsers().stream().mapToInt(u -> "SUCCESS".equals(u.getStatus_response()) ? 1 : 0).sum());
                 }
-                log.debug("Cached {} user info from bulk response",
-                        response.getUsers().stream().mapToInt(u -> "SUCCESS".equals(u.getStatus_response()) ? 1 : 0).sum());
-            }
 
-            future.complete(response);
-        } else {
-            log.warn("Received bulk response for unknown request: {}", response.getRequestId());
+                future.complete(response);
+            } else {
+                log.warn("Received bulk response for unknown request: {}", response.getRequestId());
+            }
+        } catch (Exception e) {
+            log.error("Error processing bulk user info response: {}", payload, e);
         }
     }
 
