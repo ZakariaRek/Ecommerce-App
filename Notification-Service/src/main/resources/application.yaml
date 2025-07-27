@@ -24,6 +24,22 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${EMAIL_USERNAME:zakariarekhla@gmail.com}
+    password: ${EMAIL_PASSWORD:ujcm dbuo ijsn emlz}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
+        debug: false
 server:
   port: 8085
   servlet:
@@ -35,6 +51,16 @@ eureka:
     hostname: localhost
     metadataMap:
       instanceId: ${spring.application.name}:${server.port}
+
+notification:
+  email:
+    from: ${EMAIL_FROM:noreply@ecommerce.com}
+    from-name: ${EMAIL_FROM_NAME:ECommerce Notification System}
+    templates:
+      base-url: ${BASE_URL:http://localhost:3000}
+    retry:
+      max-attempts: 3
+      delay: 1000
 
 logging:
   level:

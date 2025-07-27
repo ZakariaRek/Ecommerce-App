@@ -3,10 +3,13 @@ package com.Ecommerce.Notification_Service.Models;
 public enum NotificationType {
     // Existing types
     ORDER_STATUS,
+    ACCOUNT_ACTIVITY,
     PAYMENT_CONFIRMATION,
     SHIPPING_UPDATE,
     PRODUCT_RESTOCKED,
-    ACCOUNT_ACTIVITY,
+
+
+//    ACCOUNT_ACTIVITY,
     PROMOTION,
 
     // New Product-related types

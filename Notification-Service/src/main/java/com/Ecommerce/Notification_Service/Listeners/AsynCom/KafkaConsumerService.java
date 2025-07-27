@@ -1,4 +1,4 @@
-package com.Ecommerce.Notification_Service.Services.Kafka;
+package com.Ecommerce.Notification_Service.Listeners.AsynCom;
 
 import com.Ecommerce.Notification_Service.Models.NotificationType;
 import com.Ecommerce.Notification_Service.Services.NotificationService;
