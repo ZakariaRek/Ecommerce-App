@@ -2,7 +2,7 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProperty scope="context" name="application.name" source="spring.application.name" defaultValue="User_Service"/>
+    <springProperty scope="context" name="application.name" source="spring.application.name" defaultValue="User-Service"/>
 
     <!-- Console appender for local debugging -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
