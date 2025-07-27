@@ -18,6 +18,7 @@ import (
 // OrderPaymentRequest represents a payment request for an order
 type OrderPaymentRequest struct {
 	OrderID       string               `json:"orderId"`
+	UserID        string               `json:"userId"`
 	Amount        float64              `json:"amount"`
 	PaymentMethod models.PaymentMethod `json:"paymentMethod"`
 	Currency      string               `json:"currency,omitempty"`
@@ -27,6 +28,7 @@ type OrderPaymentRequest struct {
 type OrderPaymentResponse struct {
 	PaymentID     string               `json:"paymentId"`
 	OrderID       string               `json:"orderId"`
+	UserID        string               `json:"userId"`
 	Amount        float64              `json:"amount"`
 	Status        models.PaymentStatus `json:"status"`
 	PaymentMethod models.PaymentMethod `json:"paymentMethod"`
@@ -106,6 +108,7 @@ func (h *OrderPaymentHandler) RegisterPaymentInvoiceRoutes(r chi.Router) {
 // ProcessOrderPayment processes payment for an order
 func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http.Request) {
 	orderIDStr := chi.URLParam(r, "orderID")
+
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
 		http.Error(w, "Invalid order ID", http.StatusBadRequest)
@@ -147,6 +150,7 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 	response := &OrderPaymentResponse{
 		PaymentID:     payment.ID.String(),
 		OrderID:       payment.OrderID.String(),
+		UserID:        req.UserID,
 		Amount:        payment.Amount,
 		Status:        payment.Status,
 		PaymentMethod: payment.Method,
@@ -177,7 +181,7 @@ func (h *OrderPaymentHandler) ProcessOrderPayment(w http.ResponseWriter, r *http
 	}
 
 	// Publish payment confirmed event with proper format for Order Service
-	h.publishPaymentConfirmedEvent(payment, oldStatus, "Payment processed successfully")
+	h.publishPaymentConfirmedEvent(payment, oldStatus, req.UserID, "Payment processed successfully")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -517,7 +521,7 @@ func (h *OrderPaymentHandler) GetOrderPaymentStatus(w http.ResponseWriter, r *ht
 }
 
 // publishPaymentConfirmedEvent sends message in format Order Service expects
-func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payment, oldStatus models.PaymentStatus, message string) {
+func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payment, oldStatus models.PaymentStatus, userIdStr string, message string) {
 	if h.kafkaService == nil {
 		log.Printf("💳 PAYMENT SERVICE: Kafka service not available")
 		return
@@ -527,6 +531,7 @@ func (h *OrderPaymentHandler) publishPaymentConfirmedEvent(payment *models.Payme
 		"orderId":       payment.OrderID.String(),
 		"paymentId":     payment.ID.String(),
 		"amount":        payment.Amount,
+		"userId":        userIdStr,
 		"paymentMethod": payment.Method,
 		"status":        payment.Status,
 		"success":       true,

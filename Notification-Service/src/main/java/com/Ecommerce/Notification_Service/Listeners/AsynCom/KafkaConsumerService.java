@@ -307,28 +307,28 @@ public class KafkaConsumerService {
         }
     }
 
-    @KafkaListener(topics = "payment-confirmed", groupId = "${spring.kafka.consumer.group-id}")
-    public void listenPaymentConfirmed(String message) {
-        try {
-            JsonNode eventNode = objectMapper.readTree(message);
-            UUID userId = UUID.fromString(eventNode.path("userId").asText());
-            String orderId = eventNode.path("orderId").asText();
-            String amount = eventNode.path("amount").asText();
-
-            String content = String.format("Payment of %s has been confirmed for order #%s. Thank you for your purchase!", amount, orderId);
-
-            notificationService.createNotification(
-                    userId,
-                    NotificationType.PAYMENT_CONFIRMATION,
-                    content,
-                    LocalDateTime.now().plusDays(7)
-            );
-
-            log.info("Created notification for payment confirmation. Order ID: {}, User ID: {}", orderId, userId);
-        } catch (Exception e) {
-            log.error("Error processing payment confirmation event", e);
-        }
-    }
+//    @KafkaListener(topics = "payment-confirmed", groupId = "${spring.kafka.consumer.group-id}")
+//    public void listenPaymentConfirmed(String message) {
+//        try {
+//            JsonNode eventNode = objectMapper.readTree(message);
+//            UUID userId = UUID.fromString(eventNode.path("userId").asText());
+//            String orderId = eventNode.path("orderId").asText();
+//            String amount = eventNode.path("amount").asText();
+//
+//            String content = String.format("Payment of %s has been confirmed for order #%s. Thank you for your purchase!", amount, orderId);
+//
+//            notificationService.createNotification(
+//                    userId,
+//                    NotificationType.PAYMENT_CONFIRMATION,
+//                    content,
+//                    LocalDateTime.now().plusDays(7)
+//            );
+//
+//            log.info("Created notification for payment confirmation. Order ID: {}, User ID: {}", orderId, userId);
+//        } catch (Exception e) {
+//            log.error("Error processing payment confirmation event", e);
+//        }
+//    }
 
     @KafkaListener(topics = "shipping-update", groupId = "${spring.kafka.consumer.group-id}")
     public void listenShippingUpdate(String message) {

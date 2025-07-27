@@ -19,6 +19,8 @@ public class ProcessPaymentRequestDto {
     @Positive(message = "Amount must be positive")
     private Double amount;
 
+    private String userId;  // Matches Go struct field name
+
     @NotNull(message = "Payment method is required")
     private String paymentMethod;  // Matches Go struct field name
 

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -38,14 +39,15 @@ public class EmailKafkaConsumer {
             String paymentMethod = event.path("paymentMethod").asText("Credit Card");
 
             String content = String.format("Payment of %s has been confirmed for order #%s. Thank you for your purchase!", amount, orderId);
+                log.info("id user  :-----------" + userId);
 
             // Create in-app notification
-            notificationService.createNotification(
-                    userId,
-                    NotificationType.PAYMENT_CONFIRMATION,
-                    content,
-                    LocalDateTime.now().plusDays(7)
-            );
+//            notificationService.createNotification(
+//                    userId,
+//                    NotificationType.PAYMENT_CONFIRMATION,
+//                    content,
+//                    LocalDateTime.now().plusDays(7)
+//            );
 
             // Send enhanced email notification with user information
             sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
@@ -59,8 +61,41 @@ public class EmailKafkaConsumer {
             log.error("Error processing payment confirmation event", e);
         }
     }
+    private UUID parseOrConvertToUUID(String userId) {
+        try {
+            // Try to parse as UUID
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            // If not a UUID, convert from MongoDB ObjectId
+            return convertObjectIdToUuid(userId);
+        }
+    }
+    private UUID convertObjectIdToUuid(String objectId) {
+        // Convert MongoDB ObjectId to UUID using a deterministic approach
+        // This ensures the same ObjectId always maps to the same UUID
+        try {
+            // Use a hash-based approach to convert ObjectId to UUID
+            byte[] bytes = objectId.getBytes(StandardCharsets.UTF_8);
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(bytes);
 
-    @KafkaListener(topics = "payment-failed", groupId = "${spring.kafka.consumer.group-id}")
+            // Create UUID from hash bytes
+            long mostSigBits = 0;
+            long leastSigBits = 0;
+
+            for (int i = 0; i < 8; i++) {
+                mostSigBits = (mostSigBits << 8) | (hash[i] & 0xff);
+            }
+            for (int i = 8; i < 16; i++) {
+                leastSigBits = (leastSigBits << 8) | (hash[i] & 0xff);
+            }
+
+            return new UUID(mostSigBits, leastSigBits);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid user ID format: " + objectId, e);
+        }
+    }
+    @KafkaListener(topics = "payment-failed", groupId = "order-service-group")
     public void handlePaymentFailed(String message) {
         try {
             JsonNode event = objectMapper.readTree(message);
@@ -91,7 +126,74 @@ public class EmailKafkaConsumer {
         }
     }
 
+    @KafkaListener(topics = "payment-updated", groupId = "$order-service-group")
+    public void handlePaymentUpdated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+            String orderId = event.path("orderId").asText();
+            String paymentId = event.path("paymentId").asText();
+            String status = event.path("status").asText();
+            String eventMessage = event.path("message").asText("Payment status updated");
+
+            String content = String.format("Payment update for order #%s: %s", orderId, eventMessage);
+
+            // Create in-app notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.PAYMENT_CONFIRMATION,
+                    content,
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            // Send enhanced email notification for important updates (like refunds)
+            if (status.toLowerCase().contains("refund")) {
+                sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                    Map<String, Object> templateData = createPaymentUpdateTemplateData(orderId, paymentId, status, eventMessage, userInfo);
+                    emailService.sendEmailToUserWithInfo(userInfo, "💰 Payment Update - Order #" + orderId, content, NotificationType.PAYMENT_CONFIRMATION, templateData);
+                }, "payment update");
+            }
+
+            log.info("Processed payment update notification. Order: {}, User: {}, Status: {}", orderId, userId, status);
+
+        } catch (Exception e) {
+            log.error("Error processing payment update event", e);
+        }
+    }
+
     // ================ SHIPPING SERVICE EVENTS ================
+
+    @KafkaListener(topics = "shipping-created", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleShippingCreated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+            String orderId = event.path("orderId").asText();
+            String shippingId = event.path("shippingId").asText();
+            String carrier = event.path("carrier").asText("Standard Carrier");
+
+            String content = String.format("Shipping has been arranged for order #%s with %s. You'll receive tracking information soon.", orderId, carrier);
+
+            // Create in-app notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.SHIPPING_UPDATE,
+                    content,
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            // Send shipping creation email
+            sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                Map<String, Object> templateData = createShippingCreatedTemplateData(orderId, shippingId, carrier, userInfo);
+                emailService.sendEmailToUserWithInfo(userInfo, "📦 Shipping Arranged - Order #" + orderId, content, NotificationType.SHIPPING_UPDATE, templateData);
+            }, "shipping created");
+
+            log.info("Processed shipping created notification. Order: {}, User: {}, ShippingId: {}", orderId, userId, shippingId);
+
+        } catch (Exception e) {
+            log.error("Error processing shipping created event", e);
+        }
+    }
 
     @KafkaListener(topics = "shipping-update", groupId = "${spring.kafka.consumer.group-id}")
     public void handleShippingUpdate(String message) {
@@ -130,6 +232,7 @@ public class EmailKafkaConsumer {
         }
     }
 
+
     @KafkaListener(topics = "shipping-delivered", groupId = "${spring.kafka.consumer.group-id}")
     public void handleShippingDelivered(String message) {
         try {
@@ -158,6 +261,124 @@ public class EmailKafkaConsumer {
 
         } catch (Exception e) {
             log.error("Error processing delivery event", e);
+        }
+    }
+
+    // ================ ORDER SERVICE EVENTS ================
+
+    @KafkaListener(topics = "order-status-changed", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleOrderStatusChanged(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+            String orderId = event.path("orderId").asText();
+            String oldStatus = event.path("oldStatus").asText("");
+            String newStatus = event.path("newStatus").asText();
+
+            String content = String.format("Your order #%s status has been updated to: %s", orderId, newStatus);
+
+            // Create in-app notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.ORDER_STATUS,
+                    content,
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            // Send email for important order status changes
+            if (isImportantOrderStatus(newStatus)) {
+                sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                    Map<String, Object> templateData = createOrderStatusTemplateData(orderId, oldStatus, newStatus, userInfo);
+                    emailService.sendEmailToUserWithInfo(userInfo, "📋 Order Status Update - Order #" + orderId, content, NotificationType.ORDER_STATUS, templateData);
+                }, "order status change");
+            }
+
+            log.info("Processed order status change notification. Order: {}, User: {}, Status: {} -> {}", orderId, userId, oldStatus, newStatus);
+
+        } catch (Exception e) {
+            log.error("Error processing order status change event", e);
+        }
+    }
+
+    @KafkaListener(topics = "order-cancelled", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleOrderCancelled(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+            String orderId = event.path("orderId").asText();
+            String reason = event.path("reason").asText("Order cancelled");
+
+            String content = String.format("Your order #%s has been cancelled. Reason: %s", orderId, reason);
+
+            // Create in-app notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.ORDER_STATUS,
+                    content,
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            // Send cancellation email
+            sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                Map<String, Object> templateData = createOrderCancellationTemplateData(orderId, reason, userInfo);
+                emailService.sendEmailToUserWithInfo(userInfo, "❌ Order Cancelled - Order #" + orderId, content, NotificationType.ORDER_STATUS, templateData);
+            }, "order cancellation");
+
+            log.info("Processed order cancellation notification. Order: {}, User: {}", orderId, userId);
+
+        } catch (Exception e) {
+            log.error("Error processing order cancellation event", e);
+        }
+    }
+
+    // ================ INVENTORY SERVICE EVENTS ================
+
+    @KafkaListener(topics = "inventory-low-stock", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleInventoryLowStock(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            int currentQuantity = event.path("currentQuantity").asInt();
+            String productId = event.path("productId").asText("");
+
+            // This is typically sent to admin users, but we can also notify users who have this item in wishlist
+            String content = String.format("Limited stock alert: Only %d units left of %s", currentQuantity, productName);
+
+            // Broadcast to interested users (you could maintain a wishlist/interest list)
+            notificationService.broadcastSystemNotification(
+                    "Low Stock Alert",
+                    content,
+                    NotificationType.INVENTORY_LOW_STOCK
+            );
+
+            log.info("Processed low stock notification for product: {}", productName);
+
+        } catch (Exception e) {
+            log.error("Error processing low stock event", e);
+        }
+    }
+
+    @KafkaListener(topics = "inventory-restocked", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleInventoryRestocked(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            int newQuantity = event.path("newQuantity").asInt();
+            String productId = event.path("productId").asText("");
+
+            String content = String.format("Good news! %s is back in stock with %d units available", productName, newQuantity);
+
+            // Broadcast to interested users
+            notificationService.broadcastSystemNotification(
+                    "Back in Stock",
+                    content,
+                    NotificationType.INVENTORY_RESTOCKED
+            );
+
+            log.info("Processed restock notification for product: {}", productName);
+
+        } catch (Exception e) {
+            log.error("Error processing restock event", e);
         }
     }
 
@@ -273,6 +494,94 @@ public class EmailKafkaConsumer {
         }
     }
 
+    @KafkaListener(topics = "discount-activated", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleDiscountActivated(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            String productName = event.path("productName").asText();
+            String discountValue = event.path("discountValue").asText();
+            String discountType = event.path("discountType").asText();
+            String validUntil = event.path("validUntil").asText("");
+
+            String content = String.format("Special %s discount of %s now available for '%s'!", discountType, discountValue, productName);
+
+            // Broadcast discount notification
+            notificationService.broadcastSystemNotification(
+                    "New Discount Available",
+                    content,
+                    NotificationType.DISCOUNT_ACTIVATED
+            );
+
+            log.info("Processed discount activation notification for product: {}", productName);
+
+        } catch (Exception e) {
+            log.error("Error processing discount activated event", e);
+        }
+    }
+
+    // ================ USER ACCOUNT EVENTS ================
+
+    @KafkaListener(topics = "user-registered", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleUserRegistered(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+            String email = event.path("email").asText();
+            String firstName = event.path("firstName").asText("");
+
+            String content = String.format("Welcome to our platform%s! Your account has been successfully created.",
+                    firstName.isEmpty() ? "" : ", " + firstName);
+
+            // Create welcome notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.ACCOUNT_ACTIVITY,
+                    content,
+                    LocalDateTime.now().plusDays(30)
+            );
+
+            // Send welcome email
+            sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                Map<String, Object> templateData = createWelcomeTemplateData(userInfo);
+                emailService.sendEmailToUserWithInfo(userInfo, "🎉 Welcome to Our Platform!", content, NotificationType.ACCOUNT_ACTIVITY, templateData);
+            }, "user registration");
+
+            log.info("Processed user registration notification. User: {}", userId);
+
+        } catch (Exception e) {
+            log.error("Error processing user registration event", e);
+        }
+    }
+
+    @KafkaListener(topics = "password-changed", groupId = "${spring.kafka.consumer.group-id}")
+    public void handlePasswordChanged(String message) {
+        try {
+            JsonNode event = objectMapper.readTree(message);
+            UUID userId = UUID.fromString(event.path("userId").asText());
+
+            String content = "Your password has been successfully changed. If you didn't make this change, please contact support immediately.";
+
+            // Create security notification
+            notificationService.createNotification(
+                    userId,
+                    NotificationType.ACCOUNT_ACTIVITY,
+                    content,
+                    LocalDateTime.now().plusDays(7)
+            );
+
+            // Send security email
+            sendEnhancedEmailNotificationAsync(userId, (userInfo) -> {
+                Map<String, Object> templateData = createSecurityTemplateData("Password Changed", userInfo);
+                emailService.sendEmailToUserWithInfo(userInfo, "🔐 Password Changed", content, NotificationType.ACCOUNT_ACTIVITY, templateData);
+            }, "password changed");
+
+            log.info("Processed password change notification. User: {}", userId);
+
+        } catch (Exception e) {
+            log.error("Error processing password change event", e);
+        }
+    }
+
     // ================ EMAIL HELPER METHODS ================
 
     /**
@@ -344,6 +653,23 @@ public class EmailKafkaConsumer {
                 });
     }
 
+    // ================ HELPER METHODS FOR STATUS CHECKING ================
+
+    private boolean isSignificantStatusChange(String status) {
+        return status.toLowerCase().contains("shipped") ||
+                status.toLowerCase().contains("out_for_delivery") ||
+                status.toLowerCase().contains("delivered") ||
+                status.toLowerCase().contains("exception");
+    }
+
+    private boolean isImportantOrderStatus(String status) {
+        return status.toLowerCase().contains("confirmed") ||
+                status.toLowerCase().contains("processing") ||
+                status.toLowerCase().contains("shipped") ||
+                status.toLowerCase().contains("cancelled") ||
+                status.toLowerCase().contains("completed");
+    }
+
     // ================ TEMPLATE DATA CREATORS ================
 
     private Map<String, Object> createPaymentTemplateData(String orderId, String amount, String paymentMethod, UserInfoResponse userInfo) {
@@ -368,6 +694,30 @@ public class EmailKafkaConsumer {
         return data;
     }
 
+    private Map<String, Object> createPaymentUpdateTemplateData(String orderId, String paymentId, String status, String message, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("paymentId", paymentId);
+        data.put("status", status);
+        data.put("message", message);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        return data;
+    }
+
+    private Map<String, Object> createShippingCreatedTemplateData(String orderId, String shippingId, String carrier, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("shippingId", shippingId);
+        data.put("carrier", carrier);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        if (userInfo.getDefaultAddress() != null) {
+            data.put("shippingAddress", userInfo.getFormattedDefaultAddress());
+        }
+        return data;
+    }
+
     private Map<String, Object> createShippingTemplateData(String orderId, String status, String trackingNumber, UserInfoResponse userInfo) {
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
@@ -383,6 +733,20 @@ public class EmailKafkaConsumer {
         return data;
     }
 
+    private Map<String, Object> createShippingStatusChangeTemplateData(String orderId, String oldStatus, String newStatus, String location, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("oldStatus", oldStatus);
+        data.put("newStatus", newStatus);
+        data.put("location", location);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        if (userInfo.getDefaultAddress() != null) {
+            data.put("deliveryAddress", userInfo.getFormattedDefaultAddress());
+        }
+        return data;
+    }
+
     private Map<String, Object> createDeliveryTemplateData(String orderId, String deliveryDate, UserInfoResponse userInfo) {
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
@@ -392,6 +756,25 @@ public class EmailKafkaConsumer {
         if (userInfo.getDefaultAddress() != null) {
             data.put("deliveryAddress", userInfo.getFormattedDefaultAddress());
         }
+        return data;
+    }
+
+    private Map<String, Object> createOrderStatusTemplateData(String orderId, String oldStatus, String newStatus, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("oldStatus", oldStatus);
+        data.put("newStatus", newStatus);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        return data;
+    }
+
+    private Map<String, Object> createOrderCancellationTemplateData(String orderId, String reason, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("reason", reason);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
         return data;
     }
 
@@ -411,6 +794,23 @@ public class EmailKafkaConsumer {
         data.put("oldTier", oldTier);
         data.put("userName", userInfo.getFullName());
         data.put("userEmail", userInfo.getEmail());
+        return data;
+    }
+
+    private Map<String, Object> createWelcomeTemplateData(UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        data.put("joinDate", LocalDateTime.now().toLocalDate().toString());
+        return data;
+    }
+
+    private Map<String, Object> createSecurityTemplateData(String actionType, UserInfoResponse userInfo) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("actionType", actionType);
+        data.put("userName", userInfo.getFullName());
+        data.put("userEmail", userInfo.getEmail());
+        data.put("timestamp", LocalDateTime.now().toString());
         return data;
     }
 

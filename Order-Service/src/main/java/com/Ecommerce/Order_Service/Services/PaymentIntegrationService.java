@@ -124,6 +124,7 @@ public class PaymentIntegrationService {
             // Create payment request with correct field names for Go service
             ProcessPaymentRequestDto paymentRequest = ProcessPaymentRequestDto.builder()
                     .orderId(orderId.toString())
+                    .userId(order.getUserId().toString())
                     .amount(amount.doubleValue())
                     .paymentMethod(paymentMethod)
                     .currency("USD")
@@ -131,7 +132,7 @@ public class PaymentIntegrationService {
 
             // Get Payment Service URL with retries
             String baseUrl = getPaymentServiceUrl();
-            String url = baseUrl + "/api/orders/" + orderId + "/payments";
+            String url = baseUrl + "/api/payments/orders/" + orderId + "/payments";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -238,7 +239,7 @@ public class PaymentIntegrationService {
     public PaymentResponseDto getOrderPaymentStatus(UUID orderId) {
         try {
             String baseUrl = getPaymentServiceUrl();
-            String url = baseUrl + "/api/orders/" + orderId + "/payments/status";
+            String url = baseUrl + "/api/payments/orders/" + orderId + "/payments/status";
 
             log.info("💳 Getting payment status for order: {} from {}", orderId, url);
 
@@ -277,7 +278,7 @@ public class PaymentIntegrationService {
                     .build();
 
             String baseUrl = getPaymentServiceUrl();
-            String url = baseUrl + "/api/orders/" + orderId + "/refund";
+            String url = baseUrl + "/api/payments/orders/" + orderId + "/refund";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
