@@ -45,6 +45,80 @@ public class KafkaProducerConfig {
 
     public static final String TOPIC_SHIPPING_UPDATE = "shipping-update";
 
+    public static final String TOPIC_USER_EMAIL_REQUEST = "user-email-request";
+    public static final String TOPIC_USER_EMAIL_RESPONSE = "user-email-response";
+    public static final String TOPIC_BULK_USER_EMAIL_REQUEST = "bulk-user-email-request";
+    public static final String TOPIC_BULK_USER_EMAIL_RESPONSE = "bulk-user-email-response";
+    public static final String TOPIC_USER_INFO_REQUEST = "user-info-request";
+    public static final String TOPIC_USER_INFO_RESPONSE = "user-info-response";
+    public static final String TOPIC_BULK_USER_INFO_REQUEST = "bulk-user-info-request";
+    public static final String TOPIC_BULK_USER_INFO_RESPONSE = "bulk-user-info-response";
+
+// Add these topic bean definitions to your existing KafkaProducerConfig.java
+
+    @Bean
+    public NewTopic userEmailRequestTopic() {
+        return TopicBuilder.name(TOPIC_USER_EMAIL_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic userEmailResponseTopic() {
+        return TopicBuilder.name(TOPIC_USER_EMAIL_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic bulkUserEmailRequestTopic() {
+        return TopicBuilder.name(TOPIC_BULK_USER_EMAIL_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic bulkUserEmailResponseTopic() {
+        return TopicBuilder.name(TOPIC_BULK_USER_EMAIL_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic userInfoRequestTopic() {
+        return TopicBuilder.name(TOPIC_USER_INFO_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic userInfoResponseTopic() {
+        return TopicBuilder.name(TOPIC_USER_INFO_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic bulkUserInfoRequestTopic() {
+        return TopicBuilder.name(TOPIC_BULK_USER_INFO_REQUEST)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic bulkUserInfoResponseTopic() {
+        return TopicBuilder.name(TOPIC_BULK_USER_INFO_RESPONSE)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
     /**
      * Producer configuration
      */

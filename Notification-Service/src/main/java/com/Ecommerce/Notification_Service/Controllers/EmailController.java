@@ -1,19 +1,18 @@
 package com.Ecommerce.Notification_Service.Controllers;
 
 import com.Ecommerce.Notification_Service.Models.NotificationType;
-import com.Ecommerce.Notification_Service.Payload.Request.*;
 import com.Ecommerce.Notification_Service.Payload.Response.EmailResponse;
 import com.Ecommerce.Notification_Service.Services.EmailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -37,8 +36,8 @@ public class EmailController {
     public ResponseEntity<EmailResponse> testSendToOne(
             @Parameter(description = "Recipient email address", example = "user@example.com")
             @RequestParam String email,
-            @Parameter(description = "Notification type for testing", example = "ORDER_STATUS")
-            @RequestParam(defaultValue = "ORDER_STATUS") String type) {
+            @Parameter(description = "Notification type for testing", example = "ACCOUNT_ACTIVITY")
+            @RequestParam(defaultValue = "ACCOUNT_ACTIVITY") String type) {
 
         log.info("Testing send-to-one email for: {} with type: {}", email, type);
 
@@ -93,7 +92,24 @@ public class EmailController {
             String subject = getTestSubject(notificationType);
             String content = getTestContent(notificationType);
 
-            CompletableFuture<Void> future = emailService.sendBulkEmails(emailList, subject, content, notificationType);
+            // Send to each email individually (since we don't have bulk method)
+            CompletableFuture.runAsync(() -> {
+                int successCount = 0;
+                int failureCount = 0;
+
+                for (String emailAddr : emailList) {
+                    try {
+                        emailService.sendEmailToUser(emailAddr, subject, content, notificationType);
+                        successCount++;
+                        Thread.sleep(100); // Small delay to avoid overwhelming
+                    } catch (Exception e) {
+                        failureCount++;
+                        log.error("Failed to send email to: {}", emailAddr, e);
+                    }
+                }
+
+                log.info("Bulk email completed. Success: {}, Failures: {}", successCount, failureCount);
+            });
 
             return ResponseEntity.ok(EmailResponse.success(
                     "Bulk test email started for " + emailList.size() + " recipients"
@@ -122,33 +138,39 @@ public class EmailController {
         try {
             // Test all notification types
             NotificationType[] types = {
-                    NotificationType.ORDER_STATUS,
                     NotificationType.PAYMENT_CONFIRMATION,
                     NotificationType.SHIPPING_UPDATE,
                     NotificationType.PROMOTION,
                     NotificationType.ACCOUNT_ACTIVITY
             };
 
-            int successCount = 0;
-            int failureCount = 0;
+            CompletableFuture.runAsync(() -> {
+                int successCount = 0;
+                int failureCount = 0;
 
-            for (NotificationType type : types) {
-                try {
-                    String subject = getTestSubject(type);
-                    String content = getTestContent(type);
+                for (NotificationType type : types) {
+                    try {
+                        String subject = getTestSubject(type);
+                        String content = getTestContent(type);
 
-                    emailService.sendEmailToUser(email, subject, content, type);
-                    successCount++;
+                        emailService.sendEmailToUser(email, subject, content, type);
+                        successCount++;
 
-                    // Small delay between emails
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                    failureCount++;
-                    log.error("Failed to send {} template to {}", type, email, e);
+                        // Small delay between emails
+                        Thread.sleep(2000);
+                    } catch (Exception e) {
+                        failureCount++;
+                        log.error("Failed to send {} template to {}", type, email, e);
+                    }
                 }
-            }
 
-            return ResponseEntity.ok(EmailResponse.bulk(successCount, failureCount));
+                log.info("All templates test completed for {}. Success: {}, Failures: {}",
+                        email, successCount, failureCount);
+            });
+
+            return ResponseEntity.ok(EmailResponse.success(
+                    "All templates test started for " + email + " (" + types.length + " templates)"
+            ));
 
         } catch (Exception e) {
             log.error("Failed to test all templates for: {}", email, e);
@@ -157,7 +179,7 @@ public class EmailController {
     }
 
     /**
-     * Quick promotional email test
+     * Quick promotional email test - uses generic template
      */
     @PostMapping("/test/promotion")
     @Operation(summary = "Quick promotional email test", description = "Send promotional email test - provide comma-separated emails")
@@ -179,12 +201,27 @@ public class EmailController {
             }
 
             // Predefined promotional data
-            String title = "🎉 Special Test Promotion";
-            String message = "This is a test promotional email with special offers and discounts!";
-            String promoCode = "TEST50";
-            String validUntil = "2024-12-31";
+            String subject = "🎉 Special Test Promotion - Limited Time Offer!";
+            String content = "This is a test promotional email with special offers and discounts! Use code TEST50 for 50% off. Valid until 2024-12-31.";
 
-            CompletableFuture<Void> future = emailService.sendPromotionalEmail(emailList, title, message, promoCode, validUntil);
+            // Send promotional emails
+            CompletableFuture.runAsync(() -> {
+                int successCount = 0;
+                int failureCount = 0;
+
+                for (String emailAddr : emailList) {
+                    try {
+                        emailService.sendEmailToUser(emailAddr, subject, content, NotificationType.PROMOTION);
+                        successCount++;
+                        Thread.sleep(200); // Small delay
+                    } catch (Exception e) {
+                        failureCount++;
+                        log.error("Failed to send promotional email to: {}", emailAddr, e);
+                    }
+                }
+
+                log.info("Promotional email completed. Success: {}, Failures: {}", successCount, failureCount);
+            });
 
             return ResponseEntity.ok(EmailResponse.success(
                     "Promotional test email started for " + emailList.size() + " recipients"
@@ -208,7 +245,11 @@ public class EmailController {
             @Parameter(description = "Order status", example = "SHIPPED") @RequestParam(defaultValue = "SHIPPED") String status) {
 
         try {
-            emailService.sendOrderEmail(email, "ORD-TEST-" + System.currentTimeMillis(), status, "2x Test Product, 1x Sample Item");
+            String orderId = "ORD-TEST-" + System.currentTimeMillis();
+            String subject = "📦 Order Update - " + status;
+            String content = String.format("Your order %s has been updated to %s status. Items: 2x Test Product, 1x Sample Item", orderId, status);
+
+            emailService.sendEmailToUser(email, subject, content, NotificationType.ACCOUNT_ACTIVITY);
             return ResponseEntity.ok(EmailResponse.success("Order test email sent successfully"));
         } catch (Exception e) {
             log.error("Failed to send order test email", e);
@@ -225,7 +266,11 @@ public class EmailController {
             @Parameter(description = "Recipient email address") @RequestParam String email) {
 
         try {
-            emailService.sendPaymentConfirmationEmail(email, "ORD-TEST-" + System.currentTimeMillis(), "$199.99", "Credit Card (**** 1234)");
+            String orderId = "ORD-TEST-" + System.currentTimeMillis();
+            String subject = "💳 Payment Confirmed - Order #" + orderId;
+            String content = String.format("Payment of $199.99 has been successfully processed for order #%s using Credit Card (**** 1234)", orderId);
+
+            emailService.sendEmailToUser(email, subject, content, NotificationType.PAYMENT_CONFIRMATION);
             return ResponseEntity.ok(EmailResponse.success("Payment test email sent successfully"));
         } catch (Exception e) {
             log.error("Failed to send payment test email", e);
@@ -242,7 +287,10 @@ public class EmailController {
             @Parameter(description = "Recipient email address") @RequestParam String email) {
 
         try {
-            emailService.sendLoyaltyPointsEmail(email, 250, 2500, "Test purchase reward - Order #TEST-12345");
+            String subject = "🌟 You've Earned 250 Loyalty Points!";
+            String content = "Congratulations! You've earned 250 loyalty points from your recent purchase (Order #TEST-12345). Your total points: 2,500";
+
+            emailService.sendEmailToUser(email, subject, content, NotificationType.ACCOUNT_ACTIVITY);
             return ResponseEntity.ok(EmailResponse.success("Loyalty test email sent successfully"));
         } catch (Exception e) {
             log.error("Failed to send loyalty test email", e);
@@ -260,7 +308,11 @@ public class EmailController {
             @Parameter(description = "Shipping status", example = "IN_TRANSIT") @RequestParam(defaultValue = "IN_TRANSIT") String status) {
 
         try {
-            emailService.sendShippingUpdateEmail(email, "ORD-TEST-" + System.currentTimeMillis(), status, "1Z999AA1234567890");
+            String orderId = "ORD-TEST-" + System.currentTimeMillis();
+            String subject = "🚚 Shipping Update - " + status;
+            String content = String.format("Your order #%s is now %s. Tracking number: 1Z999AA1234567890", orderId, status);
+
+            emailService.sendEmailToUser(email, subject, content, NotificationType.SHIPPING_UPDATE);
             return ResponseEntity.ok(EmailResponse.success("Shipping test email sent successfully"));
         } catch (Exception e) {
             log.error("Failed to send shipping test email", e);
@@ -277,7 +329,10 @@ public class EmailController {
             @Parameter(description = "Recipient email address") @RequestParam String email) {
 
         try {
-            emailService.sendAccountActivityEmail(email, "Profile Update", "Your account profile has been successfully updated with new information.");
+            String subject = "👤 Account Activity - Profile Updated";
+            String content = "Your account profile has been successfully updated with new information. If this wasn't you, please contact support immediately.";
+
+            emailService.sendEmailToUser(email, subject, content, NotificationType.ACCOUNT_ACTIVITY);
             return ResponseEntity.ok(EmailResponse.success("Account activity test email sent successfully"));
         } catch (Exception e) {
             log.error("Failed to send account test email", e);
@@ -285,57 +340,22 @@ public class EmailController {
         }
     }
 
-    // ==================== ORIGINAL ENDPOINTS (Kept for Advanced Testing) ====================
-//
-//    /**
-//     * Send email to a single user (Full featured)
-//     */
-//    @PostMapping("/send-to-one")
-//    @Operation(summary = "Send email to one user (Advanced)", description = "Send a notification email to a specific user with full control")
-//    public ResponseEntity<EmailResponse> sendEmailToOne(@Valid @RequestBody SendEmailToOneRequest request) {
-//        log.info("Sending email to: {} with type: {}", request.getToEmail(), request.getType());
-//
-//        try {
-//            emailService.sendEmailToUser(
-//                    request.getToEmail(),
-//                    request.getSubject(),
-//                    request.getContent(),
-//                    request.getType()
-//            );
-//
-//            return ResponseEntity.ok(EmailResponse.success("Email sent successfully to " + request.getToEmail()));
-//
-//        } catch (Exception e) {
-//            log.error("Failed to send email to: {}", request.getToEmail(), e);
-//            return ResponseEntity.status(500).body(EmailResponse.failure("Failed to send email: " + e.getMessage()));
-//        }
-//    }
-//
-//    /**
-//     * Send email to multiple users (Full featured)
-//     */
-//    @PostMapping("/send-to-all")
-//    @Operation(summary = "Send bulk emails (Advanced)", description = "Send notification emails to multiple users with full control")
-//    public ResponseEntity<EmailResponse> sendEmailToAll(@Valid @RequestBody SendEmailToAllRequest request) {
-//        log.info("Sending bulk email to {} recipients with type: {}", request.getToEmails().size(), request.getType());
-//
-//        try {
-//            CompletableFuture<Void> future = emailService.sendBulkEmails(
-//                    request.getToEmails(),
-//                    request.getSubject(),
-//                    request.getContent(),
-//                    request.getType()
-//            );
-//
-//            return ResponseEntity.ok(EmailResponse.success(
-//                    "Bulk email job started for " + request.getToEmails().size() + " recipients"
-//            ));
-//
-//        } catch (Exception e) {
-//            log.error("Failed to start bulk email job", e);
-//            return ResponseEntity.status(500).body(EmailResponse.failure("Failed to start bulk email: " + e.getMessage()));
-//        }
-//    }
+    /**
+     * Test email configuration
+     */
+    @PostMapping("/test/config")
+    @Operation(summary = "Test email configuration", description = "Send a simple test email to verify configuration")
+    public ResponseEntity<EmailResponse> testEmailConfig(
+            @Parameter(description = "Recipient email address") @RequestParam String email) {
+
+        try {
+            emailService.sendTestEmail(email);
+            return ResponseEntity.ok(EmailResponse.success("Configuration test email sent successfully"));
+        } catch (Exception e) {
+            log.error("Failed to send configuration test email", e);
+            return ResponseEntity.status(500).body(EmailResponse.failure("Failed to send test email: " + e.getMessage()));
+        }
+    }
 
     // ==================== UTILITY ENDPOINTS ====================
 
@@ -349,7 +369,6 @@ public class EmailController {
                 "availableTypes", Arrays.asList(NotificationType.values()),
                 "message", "Use these types in the 'type' parameter for testing",
                 "examples", Map.of(
-                        "ORDER_STATUS", "Order updates and confirmations",
                         "PAYMENT_CONFIRMATION", "Payment success/failure notifications",
                         "SHIPPING_UPDATE", "Shipping and delivery updates",
                         "PROMOTION", "Marketing and promotional emails",
@@ -377,11 +396,32 @@ public class EmailController {
                         "POST /test/payment?email={email}",
                         "POST /test/loyalty?email={email}",
                         "POST /test/shipping?email={email}&status={status}",
-                        "POST /test/account?email={email}"
+                        "POST /test/account?email={email}",
+                        "POST /test/config?email={email}"
                 ),
-                "advancedEndpoints", Arrays.asList(
-                        "/send-to-one", "/send-to-all"
-                )
+                "note", "All tests use existing EmailService.sendEmailToUser() method with appropriate templates"
+        ));
+    }
+
+    /**
+     * Get email templates preview
+     */
+    @GetMapping("/templates")
+    @Operation(summary = "Get email templates", description = "Preview all available email templates")
+    public ResponseEntity<Map<String, Object>> getEmailTemplates() {
+        Map<String, Map<String, String>> templates = new HashMap<>();
+
+        for (NotificationType type : NotificationType.values()) {
+            templates.put(type.name(), Map.of(
+                    "subject", getTestSubject(type),
+                    "content", getTestContent(type),
+                    "description", getTypeDescription(type)
+            ));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "templates", templates,
+                "note", "These are sample templates used for testing"
         ));
     }
 
@@ -392,12 +432,10 @@ public class EmailController {
      */
     private String getTestSubject(NotificationType type) {
         return switch (type) {
-            case ORDER_STATUS -> "📦 Test Order Update";
             case PAYMENT_CONFIRMATION -> "💳 Test Payment Confirmation";
             case SHIPPING_UPDATE -> "🚚 Test Shipping Update";
             case PROMOTION -> "🎉 Test Special Promotion";
             case ACCOUNT_ACTIVITY -> "👤 Test Account Activity";
-            case SYSTEM_ALERT -> "⚠️ Test System Alert";
             default -> "📧 Test Notification";
         };
     }
@@ -407,13 +445,24 @@ public class EmailController {
      */
     private String getTestContent(NotificationType type) {
         return switch (type) {
-            case ORDER_STATUS -> "This is a test order status notification. Your order #TEST-12345 has been updated to CONFIRMED status.";
             case PAYMENT_CONFIRMATION -> "This is a test payment confirmation. Payment of $199.99 has been successfully processed for order #TEST-12345.";
             case SHIPPING_UPDATE -> "This is a test shipping update. Your order #TEST-12345 is now IN_TRANSIT with tracking number 1Z999AA1234567890.";
             case PROMOTION -> "This is a test promotional notification. Get 50% off on all items with code TEST50! Limited time offer.";
             case ACCOUNT_ACTIVITY -> "This is a test account activity notification. Your profile information has been successfully updated.";
-            case SYSTEM_ALERT -> "This is a test system alert notification. System maintenance is scheduled for tonight.";
             default -> "This is a test notification from the Email Service.";
+        };
+    }
+
+    /**
+     * Get type description
+     */
+    private String getTypeDescription(NotificationType type) {
+        return switch (type) {
+            case PAYMENT_CONFIRMATION -> "Sent when payment is processed (success or failure)";
+            case SHIPPING_UPDATE -> "Sent for shipping status changes and delivery updates";
+            case PROMOTION -> "Sent for marketing campaigns and special offers";
+            case ACCOUNT_ACTIVITY -> "Sent for account changes, security alerts, and general activities";
+            default -> "General notification type";
         };
     }
 }

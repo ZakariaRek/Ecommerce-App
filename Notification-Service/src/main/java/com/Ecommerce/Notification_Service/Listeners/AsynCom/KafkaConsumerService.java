@@ -29,6 +29,7 @@ public class KafkaConsumerService {
 
     // ================ PRODUCT EVENTS ================
 
+
     @KafkaListener(topics = "product-created", groupId = "${spring.kafka.consumer.group-id}")
     public void handleProductCreated(String message) {
         try {

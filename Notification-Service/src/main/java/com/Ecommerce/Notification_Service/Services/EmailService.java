@@ -2,6 +2,8 @@ package com.Ecommerce.Notification_Service.Services;
 
 import com.Ecommerce.Notification_Service.Models.Notification;
 import com.Ecommerce.Notification_Service.Models.NotificationType;
+import com.Ecommerce.Notification_Service.Payload.Kafka.UserInfoResponse;
+import jakarta.annotation.PostConstruct;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +19,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -26,17 +30,33 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${notification.email.from}")
+    @Value("${notification.email.from:noreply@yourdomain.com}")
     private String fromEmail;
 
-    @Value("${notification.email.from-name}")
+    @Value("${notification.email.from-name:YourCompany Notifications}")
     private String fromName;
 
-    @Value("${notification.email.templates.base-url}")
+    @Value("${notification.email.templates.base-url:http://localhost:3000}")
     private String baseUrl;
 
+    @PostConstruct
+    public void init() {
+        log.info("EmailService initialized with:");
+        log.info("From Email: {}", fromEmail);
+        log.info("From Name: {}", fromName);
+        log.info("Base URL: {}", baseUrl);
+
+        // Test email configuration
+        try {
+            mailSender.createMimeMessage();
+            log.info("Email configuration is valid");
+        } catch (Exception e) {
+            log.error("Email configuration error: {}", e.getMessage());
+        }
+    }
+
     /**
-     * Send email to a specific user with automatic template selection
+     * Send basic email without user info (fallback method)
      */
     @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
     public void sendEmailToUser(String toEmail, String subject, String content, NotificationType type) {
@@ -48,380 +68,384 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject(subject);
 
-            // Generate HTML content based on notification type
-            String htmlContent = generateEmailContent(content, type, null);
+            // Generate basic HTML content
+            String htmlContent = generateBasicEmailContent(content, type);
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            log.info("Email sent successfully to: {} for type: {}", toEmail, type);
+            log.info("Basic email sent successfully to: {} for type: {}", toEmail, type);
 
         } catch (Exception e) {
-            log.error("Failed to send email to: {} for type: {}", toEmail, type, e);
+            log.error("Failed to send basic email to: {} for type: {}", toEmail, type, e);
             throw new RuntimeException("Failed to send email", e);
         }
     }
 
     /**
-     * Send automatic email based on notification - determines template automatically
+     * Send email with enhanced user information and template data
      */
-    public void sendNotificationEmail(Notification notification, String userEmail) {
-        String subject = generateSubject(notification.getType());
-
-        // Create context data for the specific notification type
-        Map<String, Object> templateData = createTemplateData(notification);
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendEmailToUserWithInfo(UserInfoResponse userInfo, String subject, String content,
+                                        NotificationType type, Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null || userInfo.getEmail().isEmpty()) {
+            log.warn("Cannot send email - user info or email is null/empty");
+            return;
+        }
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+            // Validate and set sender
+            if (fromEmail == null || fromEmail.isEmpty()) {
+                throw new IllegalStateException("From email is not configured");
+            }
+
             helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
+            helper.setTo(userInfo.getEmail());
             helper.setSubject(subject);
 
-            // Generate HTML content with notification data
-            String htmlContent = generateEmailContent(notification.getContent(), notification.getType(), templateData);
+            // Generate HTML content with enhanced user information
+            String htmlContent = generateEnhancedEmailContent(content, type, userInfo, templateData);
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            log.info("Automatic notification email sent to: {} for type: {}", userEmail, notification.getType());
+            log.info("Enhanced email sent successfully to: {} ({}) for type: {}",
+                    userInfo.getEmail(), userInfo.getFullName(), type);
 
         } catch (Exception e) {
-            log.error("Failed to send notification email to: {} for type: {}", userEmail, notification.getType(), e);
-            throw new RuntimeException("Failed to send notification email", e);
+            log.error("Failed to send enhanced email to: {} for type: {}", userInfo.getEmail(), type, e);
+            throw new RuntimeException("Failed to send enhanced email", e);
         }
     }
 
     /**
-     * Send bulk emails to multiple users (async)
+     * Send payment confirmation email with user information
      */
-    public CompletableFuture<Void> sendBulkEmails(List<String> emails, String subject, String content, NotificationType type) {
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendPaymentConfirmationEmailWithUserInfo(UserInfoResponse userInfo, String orderId,
+                                                         String amount, String paymentMethod,
+                                                         Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null) {
+            log.warn("Cannot send payment confirmation email - user info is null");
+            return;
+        }
+
+        try {
+            String subject = "💳 Payment Confirmed - Order #" + orderId;
+            String htmlContent = generateEnhancedPaymentConfirmationTemplate(userInfo, orderId, amount, paymentMethod, templateData);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(userInfo.getEmail());
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Enhanced payment confirmation email sent to: {} for order: {}", userInfo.getEmail(), orderId);
+
+        } catch (Exception e) {
+            log.error("Failed to send enhanced payment confirmation email to: {} for order: {}", userInfo.getEmail(), orderId, e);
+            throw new RuntimeException("Failed to send enhanced payment confirmation email", e);
+        }
+    }
+
+    /**
+     * Send shipping update email with user information and address
+     */
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendShippingUpdateEmailWithUserInfo(UserInfoResponse userInfo, String orderId,
+                                                    String status, String trackingNumber,
+                                                    Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null) {
+            log.warn("Cannot send shipping update email - user info is null");
+            return;
+        }
+
+        try {
+            String subject = "🚚 Shipping Update - Order #" + orderId;
+            String htmlContent = generateEnhancedShippingUpdateTemplate(userInfo, orderId, status, trackingNumber, templateData);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(userInfo.getEmail());
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Enhanced shipping update email sent to: {} for order: {}", userInfo.getEmail(), orderId);
+
+        } catch (Exception e) {
+            log.error("Failed to send enhanced shipping update email to: {} for order: {}", userInfo.getEmail(), orderId, e);
+            throw new RuntimeException("Failed to send enhanced shipping update email", e);
+        }
+    }
+
+    /**
+     * Send delivery confirmation email with user information
+     */
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendDeliveryConfirmationEmailWithUserInfo(UserInfoResponse userInfo, String orderId,
+                                                          String deliveryDate, Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null) {
+            log.warn("Cannot send delivery confirmation email - user info is null");
+            return;
+        }
+
+        try {
+            String subject = "📦 Package Delivered - Order #" + orderId;
+            String htmlContent = generateEnhancedDeliveryConfirmationTemplate(userInfo, orderId, deliveryDate, templateData);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(userInfo.getEmail());
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Enhanced delivery confirmation email sent to: {} for order: {}", userInfo.getEmail(), orderId);
+
+        } catch (Exception e) {
+            log.error("Failed to send enhanced delivery confirmation email to: {} for order: {}", userInfo.getEmail(), orderId, e);
+            throw new RuntimeException("Failed to send enhanced delivery confirmation email", e);
+        }
+    }
+
+    /**
+     * Send loyalty points email with user information
+     */
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendLoyaltyPointsEmailWithUserInfo(UserInfoResponse userInfo, int pointsEarned,
+                                                   int totalPoints, String reason,
+                                                   Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null) {
+            log.warn("Cannot send loyalty points email - user info is null");
+            return;
+        }
+
+        try {
+            String subject = "🌟 You've Earned " + pointsEarned + " Loyalty Points!";
+            String htmlContent = generateEnhancedLoyaltyPointsTemplate(userInfo, pointsEarned, totalPoints, reason, templateData);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(userInfo.getEmail());
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Enhanced loyalty points email sent to: {} - {} points earned", userInfo.getEmail(), pointsEarned);
+
+        } catch (Exception e) {
+            log.error("Failed to send enhanced loyalty points email to: {}", userInfo.getEmail(), e);
+            throw new RuntimeException("Failed to send enhanced loyalty points email", e);
+        }
+    }
+
+    /**
+     * Send tier upgrade email with user information
+     */
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void sendTierUpgradeEmailWithUserInfo(UserInfoResponse userInfo, String newTier,
+                                                 String oldTier, Map<String, Object> templateData) {
+        if (userInfo == null || userInfo.getEmail() == null) {
+            log.warn("Cannot send tier upgrade email - user info is null");
+            return;
+        }
+
+        try {
+            String subject = "🎉 Loyalty Tier Upgraded to " + newTier + "!";
+            String htmlContent = generateEnhancedTierUpgradeTemplate(userInfo, newTier, oldTier, templateData);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(userInfo.getEmail());
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Enhanced tier upgrade email sent to: {} - upgraded to {}", userInfo.getEmail(), newTier);
+
+        } catch (Exception e) {
+            log.error("Failed to send enhanced tier upgrade email to: {}", userInfo.getEmail(), e);
+            throw new RuntimeException("Failed to send enhanced tier upgrade email", e);
+        }
+    }
+
+    /**
+     * Send bulk promotional emails with user information
+     */
+    public CompletableFuture<Void> sendBulkPromotionalEmailWithUserInfo(Map<UUID, UserInfoResponse> userInfoMap,
+                                                                        String title, String message,
+                                                                        String promoCode, String validUntil) {
         return CompletableFuture.runAsync(() -> {
-            log.info("Starting bulk email send to {} recipients for type: {}", emails.size(), type);
+            log.info("Starting bulk promotional email send to {} recipients", userInfoMap.size());
 
             int successCount = 0;
             int failureCount = 0;
 
-            for (String email : emails) {
+            for (Map.Entry<UUID, UserInfoResponse> entry : userInfoMap.entrySet()) {
+                UserInfoResponse userInfo = entry.getValue();
+
+                // Skip users who haven't opted in for marketing emails
+                if (!userInfo.isMarketingOptIn() || !userInfo.isEmailVerified()) {
+                    log.debug("Skipping promotional email for user {} - not opted in or email not verified", userInfo.getUserId());
+                    continue;
+                }
+
                 try {
-                    sendEmailToUser(email, subject, content, type);
+                    sendPromotionalEmailWithUserInfo(userInfo, title, message, promoCode, validUntil);
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
-                    log.error("Failed to send bulk email to: {}", email, e);
+                    log.error("Failed to send promotional email to: {}", userInfo.getEmail(), e);
                 }
             }
 
-            log.info("Bulk email completed. Success: {}, Failures: {}", successCount, failureCount);
+            log.info("Bulk promotional email completed. Success: {}, Failures: {}", successCount, failureCount);
         });
     }
 
     /**
-     * Send promotional email to all users
+     * Send individual promotional email with user information
      */
-    public CompletableFuture<Void> sendPromotionalEmail(List<String> emails, String title, String message,
-                                                        String promoCode, String validUntil) {
-        return CompletableFuture.runAsync(() -> {
-            String subject = "🎉 " + title + " - Special Offer Just for You!";
-
-            for (String email : emails) {
-                try {
-                    MimeMessage mimeMessage = mailSender.createMimeMessage();
-                    MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-
-                    helper.setFrom(fromEmail, fromName);
-                    helper.setTo(email);
-                    helper.setSubject(subject);
-
-                    String htmlContent = generatePromotionalEmailTemplate(title, message, promoCode, validUntil, email);
-                    helper.setText(htmlContent, true);
-
-                    mailSender.send(mimeMessage);
-                    log.debug("Promotional email sent to: {}", email);
-
-                } catch (Exception e) {
-                    log.error("Failed to send promotional email to: {}", email, e);
-                }
-            }
-            log.info("Promotional email campaign completed for {} recipients", emails.size());
-        });
-    }
-
-    /**
-     * Send order-related emails
-     */
-    public void sendOrderEmail(String userEmail, String orderId, String status, String orderDetails) {
+    @Retryable(retryFor = {MailException.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    private void sendPromotionalEmailWithUserInfo(UserInfoResponse userInfo, String title, String message,
+                                                  String promoCode, String validUntil) {
         try {
-            String subject = generateOrderSubject(status);
-            String htmlContent = generateOrderEmailTemplate(orderId, status, orderDetails);
+            String subject = "🎉 " + title + " - Special Offer for " + userInfo.getFullName() + "!";
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            Map<String, Object> templateData = new HashMap<>();
+            templateData.put("userName", userInfo.getFullName());
+            templateData.put("userEmail", userInfo.getEmail());
+            templateData.put("title", title);
+            templateData.put("message", message);
+            templateData.put("promoCode", promoCode);
+            templateData.put("validUntil", validUntil);
+
+            String htmlContent = generateEnhancedPromotionalEmailTemplate(userInfo, title, message, promoCode, validUntil, templateData);
+
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
             helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
+            helper.setTo(userInfo.getEmail());
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
 
-            mailSender.send(message);
-            log.info("Order email sent to: {} for order: {} with status: {}", userEmail, orderId, status);
+            mailSender.send(mimeMessage);
+            log.debug("Enhanced promotional email sent to: {} ({})", userInfo.getEmail(), userInfo.getFullName());
 
         } catch (Exception e) {
-            log.error("Failed to send order email to: {} for order: {}", userEmail, orderId, e);
-            throw new RuntimeException("Failed to send order email", e);
+            log.error("Failed to send enhanced promotional email to: {}", userInfo.getEmail(), e);
+            throw new RuntimeException("Failed to send enhanced promotional email", e);
         }
     }
 
     /**
-     * Send payment confirmation email
+     * Test email configuration
      */
-    public void sendPaymentConfirmationEmail(String userEmail, String orderId, String amount, String paymentMethod) {
+    public void sendTestEmail(String toEmail) {
         try {
-            String subject = "💳 Payment Confirmed - Order #" + orderId;
-            String htmlContent = generatePaymentConfirmationTemplate(orderId, amount, paymentMethod);
-
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
+            helper.setTo(toEmail);
+            helper.setSubject("Test Email - Configuration Verification");
+            helper.setText("<h1>Email Configuration Test</h1><p>If you receive this email, your configuration is working correctly!</p>", true);
 
             mailSender.send(message);
-            log.info("Payment confirmation email sent to: {} for order: {}", userEmail, orderId);
-
-        } catch (Exception e) {
-            log.error("Failed to send payment confirmation email to: {} for order: {}", userEmail, orderId, e);
-            throw new RuntimeException("Failed to send payment confirmation email", e);
-        }
-    }
-
-    /**
-     * Send loyalty points email
-     */
-    public void sendLoyaltyPointsEmail(String userEmail, int pointsEarned, int totalPoints, String reason) {
-        try {
-            String subject = "🌟 You've Earned " + pointsEarned + " Loyalty Points!";
-            String htmlContent = generateLoyaltyPointsTemplate(pointsEarned, totalPoints, reason);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
-            mailSender.send(message);
-            log.info("Loyalty points email sent to: {} - {} points earned", userEmail, pointsEarned);
-
-        } catch (Exception e) {
-            log.error("Failed to send loyalty points email to: {}", userEmail, e);
-            throw new RuntimeException("Failed to send loyalty points email", e);
-        }
-    }
-
-    /**
-     * Send shipping update email
-     */
-    public void sendShippingUpdateEmail(String userEmail, String orderId, String status, String trackingNumber) {
-        try {
-            String subject = "🚚 Shipping Update - Order #" + orderId;
-            String htmlContent = generateShippingUpdateTemplate(orderId, status, trackingNumber);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
-            mailSender.send(message);
-            log.info("Shipping update email sent to: {} for order: {}", userEmail, orderId);
-
-        } catch (Exception e) {
-            log.error("Failed to send shipping update email to: {} for order: {}", userEmail, orderId, e);
-            throw new RuntimeException("Failed to send shipping update email", e);
-        }
-    }
-
-    /**
-     * Send account activity email
-     */
-    public void sendAccountActivityEmail(String userEmail, String activityType, String description) {
-        try {
-            String subject = "👤 Account Activity - " + activityType;
-            String htmlContent = generateAccountActivityTemplate(activityType, description);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
-            mailSender.send(message);
-            log.info("Account activity email sent to: {} for activity: {}", userEmail, activityType);
-
-        } catch (Exception e) {
-            log.error("Failed to send account activity email to: {}", userEmail, e);
-            throw new RuntimeException("Failed to send account activity email", e);
-        }
-    }
-
-    /**
-     * Test email functionality
-     */
-    public void sendTestEmail(String toEmail, String testType) {
-        try {
-            String subject = "🧪 Test Email - " + testType;
-            String content = "This is a test email from the Notification Service. Test type: " + testType;
-
-            sendEmailToUser(toEmail, subject, content, NotificationType.SYSTEM_ALERT);
             log.info("Test email sent successfully to: {}", toEmail);
 
         } catch (Exception e) {
             log.error("Failed to send test email to: {}", toEmail, e);
-            throw new RuntimeException("Failed to send test email", e);
+            throw new RuntimeException("Failed to send test email: " + e.getMessage(), e);
         }
     }
 
     // ==================== TEMPLATE GENERATION METHODS ====================
 
     /**
-     * Generate email content based on notification type
+     * Generate basic email content (fallback)
      */
-    private String generateEmailContent(String content, NotificationType type, Map<String, Object> variables) {
+    private String generateBasicEmailContent(String content, NotificationType type) {
+        return String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"><title>Notification</title></head>
+            <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px;">
+                    <h1>📧 %s</h1>
+                    <p>%s</p>
+                    <p><small>Generated at: %s</small></p>
+                </div>
+            </body>
+            </html>
+            """,
+                type.name(),
+                content,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
+    }
+
+    /**
+     * Generate enhanced email content with user information
+     */
+    private String generateEnhancedEmailContent(String content, NotificationType type,
+                                                UserInfoResponse userInfo, Map<String, Object> templateData) {
         return switch (type) {
-            case ORDER_STATUS -> generateOrderEmailTemplate(
-                    getFromVariables(variables, "orderId", "N/A"),
-                    getFromVariables(variables, "status", "Updated"),
-                    getFromVariables(variables, "orderDetails", content)
+            case PAYMENT_CONFIRMATION -> generateEnhancedPaymentConfirmationTemplate(
+                    userInfo,
+                    getFromTemplateData(templateData, "orderId", "N/A"),
+                    getFromTemplateData(templateData, "amount", "N/A"),
+                    getFromTemplateData(templateData, "paymentMethod", "N/A"),
+                    templateData
             );
-            case PAYMENT_CONFIRMATION -> generatePaymentConfirmationTemplate(
-                    getFromVariables(variables, "orderId", "N/A"),
-                    getFromVariables(variables, "amount", "N/A"),
-                    getFromVariables(variables, "paymentMethod", "N/A")
+            case SHIPPING_UPDATE -> generateEnhancedShippingUpdateTemplate(
+                    userInfo,
+                    getFromTemplateData(templateData, "orderId", "N/A"),
+                    getFromTemplateData(templateData, "status", "Updated"),
+                    getFromTemplateData(templateData, "trackingNumber", ""),
+                    templateData
             );
-            case SHIPPING_UPDATE -> generateShippingUpdateTemplate(
-                    getFromVariables(variables, "orderId", "N/A"),
-                    getFromVariables(variables, "status", "Updated"),
-                    getFromVariables(variables, "trackingNumber", "")
-            );
-            case PROMOTION -> generatePromotionalEmailTemplate(
-                    getFromVariables(variables, "title", "Special Offer"),
+            case PROMOTION -> generateEnhancedPromotionalEmailTemplate(
+                    userInfo,
+                    getFromTemplateData(templateData, "title", "Special Offer"),
                     content,
-                    getFromVariables(variables, "promoCode", ""),
-                    getFromVariables(variables, "validUntil", ""),
-                    getFromVariables(variables, "userEmail", "")
+                    getFromTemplateData(templateData, "promoCode", ""),
+                    getFromTemplateData(templateData, "validUntil", ""),
+                    templateData
             );
-            case ACCOUNT_ACTIVITY -> generateAccountActivityTemplate(
-                    getFromVariables(variables, "activityType", "Activity"),
-                    content
+            case ACCOUNT_ACTIVITY -> generateEnhancedAccountActivityTemplate(
+                    userInfo,
+                    getFromTemplateData(templateData, "activityType", "Activity"),
+                    content,
+                    templateData
             );
-            default -> generateGenericEmailTemplate(content, type.name());
+            default -> generateEnhancedGenericEmailTemplate(userInfo, content, type.name(), templateData);
         };
     }
 
     /**
-     * Create template data based on notification content
+     * Generate Enhanced Payment Confirmation Email Template
      */
-    private Map<String, Object> createTemplateData(Notification notification) {
-        Map<String, Object> data = new java.util.HashMap<>();
-        data.put("notificationId", notification.getId());
-        data.put("userId", notification.getUserId().toString());
-        data.put("createdAt", notification.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        data.put("expiresAt", notification.getExpiresAt() != null ?
-                notification.getExpiresAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : "");
+    private String generateEnhancedPaymentConfirmationTemplate(UserInfoResponse userInfo, String orderId,
+                                                               String amount, String paymentMethod,
+                                                               Map<String, Object> templateData) {
+        String shippingAddress = userInfo.getFormattedDefaultAddress();
 
-        // Parse content for specific data based on type
-        String content = notification.getContent();
-        switch (notification.getType()) {
-            case ORDER_STATUS -> {
-                if (content.contains("#")) {
-                    String orderId = extractOrderId(content);
-                    data.put("orderId", orderId);
-                }
-                data.put("status", extractStatus(content));
-            }
-            case PAYMENT_CONFIRMATION -> {
-                data.put("orderId", extractOrderId(content));
-                data.put("amount", extractAmount(content));
-                data.put("paymentMethod", "Payment Method");
-            }
-            case SHIPPING_UPDATE -> {
-                data.put("orderId", extractOrderId(content));
-                data.put("status", extractStatus(content));
-                data.put("trackingNumber", extractTrackingNumber(content));
-            }
-        }
-
-        return data;
-    }
-
-    // ==================== EMAIL TEMPLATES ====================
-
-    /**
-     * Generate Order Status Email Template
-     */
-    private String generateOrderEmailTemplate(String orderId, String status, String orderDetails) {
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Order Update</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    .header { text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 20px; }
-                    .status { background-color: #3498db; color: white; padding: 10px; border-radius: 5px; text-align: center; margin: 15px 0; }
-                    .order-details { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
-                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
-                    .button { display: inline-block; background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>📦 Order Update</h1>
-                    </div>
-                    <div class="content">
-                        <p>Hello!</p>
-                        <p>Your order has been updated:</p>
-                        
-                        <div class="order-details">
-                            <p><strong>Order ID:</strong> %s</p>
-                            <div class="status">
-                                <h3>%s</h3>
-                            </div>
-                            <p><strong>Order Details:</strong></p>
-                            <p>%s</p>
-                        </div>
-                        
-                        <p>Thank you for choosing our service!</p>
-                        
-                        <a href="%s/orders/%s" class="button">View Order Details</a>
-                    </div>
-                    <div class="footer">
-                        <p>This is an automated message from the ECommerce System.</p>
-                        <p>If you have any questions, please contact our support team.</p>
-                        <p>Generated at: %s</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """.formatted(orderId, status, orderDetails, baseUrl, orderId, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-    }
-
-    /**
-     * Generate Payment Confirmation Email Template
-     */
-    private String generatePaymentConfirmationTemplate(String orderId, String amount, String paymentMethod) {
-        return """
+        return String.format("""
             <!DOCTYPE html>
             <html>
             <head>
@@ -434,6 +458,7 @@ public class EmailService {
                     .header { text-align: center; border-bottom: 2px solid #27ae60; padding-bottom: 20px; margin-bottom: 20px; }
                     .success { background-color: #27ae60; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
                     .payment-details { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
                     .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
                     .button { display: inline-block; background-color: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
                 </style>
@@ -448,18 +473,21 @@ public class EmailService {
                             <h2>✅ Payment Successful!</h2>
                         </div>
                         
-                        <p>Hello!</p>
-                        <p>Your payment has been successfully processed:</p>
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>Thank you for your purchase. We're processing your order now.</p>
+                        </div>
                         
                         <div class="payment-details">
                             <p><strong>Order ID:</strong> %s</p>
                             <p><strong>Amount Paid:</strong> %s</p>
                             <p><strong>Payment Method:</strong> %s</p>
+                            %s
                         </div>
                         
-                        <p>Thank you for your purchase! Your order will be processed shortly.</p>
+                        <p>Your order will be processed shortly and you'll receive a shipping notification once it's on its way.</p>
                         
-                        <a href="%s/orders/%s" class="button">View Order</a>
+                        <a href="%s/orders/%s" class="button">View Order Details</a>
                     </div>
                     <div class="footer">
                         <p>This is an automated message from the ECommerce System.</p>
@@ -469,14 +497,305 @@ public class EmailService {
                 </div>
             </body>
             </html>
-            """.formatted(orderId, amount, paymentMethod, baseUrl, orderId, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            """,
+                userInfo.getFullName(),
+                orderId,
+                amount,
+                paymentMethod,
+                shippingAddress != null && !shippingAddress.equals("No address on file") ?
+                        "<p><strong>Shipping Address:</strong> " + shippingAddress + "</p>" : "",
+                baseUrl,
+                orderId,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
     }
 
     /**
-     * Generate Promotional Email Template
+     * Generate Enhanced Shipping Update Email Template
      */
-    private String generatePromotionalEmailTemplate(String title, String message, String promoCode, String validUntil, String userEmail) {
-        return """
+    private String generateEnhancedShippingUpdateTemplate(UserInfoResponse userInfo, String orderId,
+                                                          String status, String trackingNumber,
+                                                          Map<String, Object> templateData) {
+        String deliveryAddress = userInfo.getFormattedDefaultAddress();
+
+        return String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Shipping Update</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                    .header { text-align: center; border-bottom: 2px solid #8e44ad; padding-bottom: 20px; margin-bottom: 20px; }
+                    .shipping-status { background-color: #8e44ad; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
+                    .tracking-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
+                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+                    .button { display: inline-block; background-color: #8e44ad; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🚚 Shipping Update</h1>
+                    </div>
+                    <div class="content">
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>We have an update on your shipment.</p>
+                        </div>
+                        
+                        <div class="tracking-info">
+                            <p><strong>Order ID:</strong> %s</p>
+                            <div class="shipping-status">
+                                <h3>%s</h3>
+                            </div>
+                            %s
+                            %s
+                        </div>
+                        
+                        <p>Thank you for your patience!</p>
+                        
+                        <a href="%s/orders/%s" class="button">Track Package</a>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated message from the ECommerce System.</p>
+                        <p>Delivery estimates may vary based on location and carrier.</p>
+                        <p>Generated at: %s</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+                userInfo.getFullName(),
+                orderId,
+                status,
+                trackingNumber != null && !trackingNumber.isEmpty() ?
+                        "<p><strong>Tracking Number:</strong> " + trackingNumber + "</p>" : "",
+                deliveryAddress != null && !deliveryAddress.equals("No address on file") ?
+                        "<p><strong>Delivery Address:</strong> " + deliveryAddress + "</p>" : "",
+                baseUrl,
+                orderId,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
+    }
+
+    /**
+     * Generate Enhanced Delivery Confirmation Template
+     */
+    private String generateEnhancedDeliveryConfirmationTemplate(UserInfoResponse userInfo, String orderId,
+                                                                String deliveryDate, Map<String, Object> templateData) {
+        String deliveryAddress = userInfo.getFormattedDefaultAddress();
+
+        return String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Package Delivered</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                    .header { text-align: center; border-bottom: 2px solid #27ae60; padding-bottom: 20px; margin-bottom: 20px; }
+                    .delivered { background-color: #27ae60; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
+                    .delivery-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
+                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+                    .button { display: inline-block; background-color: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>📦 Package Delivered</h1>
+                    </div>
+                    <div class="content">
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>Great news! Your package has been delivered.</p>
+                        </div>
+                        
+                        <div class="delivered">
+                            <h2>✅ Successfully Delivered!</h2>
+                        </div>
+                        
+                        <div class="delivery-info">
+                            <p><strong>Order ID:</strong> %s</p>
+                            %s
+                            %s
+                        </div>
+                        
+                        <p>We hope you enjoy your purchase! If you have any issues with your order, please don't hesitate to contact our customer service team.</p>
+                        
+                        <a href="%s/orders/%s" class="button">Leave a Review</a>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated message from the ECommerce System.</p>
+                        <p>Thank you for shopping with us!</p>
+                        <p>Generated at: %s</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+                userInfo.getFullName(),
+                orderId,
+                deliveryDate != null && !deliveryDate.isEmpty() ?
+                        "<p><strong>Delivery Date:</strong> " + deliveryDate + "</p>" : "",
+                deliveryAddress != null && !deliveryAddress.equals("No address on file") ?
+                        "<p><strong>Delivered To:</strong> " + deliveryAddress + "</p>" : "",
+                baseUrl,
+                orderId,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
+    }
+
+    /**
+     * Generate Enhanced Loyalty Points Template
+     */
+    private String generateEnhancedLoyaltyPointsTemplate(UserInfoResponse userInfo, int pointsEarned,
+                                                         int totalPoints, String reason,
+                                                         Map<String, Object> templateData) {
+        return String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Loyalty Points Earned</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                    .header { text-align: center; border-bottom: 2px solid #f39c12; padding-bottom: 20px; margin-bottom: 20px; }
+                    .points-earned { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+                    .total-points { background-color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
+                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+                    .button { display: inline-block; background-color: #f39c12; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🌟 Loyalty Points Earned</h1>
+                    </div>
+                    <div class="content">
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>You've earned more loyalty points!</p>
+                        </div>
+                        
+                        <div class="points-earned">
+                            <h2>You've Earned %d Points!</h2>
+                            <p>%s</p>
+                        </div>
+                        
+                        <div class="total-points">
+                            <h3>Total Points: %d</h3>
+                        </div>
+                        
+                        <p>Keep shopping to earn more points and unlock exclusive rewards!</p>
+                        
+                        <a href="%s/loyalty" class="button">View Rewards</a>
+                    </div>
+                    <div class="footer">
+                        <p>Thank you for being a loyal customer!</p>
+                        <p>Points expire after 12 months of inactivity.</p>
+                        <p>Generated at: %s</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+                userInfo.getFullName(),
+                pointsEarned,
+                reason,
+                totalPoints,
+                baseUrl,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
+    }
+
+    /**
+     * Generate Enhanced Tier Upgrade Template
+     */
+    private String generateEnhancedTierUpgradeTemplate(UserInfoResponse userInfo, String newTier,
+                                                       String oldTier, Map<String, Object> templateData) {
+        return String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Loyalty Tier Upgrade</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); }
+                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+                    .header { text-align: center; border-bottom: 2px solid #9b59b6; padding-bottom: 20px; margin-bottom: 20px; }
+                    .upgrade-banner { background: linear-gradient(45deg, #9b59b6, #8e44ad); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+                    .tier-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
+                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+                    .button { display: inline-block; background: linear-gradient(45deg, #9b59b6, #8e44ad); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; margin: 15px 0; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🎉 Tier Upgrade</h1>
+                    </div>
+                    <div class="content">
+                        <div class="user-info">
+                            <h3>Congratulations %s!</h3>
+                            <p>You've been upgraded to a new loyalty tier!</p>
+                        </div>
+                        
+                        <div class="upgrade-banner">
+                            <h2>Welcome to %s Tier!</h2>
+                            <p>Upgraded from %s</p>
+                        </div>
+                        
+                        <div class="tier-info">
+                            <p><strong>Your New Benefits Include:</strong></p>
+                            <ul>
+                                <li>Exclusive member discounts</li>
+                                <li>Priority customer service</li>
+                                <li>Early access to sales</li>
+                                <li>Enhanced reward points</li>
+                            </ul>
+                        </div>
+                        
+                        <p>Enjoy your new benefits and thank you for being a valued customer!</p>
+                        
+                        <a href="%s/loyalty" class="button">Explore Benefits</a>
+                    </div>
+                    <div class="footer">
+                        <p>Thank you for your continued loyalty!</p>
+                        <p>Keep shopping to maintain your tier status.</p>
+                        <p>Generated at: %s</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+                userInfo.getFullName(),
+                newTier,
+                oldTier,
+                baseUrl,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
+    }
+
+    /**
+     * Generate Enhanced Promotional Email Template
+     */
+    private String generateEnhancedPromotionalEmailTemplate(UserInfoResponse userInfo, String title, String message,
+                                                            String promoCode, String validUntil,
+                                                            Map<String, Object> templateData) {
+        return String.format("""
             <!DOCTYPE html>
             <html>
             <head>
@@ -489,6 +808,7 @@ public class EmailService {
                     .header { text-align: center; border-bottom: 2px solid #e74c3c; padding-bottom: 20px; margin-bottom: 20px; }
                     .promo-banner { background: linear-gradient(45deg, #e74c3c, #f39c12); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
                     .promo-code { background-color: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; font-size: 18px; font-weight: bold; margin: 15px 0; letter-spacing: 2px; }
+                    .user-greeting { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
                     .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
                     .button { display: inline-block; background: linear-gradient(45deg, #e74c3c, #f39c12); color: white; padding: 15px 30px; text-decoration: none; border-radius: 25px; margin: 15px 0; font-weight: bold; }
                 </style>
@@ -499,11 +819,15 @@ public class EmailService {
                         <h1>🎉 Special Promotion</h1>
                     </div>
                     <div class="content">
+                        <div class="user-greeting">
+                            <h3>Hello %s!</h3>
+                            <p>We have a special offer just for you!</p>
+                        </div>
+                        
                         <div class="promo-banner">
                             <h2>%s</h2>
                         </div>
                         
-                        <p>Hello Valued Customer!</p>
                         <p>%s</p>
                         
                         %s
@@ -522,7 +846,8 @@ public class EmailService {
                 </div>
             </body>
             </html>
-            """.formatted(
+            """,
+                userInfo.getFullName(),
                 title,
                 message,
                 promoCode != null && !promoCode.isEmpty() ? "<div class=\"promo-code\">Use Code: " + promoCode + "</div>" : "",
@@ -533,123 +858,11 @@ public class EmailService {
     }
 
     /**
-     * Generate Loyalty Points Email Template
+     * Generate Enhanced Account Activity Template
      */
-    private String generateLoyaltyPointsTemplate(int pointsEarned, int totalPoints, String reason) {
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Loyalty Points Earned</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    .header { text-align: center; border-bottom: 2px solid #f39c12; padding-bottom: 20px; margin-bottom: 20px; }
-                    .points-earned { background: linear-gradient(45deg, #f39c12, #e67e22); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
-                    .total-points { background-color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
-                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
-                    .button { display: inline-block; background-color: #f39c12; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🌟 Loyalty Points Earned</h1>
-                    </div>
-                    <div class="content">
-                        <div class="points-earned">
-                            <h2>You've Earned %d Points!</h2>
-                        </div>
-                        
-                        <p>Hello Loyal Customer!</p>
-                        <p>%s</p>
-                        
-                        <div class="total-points">
-                            <h3>Total Points: %d</h3>
-                        </div>
-                        
-                        <p>Keep shopping to earn more points and unlock exclusive rewards!</p>
-                        
-                        <a href="%s/loyalty" class="button">View Rewards</a>
-                    </div>
-                    <div class="footer">
-                        <p>Thank you for being a loyal customer!</p>
-                        <p>Points expire after 12 months of inactivity.</p>
-                        <p>Generated at: %s</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """.formatted(pointsEarned, reason, totalPoints, baseUrl, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-    }
-
-    /**
-     * Generate Shipping Update Email Template
-     */
-    private String generateShippingUpdateTemplate(String orderId, String status, String trackingNumber) {
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Shipping Update</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    .header { text-align: center; border-bottom: 2px solid #8e44ad; padding-bottom: 20px; margin-bottom: 20px; }
-                    .shipping-status { background-color: #8e44ad; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
-                    .tracking-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
-                    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
-                    .button { display: inline-block; background-color: #8e44ad; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🚚 Shipping Update</h1>
-                    </div>
-                    <div class="content">
-                        <p>Hello!</p>
-                        <p>We have an update on your shipment:</p>
-                        
-                        <div class="tracking-info">
-                            <p><strong>Order ID:</strong> %s</p>
-                            <div class="shipping-status">
-                                <h3>%s</h3>
-                            </div>
-                            %s
-                        </div>
-                        
-                        <p>Thank you for your patience!</p>
-                        
-                        <a href="%s/orders/%s" class="button">Track Package</a>
-                    </div>
-                    <div class="footer">
-                        <p>This is an automated message from the ECommerce System.</p>
-                        <p>Delivery estimates may vary based on location and carrier.</p>
-                        <p>Generated at: %s</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """.formatted(
-                orderId,
-                status,
-                trackingNumber != null && !trackingNumber.isEmpty() ? "<p><strong>Tracking Number:</strong> " + trackingNumber + "</p>" : "",
-                baseUrl,
-                orderId,
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-        );
-    }
-
-    /**
-     * Generate Account Activity Email Template
-     */
-    private String generateAccountActivityTemplate(String activityType, String description) {
-        return """
+    private String generateEnhancedAccountActivityTemplate(UserInfoResponse userInfo, String activityType,
+                                                           String description, Map<String, Object> templateData) {
+        return String.format("""
             <!DOCTYPE html>
             <html>
             <head>
@@ -662,6 +875,7 @@ public class EmailService {
                     .header { text-align: center; border-bottom: 2px solid #16a085; padding-bottom: 20px; margin-bottom: 20px; }
                     .activity-info { background-color: #16a085; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 15px 0; }
                     .description { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
                     .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
                     .button { display: inline-block; background-color: #16a085; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
                 </style>
@@ -672,12 +886,14 @@ public class EmailService {
                         <h1>👤 Account Activity</h1>
                     </div>
                     <div class="content">
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>We wanted to notify you about recent activity on your account.</p>
+                        </div>
+                        
                         <div class="activity-info">
                             <h3>%s</h3>
                         </div>
-                        
-                        <p>Hello!</p>
-                        <p>We wanted to notify you about recent activity on your account:</p>
                         
                         <div class="description">
                             <p>%s</p>
@@ -695,14 +911,21 @@ public class EmailService {
                 </div>
             </body>
             </html>
-            """.formatted(activityType, description, baseUrl, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            """,
+                userInfo.getFullName(),
+                activityType,
+                description,
+                baseUrl,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
     }
 
     /**
-     * Generate Generic Email Template
+     * Generate Enhanced Generic Email Template
      */
-    private String generateGenericEmailTemplate(String content, String type) {
-        return """
+    private String generateEnhancedGenericEmailTemplate(UserInfoResponse userInfo, String content,
+                                                        String type, Map<String, Object> templateData) {
+        return String.format("""
             <!DOCTYPE html>
             <html>
             <head>
@@ -714,6 +937,7 @@ public class EmailService {
                     .container { max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
                     .header { text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 20px; }
                     .content { line-height: 1.6; color: #333; }
+                    .user-info { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3498db; }
                     .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
                     .notification-type { background-color: #3498db; color: white; padding: 10px; border-radius: 5px; text-align: center; margin: 15px 0; }
                 </style>
@@ -724,6 +948,11 @@ public class EmailService {
                         <h1>📧 Notification</h1>
                     </div>
                     <div class="content">
+                        <div class="user-info">
+                            <h3>Hello %s!</h3>
+                            <p>You have a new notification.</p>
+                        </div>
+                        
                         <div class="notification-type">
                             <h3>%s</h3>
                         </div>
@@ -737,89 +966,18 @@ public class EmailService {
                 </div>
             </body>
             </html>
-            """.formatted(type, content, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            """,
+                userInfo.getFullName(),
+                type,
+                content,
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        );
     }
 
-    // ==================== HELPER METHODS ====================
-
-    private String getFromVariables(Map<String, Object> variables, String key, String defaultValue) {
-        if (variables == null) return defaultValue;
-        Object value = variables.get(key);
+    // Helper method to get data from template variables
+    private String getFromTemplateData(Map<String, Object> templateData, String key, String defaultValue) {
+        if (templateData == null) return defaultValue;
+        Object value = templateData.get(key);
         return value != null ? value.toString() : defaultValue;
-    }
-
-    private String extractOrderId(String content) {
-        // Extract order ID from content (assuming format like "Order #12345")
-        if (content.contains("#")) {
-            int startIndex = content.indexOf("#") + 1;
-            int endIndex = content.indexOf(" ", startIndex);
-            if (endIndex == -1) endIndex = content.length();
-            return content.substring(startIndex, endIndex);
-        }
-        return "N/A";
-    }
-
-    private String extractStatus(String content) {
-        // Extract status from content
-        String[] statusKeywords = {"confirmed", "processing", "shipped", "delivered", "cancelled"};
-        for (String status : statusKeywords) {
-            if (content.toLowerCase().contains(status)) {
-                return status.toUpperCase();
-            }
-        }
-        return "UPDATED";
-    }
-
-    private String extractAmount(String content) {
-        // Extract amount from content (assuming format like "$99.99")
-        if (content.contains("$")) {
-            int startIndex = content.indexOf("$");
-            int endIndex = content.indexOf(" ", startIndex);
-            if (endIndex == -1) endIndex = content.length();
-            return content.substring(startIndex, endIndex);
-        }
-        return "N/A";
-    }
-
-    private String extractTrackingNumber(String content) {
-        // Extract tracking number from content
-        if (content.toLowerCase().contains("tracking")) {
-            String[] words = content.split(" ");
-            for (int i = 0; i < words.length; i++) {
-                if (words[i].toLowerCase().contains("tracking") && i + 1 < words.length) {
-                    return words[i + 1];
-                }
-            }
-        }
-        return "";
-    }
-
-    /**
-     * Generate subject based on notification type
-     */
-    private String generateSubject(NotificationType type) {
-        return switch (type) {
-            case ORDER_STATUS -> "📦 Order Status Update";
-            case PAYMENT_CONFIRMATION -> "💳 Payment Confirmation";
-            case SHIPPING_UPDATE -> "🚚 Shipping Update";
-            case PROMOTION -> "🎉 Special Promotion";
-            case ACCOUNT_ACTIVITY -> "👤 Account Activity";
-            case SYSTEM_ALERT -> "⚠️ System Alert";
-            default -> "📧 Notification";
-        };
-    }
-
-    /**
-     * Generate order-specific subject
-     */
-    private String generateOrderSubject(String status) {
-        return switch (status.toUpperCase()) {
-            case "CONFIRMED" -> "✅ Order Confirmed";
-            case "PROCESSING" -> "⚙️ Order Processing";
-            case "SHIPPED" -> "🚚 Order Shipped";
-            case "DELIVERED" -> "📦 Order Delivered";
-            case "CANCELLED" -> "❌ Order Cancelled";
-            default -> "📦 Order Update";
-        };
     }
 }

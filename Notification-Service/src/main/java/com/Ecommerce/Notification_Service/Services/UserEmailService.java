@@ -3,6 +3,7 @@ package com.Ecommerce.Notification_Service.Services;
 import com.Ecommerce.Notification_Service.Payload.Kafka.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,8 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Service for communicating with User Service to fetch user emails via Kafka
+ * Enhanced service for communicating with User Service to fetch user information via Kafka
+ * Supports both email-only and full user information requests
  */
 @Service
 @Slf4j
@@ -24,19 +26,30 @@ public class UserEmailService {
     // Cache for user emails (in-memory cache)
     private final Map<UUID, CachedUserEmail> emailCache = new ConcurrentHashMap<>();
 
+    // Cache for full user information
+    private final Map<UUID, CachedUserInfo> userInfoCache = new ConcurrentHashMap<>();
+
     // Pending requests (waiting for responses)
-    private final Map<String, CompletableFuture<UserEmailResponse>> pendingRequests = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<BulkUserEmailResponse>> pendingBulkRequests = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<UserEmailResponse>> pendingEmailRequests = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<BulkUserEmailResponse>> pendingBulkEmailRequests = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<UserInfoResponse>> pendingUserInfoRequests = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<BulkUserInfoResponse>> pendingBulkUserInfoRequests = new ConcurrentHashMap<>();
 
     // Kafka Topics
     public static final String TOPIC_USER_EMAIL_REQUEST = "user-email-request";
     public static final String TOPIC_USER_EMAIL_RESPONSE = "user-email-response";
     public static final String TOPIC_BULK_USER_EMAIL_REQUEST = "bulk-user-email-request";
     public static final String TOPIC_BULK_USER_EMAIL_RESPONSE = "bulk-user-email-response";
+    public static final String TOPIC_USER_INFO_REQUEST = "user-info-request";
+    public static final String TOPIC_USER_INFO_RESPONSE = "user-info-response";
+    public static final String TOPIC_BULK_USER_INFO_REQUEST = "bulk-user-info-request";
+    public static final String TOPIC_BULK_USER_INFO_RESPONSE = "bulk-user-info-response";
 
     // Configuration
     private static final int REQUEST_TIMEOUT_SECONDS = 30;
     private static final int CACHE_CLEANUP_HOURS = 2;
+
+    // ===================== EMAIL ONLY METHODS =====================
 
     /**
      * Get user email by userId (with caching and Kafka communication)
@@ -71,7 +84,7 @@ public class UserEmailService {
         CompletableFuture<UserEmailResponse> future = new CompletableFuture<>();
 
         // Store the future for response handling
-        pendingRequests.put(request.getRequestId(), future);
+        pendingEmailRequests.put(request.getRequestId(), future);
 
         // Send Kafka message
         try {
@@ -79,7 +92,7 @@ public class UserEmailService {
             log.debug("Sent user email request via Kafka: {}", request.getRequestId());
         } catch (Exception e) {
             log.error("Failed to send user email request via Kafka", e);
-            pendingRequests.remove(request.getRequestId());
+            pendingEmailRequests.remove(request.getRequestId());
             future.completeExceptionally(e);
             return future;
         }
@@ -87,7 +100,7 @@ public class UserEmailService {
         // Set timeout
         CompletableFuture.delayedExecutor(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .execute(() -> {
-                    if (pendingRequests.remove(request.getRequestId()) != null) {
+                    if (pendingEmailRequests.remove(request.getRequestId()) != null) {
                         log.warn("User email request timed out: {}", request.getRequestId());
                         future.complete(UserEmailResponse.error(request.getRequestId(), userId, "Request timeout"));
                     }
@@ -128,7 +141,7 @@ public class UserEmailService {
         CompletableFuture<BulkUserEmailResponse> future = new CompletableFuture<>();
 
         // Store the future for response handling
-        pendingBulkRequests.put(request.getRequestId(), future);
+        pendingBulkEmailRequests.put(request.getRequestId(), future);
 
         // Send Kafka message
         try {
@@ -136,7 +149,7 @@ public class UserEmailService {
             log.debug("Sent bulk user email request via Kafka: {} users", uncachedUserIds.size());
         } catch (Exception e) {
             log.error("Failed to send bulk user email request via Kafka", e);
-            pendingBulkRequests.remove(request.getRequestId());
+            pendingBulkEmailRequests.remove(request.getRequestId());
             future.completeExceptionally(e);
             return CompletableFuture.completedFuture(cachedResults);
         }
@@ -144,7 +157,7 @@ public class UserEmailService {
         // Set timeout
         CompletableFuture.delayedExecutor(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .execute(() -> {
-                    if (pendingBulkRequests.remove(request.getRequestId()) != null) {
+                    if (pendingBulkEmailRequests.remove(request.getRequestId()) != null) {
                         log.warn("Bulk user email request timed out: {}", request.getRequestId());
                         future.complete(BulkUserEmailResponse.create(request.getRequestId(), new ArrayList<>()));
                     }
@@ -166,6 +179,137 @@ public class UserEmailService {
         });
     }
 
+    // ===================== FULL USER INFO METHODS =====================
+
+    /**
+     * Get complete user information by userId
+     */
+    public CompletableFuture<UserInfoResponse> getUserInfo(UUID userId, String purpose) {
+        return getUserInfo(userId, purpose, true, false);
+    }
+
+    /**
+     * Get complete user information with options
+     */
+    public CompletableFuture<UserInfoResponse> getUserInfo(UUID userId, String purpose,
+                                                           boolean includeAddresses, boolean includeRoles) {
+        // Check cache first
+        CachedUserInfo cached = userInfoCache.get(userId);
+        if (cached != null && !cached.isExpired()) {
+            log.debug("Retrieved user info from cache: {}", userId);
+            return CompletableFuture.completedFuture(cached.toUserInfoResponse("cached"));
+        }
+
+        // Send request to User Service via Kafka
+        UserInfoRequest request = UserInfoRequest.create(userId, purpose, includeAddresses, includeRoles);
+        CompletableFuture<UserInfoResponse> future = new CompletableFuture<>();
+
+        // Store the future for response handling
+        pendingUserInfoRequests.put(request.getRequestId(), future);
+
+        // Send Kafka message
+        try {
+            kafkaTemplate.send(TOPIC_USER_INFO_REQUEST, userId.toString(), request);
+            log.debug("Sent user info request via Kafka: {}", request.getRequestId());
+        } catch (Exception e) {
+            log.error("Failed to send user info request via Kafka", e);
+            pendingUserInfoRequests.remove(request.getRequestId());
+            future.completeExceptionally(e);
+            return future;
+        }
+
+        // Set timeout
+        CompletableFuture.delayedExecutor(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .execute(() -> {
+                    if (pendingUserInfoRequests.remove(request.getRequestId()) != null) {
+                        log.warn("User info request timed out: {}", request.getRequestId());
+                        future.complete(UserInfoResponse.error(request.getRequestId(), userId, "Request timeout"));
+                    }
+                });
+
+        return future;
+    }
+
+    /**
+     * Get multiple user information (bulk request)
+     */
+    public CompletableFuture<Map<UUID, UserInfoResponse>> getBulkUserInfo(List<UUID> userIds, String purpose) {
+        return getBulkUserInfo(userIds, purpose, true, false);
+    }
+
+    /**
+     * Get multiple user information with options
+     */
+    public CompletableFuture<Map<UUID, UserInfoResponse>> getBulkUserInfo(List<UUID> userIds, String purpose,
+                                                                          boolean includeAddresses, boolean includeRoles) {
+        if (userIds == null || userIds.isEmpty()) {
+            return CompletableFuture.completedFuture(new HashMap<>());
+        }
+
+        // Check cache for some users
+        Map<UUID, UserInfoResponse> cachedResults = new HashMap<>();
+        List<UUID> uncachedUserIds = new ArrayList<>();
+
+        for (UUID userId : userIds) {
+            CachedUserInfo cached = userInfoCache.get(userId);
+            if (cached != null && !cached.isExpired()) {
+                cachedResults.put(userId, cached.toUserInfoResponse("cached"));
+            } else {
+                uncachedUserIds.add(userId);
+            }
+        }
+
+        // If all users are cached, return immediately
+        if (uncachedUserIds.isEmpty()) {
+            log.debug("All user info retrieved from cache: {} users", cachedResults.size());
+            return CompletableFuture.completedFuture(cachedResults);
+        }
+
+        // Send bulk request for uncached users
+        BulkUserInfoRequest request = BulkUserInfoRequest.create(uncachedUserIds, purpose, includeAddresses, includeRoles);
+        CompletableFuture<BulkUserInfoResponse> future = new CompletableFuture<>();
+
+        // Store the future for response handling
+        pendingBulkUserInfoRequests.put(request.getRequestId(), future);
+
+        // Send Kafka message
+        try {
+            kafkaTemplate.send(TOPIC_BULK_USER_INFO_REQUEST, "bulk-" + System.currentTimeMillis(), request);
+            log.debug("Sent bulk user info request via Kafka: {} users", uncachedUserIds.size());
+        } catch (Exception e) {
+            log.error("Failed to send bulk user info request via Kafka", e);
+            pendingBulkUserInfoRequests.remove(request.getRequestId());
+            future.completeExceptionally(e);
+            return CompletableFuture.completedFuture(cachedResults);
+        }
+
+        // Set timeout
+        CompletableFuture.delayedExecutor(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .execute(() -> {
+                    if (pendingBulkUserInfoRequests.remove(request.getRequestId()) != null) {
+                        log.warn("Bulk user info request timed out: {}", request.getRequestId());
+                        future.complete(BulkUserInfoResponse.create(request.getRequestId(), new ArrayList<>()));
+                    }
+                });
+
+        // Combine cached and fetched results
+        return future.thenApply(bulkResponse -> {
+            Map<UUID, UserInfoResponse> allResults = new HashMap<>(cachedResults);
+
+            if (bulkResponse != null && bulkResponse.getUsers() != null) {
+                for (UserInfoResponse userResponse : bulkResponse.getUsers()) {
+                    if ("SUCCESS".equals(userResponse.getStatus_response())) {
+                        allResults.put(userResponse.getUserId(), userResponse);
+                    }
+                }
+            }
+
+            return allResults;
+        });
+    }
+
+    // ===================== KAFKA LISTENERS =====================
+
     /**
      * Listen for user email responses from User Service
      */
@@ -173,7 +317,7 @@ public class UserEmailService {
     public void handleUserEmailResponse(UserEmailResponse response) {
         log.debug("Received user email response: {}", response.getRequestId());
 
-        CompletableFuture<UserEmailResponse> future = pendingRequests.remove(response.getRequestId());
+        CompletableFuture<UserEmailResponse> future = pendingEmailRequests.remove(response.getRequestId());
         if (future != null) {
             // Cache successful responses
             if ("SUCCESS".equals(response.getStatus()) && response.getEmail() != null) {
@@ -195,7 +339,7 @@ public class UserEmailService {
     public void handleBulkUserEmailResponse(BulkUserEmailResponse response) {
         log.debug("Received bulk user email response: {} users", response.getTotalFound());
 
-        CompletableFuture<BulkUserEmailResponse> future = pendingBulkRequests.remove(response.getRequestId());
+        CompletableFuture<BulkUserEmailResponse> future = pendingBulkEmailRequests.remove(response.getRequestId());
         if (future != null) {
             // Cache successful responses
             if (response.getUsers() != null) {
@@ -214,6 +358,57 @@ public class UserEmailService {
             log.warn("Received bulk response for unknown request: {}", response.getRequestId());
         }
     }
+
+    /**
+     * Listen for user info responses from User Service
+     */
+    @KafkaListener(topics = TOPIC_USER_INFO_RESPONSE, groupId = "notification-service-user-info")
+    public void handleUserInfoResponse(UserInfoResponse response) {
+        log.debug("Received user info response: {}", response.getRequestId());
+
+        CompletableFuture<UserInfoResponse> future = pendingUserInfoRequests.remove(response.getRequestId());
+        if (future != null) {
+            // Cache successful responses
+            if ("SUCCESS".equals(response.getStatus_response())) {
+                CachedUserInfo cached = CachedUserInfo.fromResponse(response);
+                userInfoCache.put(response.getUserId(), cached);
+                log.debug("Cached user info: {}", response.getUserId());
+            }
+
+            future.complete(response);
+        } else {
+            log.warn("Received response for unknown request: {}", response.getRequestId());
+        }
+    }
+
+    /**
+     * Listen for bulk user info responses from User Service
+     */
+    @KafkaListener(topics = TOPIC_BULK_USER_INFO_RESPONSE, groupId = "notification-service-bulk-user-info")
+    public void handleBulkUserInfoResponse(BulkUserInfoResponse response) {
+        log.debug("Received bulk user info response: {} users", response.getTotalFound());
+
+        CompletableFuture<BulkUserInfoResponse> future = pendingBulkUserInfoRequests.remove(response.getRequestId());
+        if (future != null) {
+            // Cache successful responses
+            if (response.getUsers() != null) {
+                for (UserInfoResponse userResponse : response.getUsers()) {
+                    if ("SUCCESS".equals(userResponse.getStatus_response())) {
+                        CachedUserInfo cached = CachedUserInfo.fromResponse(userResponse);
+                        userInfoCache.put(userResponse.getUserId(), cached);
+                    }
+                }
+                log.debug("Cached {} user info from bulk response",
+                        response.getUsers().stream().mapToInt(u -> "SUCCESS".equals(u.getStatus_response()) ? 1 : 0).sum());
+            }
+
+            future.complete(response);
+        } else {
+            log.warn("Received bulk response for unknown request: {}", response.getRequestId());
+        }
+    }
+
+    // ===================== FALLBACK METHODS =====================
 
     /**
      * Get user email with fallback to demo email (for testing without User Service)
@@ -252,6 +447,8 @@ public class UserEmailService {
                 });
     }
 
+    // ===================== UTILITY METHODS =====================
+
     /**
      * Generate fallback email for testing (when User Service is not available)
      */
@@ -265,12 +462,17 @@ public class UserEmailService {
      * Clear expired cache entries
      */
     public void cleanupExpiredCache() {
-        int initialSize = emailCache.size();
-        emailCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
-        int removedCount = initialSize - emailCache.size();
+        int initialEmailCacheSize = emailCache.size();
+        int initialInfoCacheSize = userInfoCache.size();
 
-        if (removedCount > 0) {
-            log.debug("Cleaned up {} expired cache entries", removedCount);
+        emailCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
+        userInfoCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
+
+        int removedEmailCount = initialEmailCacheSize - emailCache.size();
+        int removedInfoCount = initialInfoCacheSize - userInfoCache.size();
+
+        if (removedEmailCount > 0 || removedInfoCount > 0) {
+            log.debug("Cleaned up {} email cache entries and {} info cache entries", removedEmailCount, removedInfoCount);
         }
     }
 
@@ -278,29 +480,31 @@ public class UserEmailService {
      * Get cache statistics
      */
     public Map<String, Object> getCacheStats() {
-        int totalCached = emailCache.size();
-        int expiredCount = (int) emailCache.values().stream().filter(CachedUserEmail::isExpired).count();
+        int totalEmailCached = emailCache.size();
+        int expiredEmailCount = (int) emailCache.values().stream().filter(CachedUserEmail::isExpired).count();
+
+        int totalInfoCached = userInfoCache.size();
+        int expiredInfoCount = (int) userInfoCache.values().stream().filter(CachedUserInfo::isExpired).count();
 
         return Map.of(
-                "totalCached", totalCached,
-                "validCached", totalCached - expiredCount,
-                "expiredCached", expiredCount,
-                "pendingRequests", pendingRequests.size(),
-                "pendingBulkRequests", pendingBulkRequests.size(),
-                "cacheHitRate", calculateCacheHitRate()
+                "totalEmailCached", totalEmailCached,
+                "validEmailCached", totalEmailCached - expiredEmailCount,
+                "expiredEmailCached", expiredEmailCount,
+                "totalInfoCached", totalInfoCached,
+                "validInfoCached", totalInfoCached - expiredInfoCount,
+                "expiredInfoCached", expiredInfoCount,
+                "pendingEmailRequests", pendingEmailRequests.size(),
+                "pendingBulkEmailRequests", pendingBulkEmailRequests.size(),
+                "pendingInfoRequests", pendingUserInfoRequests.size(),
+                "pendingBulkInfoRequests", pendingBulkUserInfoRequests.size()
         );
     }
 
-    private double calculateCacheHitRate() {
-        // This would require tracking hits/misses in a real implementation
-        return emailCache.isEmpty() ? 0.0 : 0.85; // Placeholder
-    }
-
     /**
-     * Manually add user email to cache (for testing)
+     * Manually add user info to cache (for testing)
      */
-    public void cacheUserEmail(UUID userId, String email) {
-        CachedUserEmail cached = CachedUserEmail.builder()
+    public void cacheUserInfo(UUID userId, String email, String username) {
+        CachedUserEmail emailCached = CachedUserEmail.builder()
                 .userId(userId)
                 .email(email)
                 .emailVerified(true)
@@ -309,8 +513,19 @@ public class UserEmailService {
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
 
-        emailCache.put(userId, cached);
-        log.debug("Manually cached user email: {} -> {}", userId, email);
+        CachedUserInfo infoCached = CachedUserInfo.builder()
+                .userId(userId)
+                .username(username)
+                .email(email)
+                .emailVerified(true)
+                .marketingOptIn(true)
+                .cachedAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+
+        emailCache.put(userId, emailCached);
+        userInfoCache.put(userId, infoCached);
+        log.debug("Manually cached user info: {} -> {} ({})", userId, email, username);
     }
 
     /**
@@ -318,7 +533,8 @@ public class UserEmailService {
      */
     public void clearCache() {
         emailCache.clear();
-        log.debug("Cleared all cached user emails");
+        userInfoCache.clear();
+        log.debug("Cleared all cached user data");
     }
 
     /**
