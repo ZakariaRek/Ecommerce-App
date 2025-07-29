@@ -855,7 +855,152 @@ sequenceDiagram
     
     Note over Client,ProductService: Response includes:<br/>• Items with availability status<br/>• Available items count<br/>• Unavailable items count<br/>• Availability percentage
 ```
+# 🔄 SSE Notification Flow with Asynchronous Kafka Communication
 
+## Overview
+This sequence diagram illustrates how the Notification Service handles real-time notifications using Server-Sent Events (SSE) combined with asynchronous Kafka messaging for cross-service communication.
+
+## 📊 Complete SSE + Kafka Flow Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Frontend as 🖥️ Frontend Client
+    participant Gateway as 🌐 API Gateway
+    participant NotifController as 📱 SSE Controller
+    participant SSEService as 🔌 SSE Service
+    participant KafkaConsumer as 📨 Kafka Consumer
+    participant NotifService as 🔔 Notification Service
+    participant MongoDB as 🗄️ MongoDB
+    participant KafkaProducer as 📤 Kafka Producer
+    participant KafkaBus as 🚌 Kafka Message Bus
+    participant PaymentService as 💳 Payment Service
+    participant UserService as 👤 User Service
+    participant EmailService as 📧 Email Service
+
+    Note over Frontend,EmailService: 🚀 Phase 1: SSE Connection Establishment
+
+    Frontend->>+NotifController: GET /sse/connect/{userId}
+    Note right of Frontend: User establishes SSE connection<br/>MongoDB ObjectId: 64a7b8c9e1234567890abcde
+
+    NotifController->>NotifController: validateUserId(mongoObjectId)
+    NotifController->>NotifController: parseToUUID(mongoObjectId)
+    Note right of NotifController: Convert MongoDB ObjectId to UUID<br/>for internal service communication
+
+    NotifController->>+SSEService: createConnection(userUUID)
+    SSEService->>SSEService: Create SseEmitter(timeout: ∞)
+    SSEService->>SSEService: Store in userConnections[userUUID]
+
+    SSEService->>Frontend: SSE Connection Established
+    Note right of SSEService: Send initial connection message:<br/>{"type": "CONNECTION_ESTABLISHED"}
+
+    SSEService-->>-NotifController: Return SseEmitter
+    NotifController-->>-Frontend: SSE Stream Ready
+
+    Note over Frontend,EmailService: 🎯 Phase 2: Business Event Triggers Notification
+
+    PaymentService->>+KafkaBus: Publish Event
+    Note right of PaymentService: Topic: "payment-confirmed"<br/>Payload: {userId, orderId, amount, paymentMethod}
+
+    KafkaBus->>+KafkaConsumer: @KafkaListener("payment-confirmed")
+    Note right of KafkaConsumer: EmailKafkaConsumer.handlePaymentConfirmed()
+
+    KafkaConsumer->>KafkaConsumer: parseOrConvertToUUID(userId)
+    Note right of KafkaConsumer: Convert ObjectId to UUID if needed
+
+    KafkaConsumer->>+UserService: Request user info via Kafka
+    Note right of KafkaConsumer: Topic: "user-info-request"<br/>Enhanced email with user details
+
+    UserService->>KafkaBus: User info response
+    KafkaBus->>KafkaConsumer: User details received
+
+    KafkaConsumer->>+NotifService: createNotification()
+    Note right of KafkaConsumer: UUID userId, PAYMENT_CONFIRMATION,<br/>content, expiresAt
+
+    NotifService->>+MongoDB: Save notification
+    MongoDB-->>-NotifService: Notification saved
+
+    NotifService->>+SSEService: sendNotificationToUser(userId, notification)
+    Note right of NotifService: Real-time delivery via SSE
+
+    SSEService->>SSEService: Find userConnections[userId]
+    SSEService->>SSEService: convertToSSEDTO(notification)
+
+    SSEService->>Frontend: SSE Event: "notification"
+    Note right of SSEService: JSON payload with notification details
+
+    SSEService-->>-NotifService: SSE sent successfully
+    NotifService-->>-KafkaConsumer: Notification created
+
+    Note over Frontend,EmailService: 📧 Phase 3: Enhanced Email Notification
+
+    KafkaConsumer->>+EmailService: sendPaymentConfirmationEmailWithUserInfo()
+    Note right of KafkaConsumer: Enhanced email with user address,<br/>order details, and branding
+
+    EmailService->>EmailService: generateEnhancedPaymentConfirmationTemplate()
+    EmailService->>EmailService: Send SMTP email
+
+    EmailService-->>-KafkaConsumer: Email sent successfully
+    KafkaConsumer-->>-KafkaBus: Event processing complete
+
+    Note over Frontend,EmailService: 🔄 Phase 4: Frontend Handles Real-time Notification
+
+    Frontend->>Frontend: SSE Event Received
+    Note right of Frontend: Update UI with notification:<br/>• Show toast/banner<br/>• Update notification count<br/>• Play notification sound
+
+    Frontend->>+NotifController: PUT /notifications/{id}/read
+    Note right of Frontend: Mark notification as read
+
+    NotifController->>+NotifService: markAsRead(notificationId)
+    NotifService->>NotifService: Store state before save
+    NotifService->>+MongoDB: Update notification.isRead = true
+    MongoDB-->>-NotifService: Updated successfully
+
+    NotifService->>+SSEService: sendNotificationToUser(userId, updatedNotification)
+    Note right of NotifService: Send read status update via SSE
+
+    SSEService->>Frontend: SSE Event: "notification-updated"
+    Note right of SSEService: Update UI to show read status
+
+    SSEService-->>-NotifService: Update sent
+    NotifService-->>-NotifController: Notification marked as read
+    NotifController-->>-Frontend: 200 OK
+
+    Note over Frontend,EmailService: 🎬 Phase 5: Kafka Event Publishing (MongoDB Listener)
+
+    MongoDB->>+NotifService: MongoDB Change Event (via listener)
+    NotifService->>+KafkaProducer: publishNotificationRead(notification)
+    KafkaProducer->>KafkaBus: Publish to "notification-read" topic
+    Note right of KafkaProducer: Other services can react to<br/>notification read events
+
+    KafkaProducer-->>-NotifService: Event published
+    NotifService-->>-MongoDB: Event handling complete
+
+    Note over Frontend,EmailService: 🔧 Phase 6: Error Handling & Fallbacks
+
+    rect rgb(255, 240, 240)
+        Note over SSEService,Frontend: Connection Error Handling
+        SSEService->>SSEService: onError() → removeConnection()
+        SSEService->>SSEService: onTimeout() → removeConnection()
+        SSEService->>SSEService: onCompletion() → cleanup()
+    end
+
+    rect rgb(240, 255, 240)
+        Note over KafkaConsumer,EmailService: Fallback Mechanisms
+        Note right of KafkaConsumer: If user info not available:<br/>• Use basic email fallback<br/>• Generate demo email for testing
+        Note right of EmailService: Email retry with backoff:<br/>• 3 attempts with 1s delay<br/>• Circuit breaker protection
+    end
+
+    Note over Frontend,EmailService: 📊 Phase 7: Monitoring & Analytics
+
+    SSEService->>SSEService: Track connection stats
+    Note right of SSEService: • Connected users count<br/>• Total connections<br/>• User-specific connection count
+
+    KafkaConsumer->>KafkaConsumer: Log processing metrics
+    Note right of KafkaConsumer: • Event processing time<br/>• Success/failure rates<br/>• Email delivery status
+
+    NotifService->>NotifService: Generate notification stats
+    Note right of NotifService: • Total notifications<br/>• Unread count<br/>• SSE delivery metrics
+```
 ### ⚡ Error Handling & Circuit Breaker Flow
 
 This diagram illustrates how our system gracefully handles failures and implements circuit breaker patterns:
