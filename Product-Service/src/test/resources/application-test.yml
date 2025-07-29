@@ -1,0 +1,55 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+      import-check:
+        enabled: false
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      group-id: test-group
+      properties:
+        spring.json.trusted.packages: "*"
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
+
+file:
+  upload-dir: ./test-uploads
+  max-size: 1048576  # 1MB for tests
+  allowed-extensions: jpg,jpeg,png,gif,bmp,webp
+  allowed-mime-types: image/jpeg,image/png,image/gif,image/bmp,image/webp
+
+logging:
+  level:
+    com.Ecommerce.Product_Service: DEBUG
+    org.springframework.kafka: WARN
+    org.apache.kafka: WARN
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
