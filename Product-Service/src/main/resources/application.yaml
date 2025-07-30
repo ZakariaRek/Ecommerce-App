@@ -121,3 +121,26 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
+sonar:
+  projectKey: product-service
+  projectName: NexusCommerce Product Service
+  projectVersion: 1.0.0
+  host:
+    url: http://localhost:9000
+  login: ${SONAR_TOKEN:sqp_51ebb50dcf0ee396c2d1dfb4da28fbabb23e6d43}
+  sources: src/main/java
+  tests: src/test/java
+  language: java
+  java:
+    source: 17
+    binaries: target/classes
+    test:
+      binaries: target/test-classes
+    libraries: target/dependency/*.jar
+  coverage:
+    jacoco:
+      xmlReportPaths: target/site/jacoco/jacoco.xml
+  exclusions: "**/*Application.java,**/config/**,**/dto/**,**/entity/**,**/model/**"
+  sourceEncoding: UTF-8
+  qualitygate:
+    wait: true

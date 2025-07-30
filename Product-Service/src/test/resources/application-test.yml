@@ -13,43 +13,78 @@ spring:
     hibernate:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
-    show-sql: false
+    show-sql: true
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      group-id: test-group
+      group-id: product-service-test-group
+      auto-offset-reset: earliest
       properties:
         spring.json.trusted.packages: "*"
+  data:
+    redis:
+      host: localhost
+      port: 6370
+      timeout: 2000ms
   servlet:
     multipart:
-      max-file-size: 1MB
-      max-request-size: 1MB
+      max-file-size: 10MB
+      max-request-size: 10MB
+  security:
+    user:
+      name: testuser
+      password: testpass
+      roles: USER
+  jackson:
+    default-property-inclusion: NON_NULL
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 0
+  error:
+    include-stacktrace: always
 
 file:
   upload-dir: ./test-uploads
-  max-size: 1048576  # 1MB for tests
+  max-size: 10485760  # 10MB for tests
   allowed-extensions: jpg,jpeg,png,gif,bmp,webp
   allowed-mime-types: image/jpeg,image/png,image/gif,image/bmp,image/webp
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:
     com.Ecommerce.Product_Service: DEBUG
     org.springframework.kafka: WARN
     org.apache.kafka: WARN
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-
-eureka:
-  client:
-    enabled: false
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"

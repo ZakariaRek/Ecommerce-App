@@ -1,7 +1,9 @@
 package com.Ecommerce.Product_Service.Controllers;
 
+import com.Ecommerce.Product_Service.Entities.Product;
 import com.Ecommerce.Product_Service.Payload.Product.ProductBatchRequestDTO;
 import com.Ecommerce.Product_Service.Payload.Product.ProductBatchResponseDTO;
+import com.Ecommerce.Product_Service.Payload.Product.ProductMapper;
 import com.Ecommerce.Product_Service.Services.ProductService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,13 +20,22 @@ public class ProductBatchController {
     @Autowired
     private ProductService productService;
 
+    @Autowired
+    private ProductMapper productMapper;
+
     @PostMapping("/product-info")
     public ResponseEntity<List<ProductBatchResponseDTO>> getBatchProductInfo(
             @RequestBody ProductBatchRequestDTO request) {
 
         log.info("Fetching batch product info for {} products", request.getProductIds().size());
 
-        List<ProductBatchResponseDTO> productInfos = productService.getBatchProductInfo(request.getProductIds());
+        // Get products from service
+        List<Product> products = productService.findAllProducts().stream()
+                .filter(product -> request.getProductIds().contains(product.getId()))
+                .toList();
+
+        // Use mapper to convert to DTOs
+        List<ProductBatchResponseDTO> productInfos = productMapper.toBatchResponseDTOList(products);
 
         return ResponseEntity.ok(productInfos);
     }

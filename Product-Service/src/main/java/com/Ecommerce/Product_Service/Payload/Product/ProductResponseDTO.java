@@ -2,6 +2,7 @@ package com.Ecommerce.Product_Service.Payload.Product;
 
 
 import com.Ecommerce.Product_Service.Entities.ProductStatus;
+import com.Ecommerce.Product_Service.Entities.Review;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -20,6 +21,7 @@ public class ProductResponseDTO {
     private String sku;
     private BigDecimal weight;
     private String dimensions;
+    private List<Review> reviews;
     private List<String> images;
     private ProductStatus status;
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
