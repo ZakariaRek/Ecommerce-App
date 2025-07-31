@@ -6,7 +6,7 @@ import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequ
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.*;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
-import com.Ecommerce.Order_Service.Services.Kafka.DiscountCalculationService;
+import com.Ecommerce.Order_Service.KafkaProducers.DiscountCalculationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

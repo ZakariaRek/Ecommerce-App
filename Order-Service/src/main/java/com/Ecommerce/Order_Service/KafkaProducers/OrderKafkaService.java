@@ -1,4 +1,4 @@
-package com.Ecommerce.Order_Service.Services.Kafka;
+package com.Ecommerce.Order_Service.KafkaProducers;
 
 import com.Ecommerce.Order_Service.Config.KafkaProducerConfig;
 import com.Ecommerce.Order_Service.Entities.Order;

@@ -1,11 +1,9 @@
 // Fixed Order-Service: DiscountCalculationService.java
-package com.Ecommerce.Order_Service.Services.Kafka;
+package com.Ecommerce.Order_Service.KafkaProducers;
 
 import com.Ecommerce.Order_Service.Payload.Kafka.DiscountCalculationContext;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.CombinedDiscountRequest;
-import com.Ecommerce.Order_Service.Payload.Kafka.Request.CouponValidationRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Request.DiscountCalculationRequest;
-import com.Ecommerce.Order_Service.Payload.Kafka.Request.TierDiscountRequest;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
 import com.Ecommerce.Order_Service.Payload.Response.OrderItem.OrderItemResponseDto;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -11,7 +11,7 @@ import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountBreakdown;
 import com.Ecommerce.Order_Service.Payload.Kafka.Response.DiscountCalculationResponse;
 import com.Ecommerce.Order_Service.Repositories.DiscountApplicationRepository;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
-import com.Ecommerce.Order_Service.Services.Kafka.DiscountCalculationService;
+import com.Ecommerce.Order_Service.KafkaProducers.DiscountCalculationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -5,7 +5,7 @@ import com.Ecommerce.Order_Service.Entities.OrderItem;
 import com.Ecommerce.Order_Service.Entities.OrderStatus;
 import com.Ecommerce.Order_Service.Repositories.OrderItemRepository;
 import com.Ecommerce.Order_Service.Repositories.OrderRepository;
-import com.Ecommerce.Order_Service.Services.Kafka.OrderKafkaService;
+import com.Ecommerce.Order_Service.KafkaProducers.OrderKafkaService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 
