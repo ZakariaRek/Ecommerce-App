@@ -89,12 +89,14 @@ services:
     container_name: kafka-ui
     depends_on:
       - kafka
+      - schema-registry
     ports:
       - '8091:8080'
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
     networks:
       - kafka-network
 

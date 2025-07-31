@@ -1,7 +1,7 @@
 package com.Ecommerce.Order_Service.Listeners;
 
 import com.Ecommerce.Order_Service.Entities.OrderItem;
-import com.Ecommerce.Order_Service.Services.Kafka.OrderKafkaService;
+import com.Ecommerce.Order_Service.KafkaProducers.OrderKafkaService;
 import jakarta.persistence.PostPersist;
 import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PreUpdate;
