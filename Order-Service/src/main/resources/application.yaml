@@ -1,23 +1,112 @@
+# Order-Service/src/main/resources/application.yaml
 spring:
   profiles:
-    active: kafka  # ADD THIS LINE to enable Kafka logging
+    active: kafka  # Enable Kafka logging
+
   config:
     import: configserver:http://localhost:8888
+
   application:
     name: order-service
-  datasource:
-    url: jdbc:postgresql://localhost:5432/Order-service
-    username: postgres
-    password: yahyasd56
-     #     password: zakaria
-    driver-class-name: org.postgresql.Driver
+  
+  # ShardingSphere Configuration
+  shardingsphere:
+    # Enable ShardingSphere
+    enabled: true
+    
+    # Data source configuration (will be overridden by shardingsphere-config.yaml)
+    datasource:
+      names: shard0,shard1,shard2,shard3
+      
+      shard0:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://localhost:5432/Order-service
+        username: postgres
+        password: yahyasd56
+        hikari:
+          maximum-pool-size: 10
+          minimum-idle: 2
+          connection-timeout: 30000
+          idle-timeout: 600000
+          max-lifetime: 1800000
+          pool-name: shard0-pool
+
+      shard1:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://localhost:5432/Order-service-shard-1
+        username: postgres
+        password: yahyasd56
+        hikari:
+          maximum-pool-size: 10
+          minimum-idle: 2
+          connection-timeout: 30000
+          idle-timeout: 600000
+          max-lifetime: 1800000
+          pool-name: shard1-pool
+
+      shard2:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://localhost:5432/Order-service-shard-2
+        username: postgres
+        password: yahyasd56
+        hikari:
+          maximum-pool-size: 10
+          minimum-idle: 2
+          connection-timeout: 30000
+          idle-timeout: 600000
+          max-lifetime: 1800000
+          pool-name: shard2-pool
+
+      shard3:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://localhost:5432/Order-service-shard-3
+        username: postgres
+        password: yahyasd56
+        hikari:
+          maximum-pool-size: 10
+          minimum-idle: 2
+          connection-timeout: 30000
+          idle-timeout: 600000
+          max-lifetime: 1800000
+          pool-name: shard3-pool
+    
+    # Global properties
+    props:
+      # Show executed SQL (disable in production)
+      sql-show: true
+      sql-simple: true
+      
+      # Execution engine configuration
+      kernel-executor-size: 16
+      max-connections-size-per-query: 1
+      check-table-metadata-enabled: false
+      
+      # SQL federation for complex queries
+      sql-federation-type: ORIGINAL
+      
+      # Enable query optimization
+      proxy-frontend-flush-threshold: 128
+      proxy-hint-enabled: false
+
   jpa:
     hibernate:
-      ddl-auto: update  # Change to 'none' or 'validate' based on your use case
+      ddl-auto: update
     database-platform: org.hibernate.dialect.PostgreSQLDialect
-    show-sql: true
+    show-sql: false  # ShardingSphere will handle SQL logging
     properties:
       hibernate.format_sql: true
+      hibernate.jdbc.batch_size: 25
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      hibernate.connection.provider_disables_autocommit: true
+      # Disable schema validation as ShardingSphere handles multiple schemas
+      hibernate.hbm2ddl.auto: none
+      hibernate.temp.use_jdbc_metadata_defaults: false
+  
   kafka:
     bootstrap-servers: localhost:9092
     producer:
@@ -26,19 +115,18 @@ spring:
       properties:
         spring.json.add.type.headers: false
     consumer:
-      group-id: user-service-group
+      group-id: order-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
 
-
-
 server:
   port: 8083
   servlet:
-      context-path: /api/orders
+    context-path: /api/orders
+
 springdoc:
   api-docs:
     path: /api-docs
@@ -53,6 +141,7 @@ springdoc:
     - group: order-service
       paths-to-match:
         - /**
+
 eureka:
   instance:
     preferIpAddress: true
@@ -61,22 +150,149 @@ eureka:
     metadataMap:
       instanceId: ${spring.application.name}:${server.port}
 
+# Enhanced logging for ShardingSphere
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
-    org.springframework.web: DEBUG
-    com.Ecommerce.Gateway_Service: DEBUG
-    org.springframework.data.redis: DEBUG
-    org.springframework.web.cors: DEBUG
-    io.github.resilience4j: DEBUG
-    org.springframework.boot.autoconfigure: DEBUG
-    com.Ecommerce: DEBUG  # Your package
-    org.springframework.kafka: DEBUG
+    # ShardingSphere specific logging
+    org.apache.shardingsphere: INFO
+    org.apache.shardingsphere.infra.executor.sql: DEBUG
+    org.apache.shardingsphere.sharding: DEBUG
+    
+    # Application logging
+    com.Ecommerce.Order_Service: DEBUG
+    com.Ecommerce.Order_Service.Config.Sharding: DEBUG
+    
+    # Framework logging
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+    org.springframework.data.redis: INFO
+    org.springframework.web.cors: INFO
+    io.github.resilience4j: INFO
+    org.springframework.boot.autoconfigure: INFO
+    org.springframework.kafka: INFO
     org.apache.kafka: WARN
+    
+    # Database connection logs
+    com.zaxxer.hikari: INFO
+    org.springframework.jdbc: INFO
+    
+    # SQL logging (handled by ShardingSphere)
+    org.hibernate.SQL: OFF
+    org.hibernate.type.descriptor.sql.BasicBinder: OFF
+
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{40}] - %msg%n"
+
 # Payment Service Configuration
 payment:
   service:
     name: PAYMENT-SERVICE
     url: http://localhost:8085
+
+# Management and monitoring endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,shardingsphere
+  endpoint:
+    health:
+      show-details: always
+    shardingsphere:
+      enabled: true
+  health:
+    shardingsphere:
+      enabled: true
+  metrics:
+    tags:
+      application: order-service
+      environment: ${spring.profiles.active}
+
+# ShardingSphere custom configuration
+shardingsphere:
+  management:
+    enabled: true
+    # Enable management endpoints for ShardingSphere
+    endpoints:
+      - sharding-info
+      - data-source-info
+      - rules-info
+  
+  monitoring:
+    # Enable metrics collection
+    metrics:
+      enabled: true
+      type: PROMETHEUS  # Options: PROMETHEUS, STATSD
+    
+    # Enable SQL tracing
+    tracing:
+      enabled: true
+      type: JAEGER  # Options: JAEGER, ZIPKIN, OPENTRACING
+
+---
+# Development profile - single shard for testing
+spring:
+  config:
+    activate:
+      on-profile: dev-single
+
+  shardingsphere:
+    enabled: false  # Disable sharding for single instance testing
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/Order-service
+    username: postgres
+    password: yahyasd56
+    driver-class-name: org.postgresql.Driver
+
+logging:
+  level:
+    org.apache.shardingsphere: OFF
+
+---
+# Production profile with optimized settings
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  shardingsphere:
+    props:
+      # Optimize for production
+      sql-show: false
+      sql-simple: false
+      kernel-executor-size: 32
+      max-connections-size-per-query: 2
+      check-table-metadata-enabled: true
+      
+      # Enable advanced features
+      sql-federation-type: ADVANCED
+      proxy-frontend-flush-threshold: 256
+
+logging:
+  level:
+    org.apache.shardingsphere: WARN
+    org.apache.shardingsphere.infra.executor.sql: WARN
+    com.Ecommerce.Order_Service: INFO
+    root: INFO
+
+---
+# Testing profile with mock sharding
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  shardingsphere:
+    enabled: false
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
