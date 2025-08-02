@@ -132,6 +132,24 @@ services:
       - sonar-network
       - app-network
 
+  # Zipkin Distributed Tracing
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      # Use Elasticsearch as storage backend (optional)
+      - STORAGE_TYPE=elasticsearch
+      - ES_HOSTS=http://elasticsearch:9200
+      # Uncomment below and remove elasticsearch config for in-memory storage
+      # - STORAGE_TYPE=mem
+    networks:
+      - app-network
+      - elk-network
+    depends_on:
+      - elasticsearch
+
 networks:
   elk-network:
     driver: bridge

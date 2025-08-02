@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # MongoDB Database for Cart Service
+  cart-mongodb:
+    image: mongo:7.0
+    container_name: cart-service-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: Cart-service
+    volumes:
+      - cart_mongodb_data:/data/db
+    networks:
+      - cart-service-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache for Cart Service
+  cart-redis:
+    image: redis:7.2-alpine
+    container_name: cart-service-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - cart_redis_data:/data
+    networks:
+      - cart-service-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Cart Service Application
+  cart-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cart-service-app
+    restart: unless-stopped
+    depends_on:
+      cart-mongodb:
+        condition: service_healthy
+      cart-redis:
+        condition: service_healthy
+    ports:
+      - "8087:8087"
+    environment:
+      # Spring profiles
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Database configuration
+      SPRING_DATA_MONGODB_HOST: cart-mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: Cart-service
+      SPRING_DATA_MONGODB_USERNAME: admin
+      SPRING_DATA_MONGODB_PASSWORD: password123
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+
+      # Redis configuration
+      SPRING_DATA_REDIS_HOST: cart-redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_TIMEOUT: 2000
+
+      # JVM settings
+      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+
+      # Disable services not needed for this setup
+      SPRING_KAFKA_ENABLED: false
+      EUREKA_CLIENT_ENABLED: false
+      SPRING_CLOUD_CONFIG_ENABLED: false
+
+    volumes:
+      - cart_service_logs:/app/logs
+    networks:
+      - cart-service-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/api/carts/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  cart_mongodb_data:
+    driver: local
+  cart_redis_data:
+    driver: local
+  cart_service_logs:
+    driver: local
+
+networks:
+  cart-service-network:
+    driver: bridge
