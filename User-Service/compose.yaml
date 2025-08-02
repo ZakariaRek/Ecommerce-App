@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: user-service-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: User-service
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - user-service-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # User Service Application
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Or use pre-built image:
+    # image: your-dockerhub-username/user-service:latest
+    container_name: user-service-app
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      # Spring profiles
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Database configuration
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: User-service
+      SPRING_DATA_MONGODB_USERNAME: admin
+      SPRING_DATA_MONGODB_PASSWORD: password123
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+
+      # JWT configuration
+      USER_SERVICE_APP_JWT_SECRET: "c03a546beee68b92784e681b537540349c386d02b6dbf9917cf438e47e5c1ee93fdebc55652af00cb3ebc6bff17dc3bedaa33ea6cfdd1959b114ede448c4ac87853021cc3c32f1ef6d5951d0c6b1398bc01c563c7638a0000e6b4064c5733c5552aa232aa8547be8b4b1f8dddacac8256f319acd6832ff5ae9365358e20624fc99dab8489d33e582cf621444e9d944442559707a1f92d556862bb53ce12deb3ec17d3a8bc3c7159b672e4f02189af368a8e71d8547a5b71518de7a1d9a4997d20b4f646fae73e73c26666799b21cdec5544b74319756bb0a27d4e124ec5f13bf8f338ce3ba5ad8b3af1a8aae211bef3eb6ca4f8a24e6b80662c94530e168b0dc"
+
+      # OAuth2 configuration
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID: "373916811775-cj1je9ohkmpkkgflgfs2lod5544nf281.apps.googleusercontent.com"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET: "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"
+
+      # JVM settings
+      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+
+      # Disable unused services
+      SPRING_KAFKA_ENABLED: false
+      EUREKA_CLIENT_ENABLED: false
+      SPRING_CLOUD_CONFIG_ENABLED: false
+
+    volumes:
+      - user_service_logs:/app/logs
+    networks:
+      - user-service-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/users/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: user-service-nginx
+    restart: unless-stopped
+    depends_on:
+      user-service:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - user-service-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  user_service_logs:
+    driver: local
+
+networks:
+  user-service-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
