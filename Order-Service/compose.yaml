@@ -1,13 +1,65 @@
 services:
-  postgres:
-    image: 'postgres:latest'
+  # PostgreSQL Database for Order Service
+  order-postgres:
+    image: postgres:15-alpine
+    container_name: order-postgres
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: Order-service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yahyasd56
     ports:
-      - '5432'
-  zipkin:
-    image: 'openzipkin/zipkin:latest'
+      - "5432:5432"
+    volumes:
+      - order_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - order-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d Order-service"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Order Service Application
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-service-app
+    depends_on:
+      order-postgres:
+        condition: service_healthy
     ports:
-      - '9411'
+      - "8083:8083"
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://order-postgres:5432/Order-service
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: yahyasd56
+
+      # Application Configuration
+      SPRING_PROFILES_ACTIVE: docker
+      LOGGING_LEVEL_ROOT: INFO
+      LOGGING_LEVEL_COM_ECOMMERCE_ORDER_SERVICE: DEBUG
+
+      # JVM Options
+      JAVA_OPTS: -Xmx512m -Xms256m -XX:+UseG1GC
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - order-service-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/orders/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  order_postgres_data:
+    driver: local
+
+networks:
+  order-service-network:
+    driver: bridge
