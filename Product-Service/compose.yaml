@@ -1,9 +1,64 @@
 services:
+  # PostgreSQL Database
   postgres:
-    image: 'postgres:latest'
+    image: postgres:15-alpine
+    container_name: product-service-postgres
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: Product-service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zakaria
     ports:
-      - '5432'
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - product-network
+
+  # Product Service Application
+  product-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: product-service-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/Product-service
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: zakaria
+
+      # JVM Options
+      JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
+
+      # Spring Profiles
+      SPRING_PROFILES_ACTIVE: docker
+
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/api/products/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - product-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  product-network:
+    driver: bridge

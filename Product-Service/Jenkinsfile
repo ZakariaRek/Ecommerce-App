@@ -1,0 +1,280 @@
+pipeline {
+    agent any
+    tools {
+        maven "Maven-3.9.7"
+        jdk 'jdk-21'
+    }
+    environment {
+        COMPOSE_FILE = 'compose.yaml'
+        DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-product-service'
+        IMAGE_TAG = 'latest'
+        GIT_CREDENTIALS_ID = 'git-https-token'
+        // Trivy configuration
+        TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
+        TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
+        TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+    }
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ZakariaRek/Ecommerce-App',
+                        credentialsId: env.GIT_CREDENTIALS_ID
+                    ]],
+                    extensions: [
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Product-Service/']]]
+                    ]
+                ])
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                dir('Product-Service') {
+                    bat 'mvn clean compile -DskipTests'
+                    bat 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                dir('Product-Service') {
+                    script {
+                        // Check if Dockerfile exists
+                        if (fileExists('Dockerfile')) {
+                            bat "docker build -t product-service:latest ."
+                        } else {
+                            error "Dockerfile not found in Product-Service directory"
+                        }
+
+                        // Check if compose file exists
+                        if (fileExists("${COMPOSE_FILE}")) {
+                            bat "docker-compose -f ${COMPOSE_FILE} build"
+                        } else {
+                            error "Docker compose file ${COMPOSE_FILE} not found"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                dir('Product-Service') {
+                    script {
+                        try {
+                            // Install Trivy if not already installed (Windows)
+                            bat '''
+                                @echo off
+                                where trivy >nul 2>&1
+                                if errorlevel 1 (
+                                    echo 📥 Installing Trivy for Windows...
+                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
+                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
+                                    move trivy.exe C:\\Windows\\System32\\
+                                    del trivy.zip
+                                    echo ✅ Trivy installed successfully
+                                ) else (
+                                    echo ✅ Trivy is already installed
+                                    trivy --version
+                                )
+                            '''
+
+                            // Create cache directory
+                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
+
+                            // Update Trivy database
+                            echo "📚 Updating Trivy vulnerability database..."
+                            bat """
+                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
+                            """
+
+                            // Scan the Docker image for vulnerabilities
+                            echo "🔍 Scanning Docker image: product-service:latest"
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt product-service:latest || echo "Scan completed with warnings"
+                            """
+
+                            // Generate JSON report for detailed analysis
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json product-service:latest || echo "JSON report completed"
+                            """
+
+                            // Generate SARIF report for GitHub integration (optional)
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format sarif --output trivy-report.sarif product-service:latest || echo "SARIF report completed"
+                            """
+
+                            // Generate vulnerability summary using Windows batch
+                            bat """
+                                echo === TRIVY VULNERABILITY SUMMARY === > vulnerability-summary.txt
+                                echo Scan Date: %date% %time% >> vulnerability-summary.txt
+                                echo Image: product-service:latest >> vulnerability-summary.txt
+                                echo Build Number: ${BUILD_NUMBER} >> vulnerability-summary.txt
+                                echo. >> vulnerability-summary.txt
+                                echo Vulnerability Report Files Generated: >> vulnerability-summary.txt
+                                echo - trivy-report.txt (Table format) >> vulnerability-summary.txt
+                                echo - trivy-report.json (JSON format) >> vulnerability-summary.txt
+                                echo - trivy-report.sarif (SARIF format) >> vulnerability-summary.txt
+                                echo. >> vulnerability-summary.txt
+                                echo Note: For detailed vulnerability counts, install jq on Windows >> vulnerability-summary.txt
+                            """
+
+                            // Check for HIGH and CRITICAL vulnerabilities
+                            def exitCode = bat(
+                                script: """
+                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 product-service:latest
+                                """,
+                                returnStatus: true
+                            )
+
+                            // Archive the reports
+                            archiveArtifacts artifacts: 'trivy-report.*, vulnerability-summary.txt', fingerprint: true, allowEmptyArchive: true
+
+                            // Display the scan results in console
+                            echo "📊 Displaying Trivy scan results:"
+                            script {
+                                if (fileExists('trivy-report.txt')) {
+                                    def reportContent = readFile('trivy-report.txt')
+                                    echo reportContent
+                                } else {
+                                    echo "Report file not found"
+                                }
+                            }
+
+                            echo "📋 Vulnerability Summary:"
+                            script {
+                                if (fileExists('vulnerability-summary.txt')) {
+                                    def summaryContent = readFile('vulnerability-summary.txt')
+                                    echo summaryContent
+                                } else {
+                                    echo "Summary file not found"
+                                }
+                            }
+
+                            // Set build status based on results
+                            if (exitCode == 0) {
+                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
+                                currentBuild.description = "✅ Security Scan: PASSED"
+                            } else {
+                                echo "⚠  HIGH or CRITICAL vulnerabilities detected!"
+                                echo "📄 Please review the security reports in build artifacts"
+                                currentBuild.result = 'UNSTABLE'
+                                currentBuild.description = "⚠ Security Scan: VULNERABILITIES FOUND"
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Trivy scan failed: ${e.getMessage()}"
+                            echo "📄 This might be due to network issues or missing dependencies"
+                            currentBuild.result = 'UNSTABLE'
+                            currentBuild.description = "❌ Security Scan: FAILED"
+
+                            // Create error report
+                            bat """
+                                echo Trivy scan failed with error: ${e.getMessage()} > scan-error.txt
+                                echo Build: ${BUILD_NUMBER} >> scan-error.txt
+                                echo Date: %date% %time% >> scan-error.txt
+                                echo Possible causes: >> scan-error.txt
+                                echo - Network connectivity issues >> scan-error.txt
+                                echo - Trivy installation failed >> scan-error.txt
+                                echo - Docker image not available >> scan-error.txt
+                            """
+                            archiveArtifacts artifacts: 'scan-error.txt', allowEmptyArchive: true
+                        }
+                    }
+                }
+            }
+        }
+
+        // stage('Run Containers') {
+        //     steps {
+        //         dir('Product-Service') {
+        //             bat "docker-compose -f ${COMPOSE_FILE} up -d"
+        //             // Wait a bit for containers to start
+        //             bat 'timeout /t 10 /nobreak'
+        //             // Check if containers are running
+        //             bat "docker-compose -f ${COMPOSE_FILE} ps"
+        //         }
+        //     }
+        // }
+        stage('Run Containers') {
+            steps {
+                dir('Product-Service') {
+                    bat "docker-compose -f ${COMPOSE_FILE} up -d"
+                    // Wait a bit for containers to start using PowerShell
+                    bat 'powershell -Command "Start-Sleep -Seconds 10"'
+                    // Check if containers are running
+                    bat "docker-compose -f ${COMPOSE_FILE} ps"
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        echo "Retrieved Docker Hub credentials successfully."
+                        bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
+
+                        // Tag and push the image
+                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+
+                        // Also tag with build number for versioning
+                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+                        bat "docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+
+                        // Tag with security scan info
+                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:scanned-${BUILD_NUMBER}"
+                        bat "docker push ${DOCKERHUB_REPO}:scanned-${BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                dir('Product-Service') {
+                    // Clean up containers
+                    bat 'docker-compose -f compose.yaml down --remove-orphans || echo "Cleanup completed"'
+
+                    // Clean up Trivy cache (optional, comment out to keep cache for faster subsequent scans)
+                    // bat "rmdir /s /q \"${TRIVY_CACHE_DIR}\" || echo \"Cache cleanup completed\""
+                }
+
+                // Try to publish reports
+                try {
+                    if (fileExists('Product-Service/trivy-report.json')) {
+                        echo "📊 Trivy reports have been archived as build artifacts"
+                        echo "📁 You can download them from the 'Build Artifacts' section"
+                    }
+                } catch (Exception e) {
+                    echo "📝 Note: Install HTML Publisher plugin for visual reports"
+                }
+            }
+        }
+        success {
+            echo '✅ Deployment was successful!'
+            echo '🔒 Security scan completed - check artifacts for details'
+            echo '📊 Reports available in Build Artifacts section'
+            bat 'docker logout || echo "Logout completed"'
+        }
+        failure {
+            echo '❌ Deployment failed!'
+            echo '🔍 Check the Trivy security report for potential issues'
+            bat 'docker image prune -f || echo "Image cleanup completed"'
+            bat 'docker logout || echo "Logout completed"'
+        }
+        unstable {
+            echo '⚠  Build completed with warnings!'
+            echo '🔍 Security vulnerabilities detected - review the Trivy report'
+            echo '📁 Download reports from Build Artifacts section'
+        }
+    }
+}
