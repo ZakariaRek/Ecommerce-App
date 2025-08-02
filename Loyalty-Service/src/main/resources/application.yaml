@@ -1,5 +1,6 @@
 # src/main/resources/application.yml
 server:
+
   port: 8084
   servlet:
     context-path: /api/loyalty
@@ -22,6 +23,8 @@ springdoc:
     tags-sorter: alpha
     doc-expansion: none
 spring:
+  profiles:
+    active: kafka
   # Database configuration
   datasource:
     url: jdbc:postgresql://localhost:5432/loyalty-service
