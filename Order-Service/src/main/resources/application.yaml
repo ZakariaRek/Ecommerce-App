@@ -2,7 +2,7 @@ spring:
   profiles:
     active: kafka  # ADD THIS LINE to enable Kafka logging
   config:
-    import: configserver:http://localhost:8888
+    import: optional:configserver:http://localhost:8888
   application:
     name: order-service
   datasource:
@@ -38,7 +38,7 @@ spring:
 server:
   port: 8083
   servlet:
-      context-path: /api/orders
+    context-path: /api/orders
 springdoc:
   api-docs:
     path: /api-docs

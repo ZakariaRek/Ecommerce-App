@@ -1,6 +1,5 @@
 # src/main/resources/application.yml
 server:
-
   port: 8084
   servlet:
     context-path: /api/loyalty
@@ -25,6 +24,8 @@ springdoc:
 spring:
   profiles:
     active: kafka
+  config:
+    import: optional:configserver:http://localhost:8888
   # Database configuration
   datasource:
     url: jdbc:postgresql://localhost:5432/loyalty-service
