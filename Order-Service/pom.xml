@@ -112,12 +112,7 @@
 			<artifactId>kafka-clients</artifactId>
 		</dependency>
 
-
-
-
 	</dependencies>
-
-
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
