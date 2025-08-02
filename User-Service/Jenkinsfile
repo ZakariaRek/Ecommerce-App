@@ -6,13 +6,22 @@ pipeline {
     }
     environment {
         COMPOSE_FILE = 'compose.yaml'
-        DOCKERHUB_CREDENTIALS = 'iyminds-dockerhub'
-        DOCKERHUB_REPO = 'iyminds/User-transaction-microservice'
+        DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-user-service'
         IMAGE_TAG = 'latest'
         GIT_CREDENTIALS_ID = 'GithubCredentials'
+
+        // Trivy configuration
+        TRIVY_CACHE_DIR = '/tmp/trivy-cache'
+        TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
+        TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+
+        // SonarQube configuration
+        SONARQUBE_SERVER = 'SonarQube-Server' // This should match your SonarQube server name in Jenkins
+        SONAR_HOST_URL = 'http://localhost:9000'
     }
     stages {
-        
+
         stage('Checkout') {
             steps {
                 checkout([$class: 'GitSCM',
@@ -27,16 +36,140 @@ pipeline {
                 ])
             }
         }
-        
-        stage('Build Application') {
+
+        stage('Build & Test Application') {
             steps {
                 dir('User-Service') {
-                    sh 'mvn clean compile -DskipTests'
-                    sh 'mvn package -DskipTests'
+                    script {
+                        try {
+                            // Clean and compile
+                            sh 'mvn clean compile'
+
+                            // Run tests (enable tests by removing -DskipTests if needed)
+                            echo "📋 Running tests..."
+                            def testResult = sh(script: 'mvn test', returnStatus: true)
+
+                            if (testResult == 0) {
+                                echo "✅ Tests completed successfully"
+                            } else {
+                                echo "⚠️ Some tests failed or no tests were found"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                            // Package the application
+                            sh 'mvn package -DskipTests'
+
+                        } catch (Exception e) {
+                            echo "❌ Build/Test failed: ${e.getMessage()}"
+                            throw e
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    dir('User-Service') {
+                        script {
+                            // Check if test results exist and publish them
+                            if (fileExists('target/surefire-reports/')) {
+                                def xmlFiles = sh(script: 'find target/surefire-reports/ -name "*.xml" 2>/dev/null | wc -l', returnStdout: true).trim()
+                                if (xmlFiles != '0') {
+                                    echo "📊 Publishing test results..."
+                                    junit 'target/surefire-reports/*.xml'
+                                } else {
+                                    echo "📝 No test result XML files found"
+                                }
+                                // Archive test reports
+                                archiveArtifacts artifacts: 'target/surefire-reports/**/*', allowEmptyArchive: true
+                            } else {
+                                echo "📝 No surefire-reports directory found"
+                            }
+                        }
+                    }
                 }
             }
         }
-        
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir('User-Service') {
+                    script {
+                        try {
+                            echo "📊 Starting SonarQube analysis..."
+
+                            // Check if SonarQube server is configured
+                            withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                                sh '''
+                                    mvn sonar:sonar \
+                                        -Dsonar.projectKey=user-service \
+                                        -Dsonar.projectName="User Service" \
+                                        -Dsonar.projectVersion=${BUILD_NUMBER} \
+                                        -Dsonar.sources=src/main/java \
+                                        -Dsonar.tests=src/test/java \
+                                        -Dsonar.java.binaries=target/classes \
+                                        -Dsonar.junit.reportPaths=target/surefire-reports \
+                                        -Dsonar.coverage.exclusions="**/*Application.java,**/*Config.java,**/*Configuration.java" \
+                                        -Dsonar.exclusions="**/target/**,**/*.xml,**/*.yml,**/*.yaml" \
+                                        -Dsonar.qualitygate.wait=false
+                                '''
+                            }
+
+                            echo "✅ SonarQube analysis completed successfully"
+                            echo "🔗 View results at: ${SONAR_HOST_URL}/dashboard?id=user-service"
+
+                        } catch (Exception e) {
+                            echo "⚠️ SonarQube analysis failed: ${e.getMessage()}"
+                            echo "📝 Possible causes:"
+                            echo "   - SonarQube server not configured in Jenkins"
+                            echo "   - SonarQube server not reachable at ${SONAR_HOST_URL}"
+                            echo "   - Authentication issues"
+                            echo "💡 Continuing pipeline without SonarQube analysis"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    try {
+                        echo "🚦 Checking Quality Gate..."
+
+                        // Wait for SonarQube Quality Gate result with shorter timeout
+                        timeout(time: 3, unit: 'MINUTES') {
+                            def qg = waitForQualityGate()
+
+                            if (qg.status != 'OK') {
+                                echo "🚨 Quality Gate Status: ${qg.status}"
+                                echo "📊 Quality Gate Details:"
+                                echo "   - Project: ${qg.projectStatus?.projectName ?: 'user-service'}"
+                                echo "   - Status: ${qg.status}"
+
+                                // Mark as unstable but continue
+                                currentBuild.result = 'UNSTABLE'
+
+                                echo "⚠️ Quality Gate failed but continuing pipeline"
+                                echo "🔗 Check details at: ${SONAR_HOST_URL}/dashboard?id=user-service"
+                            } else {
+                                echo "✅ Quality Gate passed successfully!"
+                                echo "🎉 Code quality meets the defined standards"
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Quality Gate check failed or timed out: ${e.getMessage()}"
+                        echo "📝 Possible causes:"
+                        echo "   - SonarQube server unreachable"
+                        echo "   - Quality Gate not configured"
+                        echo "   - Webhook not configured"
+                        echo "💡 Continuing pipeline without Quality Gate check"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
                 dir('User-Service') {
@@ -47,7 +180,7 @@ pipeline {
                         } else {
                             error "Dockerfile not found in User-Service directory"
                         }
-                        
+
                         // Check if compose file exists
                         if (fileExists("${COMPOSE_FILE}")) {
                             sh "docker-compose -f ${COMPOSE_FILE} build"
@@ -58,7 +191,135 @@ pipeline {
                 }
             }
         }
-        
+
+        stage('Security Scan with Trivy') {
+            steps {
+                dir('User-Service') {
+                    script {
+                        try {
+                            // Install Trivy if not already installed
+                            sh '''
+                                if ! command -v trivy &> /dev/null; then
+                                    echo "📥 Installing Trivy..."
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.3
+                                else
+                                    echo "✅ Trivy is already installed"
+                                    trivy --version
+                                fi
+                            '''
+
+                            // Create cache directory
+                            sh "mkdir -p ${TRIVY_CACHE_DIR}"
+
+                            // Update Trivy database
+                            echo "📚 Updating Trivy vulnerability database..."
+                            sh """
+                                trivy image --download-db-only \
+                                    --cache-dir ${TRIVY_CACHE_DIR}
+                            """
+
+                            // Scan the Docker image for vulnerabilities
+                            echo "🔍 Scanning Docker image: user-service:latest"
+                            sh """
+                                trivy image \
+                                    --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format table \
+                                    --output trivy-report.txt \
+                                    user-service:latest || true
+                            """
+
+                            // Generate JSON report for detailed analysis
+                            sh """
+                                trivy image \
+                                    --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format json \
+                                    --output trivy-report.json \
+                                    user-service:latest || true
+                            """
+
+                            // Generate SARIF report for GitHub integration (optional)
+                            sh """
+                                trivy image \
+                                    --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format sarif \
+                                    --output trivy-report.sarif \
+                                    user-service:latest || true
+                            """
+
+                            // Generate vulnerability summary
+                            sh """
+                                echo "=== TRIVY VULNERABILITY SUMMARY ===" > vulnerability-summary.txt
+                                echo "Scan Date: \$(date)" >> vulnerability-summary.txt
+                                echo "Image: user-service:latest" >> vulnerability-summary.txt
+                                echo "Build Number: ${BUILD_NUMBER}" >> vulnerability-summary.txt
+                                echo "" >> vulnerability-summary.txt
+                                echo "Vulnerability Report Files Generated:" >> vulnerability-summary.txt
+                                echo "- trivy-report.txt (Table format)" >> vulnerability-summary.txt
+                                echo "- trivy-report.json (JSON format)" >> vulnerability-summary.txt
+                                echo "- trivy-report.sarif (SARIF format)" >> vulnerability-summary.txt
+                                echo "" >> vulnerability-summary.txt
+
+                                # Count vulnerabilities by severity (if jq is available)
+                                if command -v jq &> /dev/null; then
+                                    echo "Vulnerability Counts:" >> vulnerability-summary.txt
+                                    for severity in CRITICAL HIGH MEDIUM LOW; do
+                                        count=\$(cat trivy-report.json | jq -r "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"\$severity\")] | length" 2>/dev/null || echo "0")
+                                        echo "  \$severity: \$count" >> vulnerability-summary.txt
+                                    done
+                                else
+                                    echo "Note: Install 'jq' for detailed vulnerability counts" >> vulnerability-summary.txt
+                                fi
+                            """
+
+                            // Check for HIGH and CRITICAL vulnerabilities
+                            def exitCode = sh(
+                                script: """
+                                    trivy image \
+                                        --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --severity HIGH,CRITICAL \
+                                        --exit-code 1 \
+                                        user-service:latest
+                                """,
+                                returnStatus: true
+                            )
+
+                            // Archive the reports
+                            archiveArtifacts artifacts: 'trivy-report.*, vulnerability-summary.txt', fingerprint: true, allowEmptyArchive: true
+
+                            // Display the scan results in console
+                            echo "📊 Displaying Trivy scan results:"
+                            sh 'cat trivy-report.txt || echo "Report file not found"'
+
+                            echo "📋 Vulnerability Summary:"
+                            sh 'cat vulnerability-summary.txt || echo "Summary file not found"'
+
+                            // Set build status based on results
+                            if (exitCode == 0) {
+                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
+                            } else {
+                                echo "⚠️  HIGH or CRITICAL vulnerabilities detected!"
+                                echo "📄 Please review the security reports in build artifacts"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Trivy scan failed: ${e.getMessage()}"
+                            echo "📄 This might be due to network issues or missing dependencies"
+                            currentBuild.result = 'UNSTABLE'
+
+                            // Create error report
+                            sh """
+                                echo "Trivy scan failed with error: ${e.getMessage()}" > scan-error.txt
+                                echo "Build: ${BUILD_NUMBER}" >> scan-error.txt
+                                echo "Date: \$(date)" >> scan-error.txt
+                            """
+                            archiveArtifacts artifacts: 'scan-error.txt', allowEmptyArchive: true
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Run Containers') {
             steps {
                 dir('User-Service') {
@@ -70,21 +331,25 @@ pipeline {
                 }
             }
         }
-                
+
         stage('Push to Docker Hub') {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
                         echo "Retrieved Docker Hub credentials successfully."
                         sh 'echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin'
-                        
+
                         // Tag and push the image
                         sh "docker tag user-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
                         sh "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
-                        
+
                         // Also tag with build number for versioning
                         sh "docker tag user-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
                         sh "docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+
+                        // Tag with quality and security scan info
+                        sh "docker tag user-service:latest ${DOCKERHUB_REPO}:scanned-${BUILD_NUMBER}"
+                        sh "docker push ${DOCKERHUB_REPO}:scanned-${BUILD_NUMBER}"
                     }
                 }
             }
@@ -94,18 +359,63 @@ pipeline {
         always {
             script {
                 dir('User-Service') {
+                    // Clean up containers
                     sh 'docker-compose -f compose.yaml down --remove-orphans || true'
+                }
+
+                // Create a comprehensive build summary
+                script {
+                    def buildSummary = """
+=== BUILD SUMMARY ===
+Build Number: ${BUILD_NUMBER}
+Build Status: ${currentBuild.result ?: 'SUCCESS'}
+Date: ${new Date()}
+
+📊 Reports Available:
+- SonarQube: ${SONAR_HOST_URL}/dashboard?id=user-service
+- Trivy Security Reports: Build Artifacts
+- Test Results: Available in Jenkins
+
+🔗 Quick Links:
+- Build Artifacts: ${BUILD_URL}artifact/
+- Console Output: ${BUILD_URL}console
+- SonarQube Dashboard: ${SONAR_HOST_URL}/dashboard?id=user-service
+
+📝 Notes:
+- Check Build Artifacts for detailed reports
+- Review Console Output for any warnings
+- SonarQube analysis provides code quality metrics
+- Trivy scan provides security vulnerability assessment
+"""
+                    writeFile file: 'build-summary.txt', text: buildSummary
+                    archiveArtifacts artifacts: 'build-summary.txt', allowEmptyArchive: true
                 }
             }
         }
         success {
-            echo 'Deployment was successful!'
-            sh 'docker logout'
+            echo '✅ Pipeline completed successfully!'
+            echo '🔒 Security scan completed - check artifacts for details'
+            echo '📊 SonarQube analysis completed - check dashboard for code quality'
+            echo '📁 All reports available in Build Artifacts section'
+            sh 'docker logout || true'
         }
         failure {
-            echo 'Deployment failed!'
+            echo '❌ Pipeline failed!'
+            echo '🔍 Check the following for issues:'
+            echo '   - Console Output for detailed error logs'
+            echo '   - SonarQube dashboard for code quality issues (if configured)'
+            echo '   - Trivy security report for vulnerabilities'
             sh 'docker image prune -f || true'
             sh 'docker logout || true'
+        }
+        unstable {
+            echo '⚠️  Pipeline completed with warnings!'
+            echo '🔍 Possible issues:'
+            echo '   - Security vulnerabilities found (check Trivy report)'
+            echo '   - Code quality issues found (check SonarQube dashboard)'
+            echo '   - Test failures or SonarQube configuration issues'
+            echo '📁 Review all reports in Build Artifacts section'
+            echo '🔗 SonarQube Dashboard: ${SONAR_HOST_URL}/dashboard?id=user-service'
         }
     }
 }
