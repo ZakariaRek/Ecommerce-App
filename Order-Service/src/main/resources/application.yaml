@@ -9,7 +9,7 @@ spring:
     url: jdbc:postgresql://localhost:5432/Order-service
     username: postgres
     password: yahyasd56
-    #     password: zakaria
+     #     password: zakaria
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
