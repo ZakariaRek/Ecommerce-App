@@ -22,6 +22,8 @@ springdoc:
     tags-sorter: alpha
     doc-expansion: none
 spring:
+  profiles:
+    active: kafka
   config:
     import: optional:configserver:http://localhost:8888
   # Database configuration
