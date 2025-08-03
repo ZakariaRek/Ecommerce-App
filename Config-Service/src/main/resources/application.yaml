@@ -8,9 +8,9 @@ spring:
     config:
       server:
         git:
-          uri: file:./config-repo
+          # uri: file:./config-repo
           # For production, use a Git repository:
-          # uri: https://github.com/your-org/microservices-config.git
+          uri: https://github.com/Saoudyahya/Ecommerce-App-Config-serveur-repo
           # username: ${GIT_USERNAME}
           # password: ${GIT_PASSWORD}
         default-label: main
