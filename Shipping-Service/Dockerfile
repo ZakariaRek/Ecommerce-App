@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o shipping-service main.go
 
 # Verify the binary was created
-RUN ls -la shipping-service && file shipping-service
+RUN ls -la shipping-service
 
 # Final stage - minimal runtime image
 FROM alpine:latest
@@ -65,7 +65,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8085/health || exit 1
 
 # Add labels for better image management
-LABEL maintainer="Your Name  "
+LABEL maintainer="Your Name <your.email@example.com>"
 LABEL version="1.0.0"
 LABEL description="Enhanced Shipping Service for E-commerce Platform"
 LABEL service="shipping-service"
