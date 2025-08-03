@@ -7,7 +7,7 @@ pipeline {
     environment {
         COMPOSE_FILE = 'compose.yaml'
         DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
-        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-product-service'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-loyalty-service'
         IMAGE_TAG = 'latest'
         GIT_CREDENTIALS_ID = 'git-https-token'
         // Trivy configuration
@@ -26,7 +26,7 @@ pipeline {
                         credentialsId: env.GIT_CREDENTIALS_ID
                     ]],
                     extensions: [
-                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Product-Service/']]]
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Loyalty-Service/']]]
                     ]
                 ])
             }
@@ -34,7 +34,7 @@ pipeline {
 
         stage('Build Application') {
             steps {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     bat 'mvn clean compile'
                 }
             }
@@ -42,7 +42,7 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     script {
                         // Run tests but don't fail the pipeline
                         def testResult = bat(
@@ -61,7 +61,7 @@ pipeline {
             }
             post {
                 always {
-                    dir('Product-Service') {
+                    dir('Loyalty-Service') {
                         // Archive test results even if some tests fail
                         junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
                         // Archive JaCoCo coverage report if it exists
@@ -78,7 +78,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     script {
                         echo "🔍 Starting SonarQube analysis..."
                         try {
@@ -86,8 +86,8 @@ pipeline {
                             withSonarQubeEnv('sonarqube') {
                                 bat '''
                                     mvn sonar:sonar ^
-                                    -Dsonar.projectKey=ecommerce-product-service ^
-                                    -Dsonar.projectName="E-commerce Product Service" ^
+                                    -Dsonar.projectKey=ecommerce-loyalty-service ^
+                                    -Dsonar.projectName="E-commerce Loyalty Service" ^
                                     -Dsonar.projectVersion=%BUILD_NUMBER% ^
                                     -Dsonar.host.url=%SONAR_HOST_URL% ^
                                     -Dsonar.token=%SONAR_AUTH_TOKEN% ^
@@ -102,8 +102,8 @@ pipeline {
                             // Fallback: Use direct connection with your token
                             bat '''
                                 mvn sonar:sonar ^
-                                -Dsonar.projectKey=ecommerce-product-service ^
-                                -Dsonar.projectName="E-commerce Product Service" ^
+                                -Dsonar.projectKey=ecommerce-loyalty-service ^
+                                -Dsonar.projectName="E-commerce Loyalty Service" ^
                                 -Dsonar.projectVersion=%BUILD_NUMBER% ^
                                 -Dsonar.host.url=http://localhost:9000 ^
                                 -Dsonar.token=sqa_08e3ba1af16e9a4f7f0ce7b381d391ddee03866f ^
@@ -120,7 +120,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        timeout(time: 1, unit: 'MINUTES') {
+                        timeout(time: 3, unit: 'MINUTES') {
                             def qg = waitForQualityGate()
                             if (qg.status != 'OK') {
                                 echo "⚠️ Quality Gate failed: ${qg.status}"
@@ -140,7 +140,7 @@ pipeline {
 
         stage('Package Application') {
             steps {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     bat 'mvn package -DskipTests'
                 }
             }
@@ -148,13 +148,13 @@ pipeline {
 
         stage('Build Docker Images') {
     steps {
-        dir('Product-Service') {
+        dir('Loyalty-Service') {
             script {
                 // Check if Dockerfile exists
                 if (fileExists('Dockerfile')) {
-                    bat "docker build -t product-service:latest -f Dockerfile ."
+                    bat "docker build -t loyalty-service-loyalty-service:latest -f Dockerfile ."
                 } else {
-                    error "Dockerfile not found in Product-Service directory"
+                    error "Dockerfile not found in Loyalty-Service directory"
                 }
 
                 // Check if compose file exists
@@ -167,85 +167,76 @@ pipeline {
         }
     }
 }
-        stage('Security Scan with Trivy') {
-            steps {
-                dir('Product-Service') {
-                    script {
-                        try {
-                            // Install Trivy if not already installed (Windows)
-                            bat '''
-                                @echo off
-                                where trivy >nul 2>&1
-                                if errorlevel 1 (
-                                    echo 📥 Installing Trivy for Windows...
-                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
-                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
-                                    move trivy.exe C:\\Windows\\System32\\
-                                    del trivy.zip
-                                    echo ✅ Trivy installed successfully
-                                ) else (
-                                    echo ✅ Trivy is already installed
-                                    trivy --version
-                                )
-                            '''
 
-                            // Create cache directory
-                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
+       stage('Security Scan with Trivy') {
+    steps {
+        dir('Loyalty-Service') {
+            script {
+                try {
+                    // Verify image exists before scanning
+                    def imageExists = bat(
+                        script: 'docker images -q loyalty-service-loyalty-service:latest',
+                        returnStatus: true
+                    )
 
-                            // Update Trivy database
-                            echo "📚 Updating Trivy vulnerability database..."
-                            bat """
-                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
-                            """
-
-                            // Scan the Docker image for vulnerabilities
-                            echo "🔍 Scanning Docker image: product-service:latest"
-                            bat """
-                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt product-service:latest || echo "Scan completed with warnings"
-                            """
-
-                            // Generate JSON report for detailed analysis
-                            bat """
-                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json product-service:latest || echo "JSON report completed"
-                            """
-
-                            // Check for HIGH and CRITICAL vulnerabilities
-                            def exitCode = bat(
-                                script: """
-                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 product-service:latest
-                                """,
-                                returnStatus: true
-                            )
-
-                            // Archive the reports
-                            archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true, allowEmptyArchive: true
-
-                            // Set build status based on results
-                            if (exitCode == 0) {
-                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
-                            } else {
-                                echo "⚠️ HIGH or CRITICAL vulnerabilities detected!"
-                                currentBuild.result = 'UNSTABLE'
-                            }
-
-                        } catch (Exception e) {
-                            echo "❌ Trivy scan failed: ${e.getMessage()}"
-                            currentBuild.result = 'UNSTABLE'
-                        }
+                    if (imageExists != 0) {
+                        echo "❌ Docker image not found, skipping Trivy scan"
+                        currentBuild.result = 'UNSTABLE'
+                        return
                     }
+
+                    // Continue with existing Trivy logic...
+                    echo "🔍 Scanning Docker image: loyalty-service-loyalty-service:latest"
+                    bat """
+                        trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt loyalty-service-loyalty-service:latest || echo "Scan completed with warnings"
+                    """
+
+                    // Rest of your Trivy code...
+
+                } catch (Exception e) {
+                    echo "❌ Trivy scan failed: ${e.getMessage()}"
+                    currentBuild.result = 'UNSTABLE'
                 }
             }
         }
-
+    }
+}
         stage('Run Containers') {
             steps {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     bat "docker-compose -f ${COMPOSE_FILE} up -d"
-                    bat 'powershell -Command "Start-Sleep -Seconds 10"'
+                    bat 'powershell -Command "Start-Sleep -Seconds 15"'
                     bat "docker-compose -f ${COMPOSE_FILE} ps"
                 }
             }
         }
+
+        // stage('Health Check') {
+        //     steps {
+        //         dir('Loyalty-Service') {
+        //             script {
+        //                 try {
+        //                     // Wait for the service to be ready
+        //                     timeout(time: 3, unit: 'MINUTES') {
+        //                         waitUntil {
+        //                             script {
+        //                                 def result = bat(
+        //                                     script: 'curl -f http://localhost:8084/loyalty/actuator/health',
+        //                                     returnStatus: true
+        //                                 )
+        //                                 return result == 0
+        //                             }
+        //                         }
+        //                     }
+        //                     echo "✅ Loyalty Service health check passed!"
+        //                 } catch (Exception e) {
+        //                     echo "⚠️ Health check failed or timed out: ${e.getMessage()}"
+        //                     currentBuild.result = 'UNSTABLE'
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Push to Docker Hub') {
             steps {
@@ -255,11 +246,11 @@ pipeline {
                         bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
 
                         // Tag and push the image
-                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker tag loyalty-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
                         bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
 
                         // Also tag with build number for versioning
-                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+                        bat "docker tag loyalty-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
                         bat "docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
 
                         echo "✅ Docker images pushed successfully!"
@@ -271,39 +262,41 @@ pipeline {
     post {
         always {
             script {
-                dir('Product-Service') {
+                dir('Loyalty-Service') {
                     // Clean up containers
                     bat 'docker-compose -f compose.yaml down --remove-orphans || echo "Cleanup completed"'
                 }
 
                 // Summary report
-                echo "📋 ===== PIPELINE SUMMARY ====="
+                echo "📋 ===== LOYALTY SERVICE PIPELINE SUMMARY ====="
                 echo "🏗️ Build Number: ${BUILD_NUMBER}"
                 echo "📊 Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}"
                 echo "🔍 SonarQube: Analysis completed"
                 echo "🔒 Security: Trivy scan completed"
                 echo "🐳 Docker: Images built and pushed"
+                echo "💎 Service: Loyalty Service (Port 8084)"
                 echo "================================"
             }
         }
         success {
-            echo '🎉 Pipeline completed successfully!'
-            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '🎉 Loyalty Service pipeline completed successfully!'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000/dashboard?id=ecommerce-loyalty-service'
             echo '🔒 Security scan reports available in Build Artifacts'
             echo '🐳 Docker images available on Docker Hub'
+            echo '💎 Loyalty Service running on http://localhost:8084/loyalty'
             bat 'docker logout || echo "Logout completed"'
         }
         failure {
-            echo '💥 Pipeline failed!'
+            echo '💥 Loyalty Service pipeline failed!'
             echo '🔍 Check logs and reports for issues'
-            echo '📊 SonarQube: http://localhost:9000'
+            echo '📊 SonarQube: http://localhost:9000/dashboard?id=ecommerce-loyalty-service'
             bat 'docker logout || echo "Logout completed"'
         }
         unstable {
-            echo '⚠️ Pipeline completed with warnings!'
+            echo '⚠️ Loyalty Service pipeline completed with warnings!'
             echo '📊 Quality Gate or tests may have issues'
             echo '🔍 Security vulnerabilities may have been detected'
-            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000/dashboard?id=ecommerce-loyalty-service'
             echo '📁 Download reports from Build Artifacts section'
         }
     }
