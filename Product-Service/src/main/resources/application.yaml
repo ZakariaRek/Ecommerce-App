@@ -112,6 +112,7 @@ logging:
     org.springframework.web: DEBUG
     com.Ecommerce.Gateway_Service: DEBUG
     org.springframework.data.redis: DEBUG
+    org.springframework.test: DEBUG
     org.springframework.web.cors: DEBUG
     io.github.resilience4j: DEBUG
     org.springframework.boot.autoconfigure: DEBUG
