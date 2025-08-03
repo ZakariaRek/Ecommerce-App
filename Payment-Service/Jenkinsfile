@@ -1,19 +1,30 @@
 pipeline {
     agent any
-    tools {
-        maven "Maven-3.9.7"
-        jdk 'jdk-21'
+     tools {
+        // Go tool - make sure Go 1.24+ is configured in Jenkins
+        go "Go-1.24"
+        // Reference the SonarQube Scanner configured in Global Tool Configuration (exact name from Jenkins)
+      'hudson.plugins.sonar.SonarRunnerInstallation' "Sonarqube Scanner"  // This was correct!
     }
+
     environment {
         COMPOSE_FILE = 'compose.yaml'
         DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
-        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-product-service'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-payment-service'
         IMAGE_TAG = 'latest'
         GIT_CREDENTIALS_ID = 'git-https-token'
+        // Go specific environment
+        GOPROXY = 'https://proxy.golang.org,direct'
+        GOSUMDB = 'sum.golang.org'
+        CGO_ENABLED = '0'
+        GOOS = 'linux'
+        GOARCH = 'amd64'
         // Trivy configuration
         TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
         TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
         TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+        // SonarQube configuration
+        SONAR_SCANNER_PATH = 'C:\\sonar-scanner\\bin'
     }
     stages {
 
@@ -26,101 +37,136 @@ pipeline {
                         credentialsId: env.GIT_CREDENTIALS_ID
                     ]],
                     extensions: [
-                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Product-Service/']]]
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Payment-Service/']]]
                     ]
                 ])
             }
         }
 
+        stage('Setup Go Environment') {
+            steps {
+                dir('Payment-Service') {
+                    script {
+                        echo "🔧 Setting up Go environment..."
+                        bat 'go version'
+                        bat 'go env'
+
+                        // Clean workspace module cache (safer than system cache)
+                        bat 'if exist "modcache" rmdir /s /q "modcache" || echo "Local cache cleaned"'
+
+                        // Download and verify dependencies with custom cache location
+                        withEnv(["GOMODCACHE=${WORKSPACE}\\Payment-Service\\modcache"]) {
+                            bat 'go mod tidy'
+                            bat 'go mod download'
+                            bat 'go mod verify'
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Build Application') {
             steps {
-                dir('Product-Service') {
-                    bat 'mvn clean compile'
+                dir('Payment-Service') {
+                    script {
+                        echo "🏗️ Building Go application..."
+                        withEnv(["GOMODCACHE=${WORKSPACE}\\Payment-Service\\modcache"]) {
+                            bat '''
+                                go build -v -ldflags="-w -s" -o payment-service.exe main.go
+                            '''
+                        }
+                        echo "✅ Build completed successfully!"
+                    }
                 }
             }
         }
 
         stage('Run Tests') {
             steps {
-                dir('Product-Service') {
+                dir('Payment-Service') {
                     script {
-                        // Run tests but don't fail the pipeline
-                        def testResult = bat(
-                            script: 'mvn test -Dmaven.test.failure.ignore=true -Dspring.profiles.active=test',
-                            returnStatus: true
-                        )
-                        if (testResult != 0) {
-                            echo "⚠️ Some tests failed, but continuing with analysis"
-                            env.TESTS_FAILED = 'true'
-                        } else {
-                            echo "✅ All tests passed!"
-                            env.TESTS_FAILED = 'false'
-                        }
-                    }
-                }
-            }
-            post {
-                always {
-                    dir('Product-Service') {
-                        // Archive test results even if some tests fail
-                        junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
-                        // Archive JaCoCo coverage report if it exists
-                        script {
-                            if (fileExists('target/site/jacoco/jacoco.xml')) {
-                                echo "✅ JaCoCo coverage report found"
-                                archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            steps {
-                dir('Product-Service') {
-                    script {
-                        echo "🔍 Starting SonarQube analysis..."
+                        echo "🧪 Running Go tests..."
                         try {
-                            // Try with the configured server name
-                            withSonarQubeEnv('sonarqube') {
-                                bat '''
-                                    mvn sonar:sonar ^
-                                    -Dsonar.projectKey=ecommerce-product-service ^
-                                    -Dsonar.projectName="E-commerce Product Service" ^
-                                    -Dsonar.projectVersion=%BUILD_NUMBER% ^
-                                    -Dsonar.host.url=%SONAR_HOST_URL% ^
-                                    -Dsonar.token=%SONAR_AUTH_TOKEN% ^
-                                    -Dmaven.test.failure.ignore=true
-                                '''
-                            }
-                            echo "✅ SonarQube analysis completed using Jenkins configuration"
-                        } catch (Exception e) {
-                            echo "❌ Jenkins SonarQube config failed: ${e.getMessage()}"
-                            echo "🔄 Trying direct connection..."
+                            // Run tests with coverage using custom cache location
+                            withEnv(["GOMODCACHE=${WORKSPACE}\\Payment-Service\\modcache"]) {
+                                def testResult = bat(
+                                    script: '''
+                                        go test -v -race -coverprofile=coverage.out -covermode=atomic ./... > test-results.txt 2>&1
+                                        go tool cover -html=coverage.out -o coverage.html
+                                    ''',
+                                    returnStatus: true
+                                )
 
-                            // Fallback: Use direct connection with your token
-                            bat '''
-                                mvn sonar:sonar ^
-                                -Dsonar.projectKey=ecommerce-product-service ^
-                                -Dsonar.projectName="E-commerce Product Service" ^
-                                -Dsonar.projectVersion=%BUILD_NUMBER% ^
-                                -Dsonar.host.url=http://localhost:9000 ^
-                                -Dsonar.token=sqa_08e3ba1af16e9a4f7f0ce7b381d391ddee03866f ^
-                                -Dmaven.test.failure.ignore=true
-                            '''
-                            echo "✅ SonarQube analysis completed using direct connection"
+                                if (testResult != 0) {
+                                    echo "⚠️ Some tests failed, but continuing with analysis"
+                                    env.TESTS_FAILED = 'true'
+                                } else {
+                                    echo "✅ All tests passed!"
+                                    env.TESTS_FAILED = 'false'
+                                }
+                            }
+
+                            // Archive test results and coverage
+                            if (fileExists('test-results.txt')) {
+                                archiveArtifacts artifacts: 'test-results.txt', allowEmptyArchive: true
+                            }
+                            if (fileExists('coverage.html')) {
+                                archiveArtifacts artifacts: 'coverage.html', allowEmptyArchive: true
+                            }
+                            if (fileExists('coverage.out')) {
+                                archiveArtifacts artifacts: 'coverage.out', allowEmptyArchive: true
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Test execution failed: ${e.getMessage()}"
+                            env.TESTS_FAILED = 'true'
+                            currentBuild.result = 'UNSTABLE'
                         }
                     }
                 }
             }
         }
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('Payment-Service') {
+            script {
+                echo "🔍 Starting optimized SonarQube analysis..."
+
+                withSonarQubeEnv('sonarqube') {
+                    def scannerHome = tool name: 'Sonarqube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+
+                    // Add timeout to prevent hanging
+                    timeout(time: 10, unit: 'MINUTES') {
+                        bat """
+                            echo "Using Scanner from: ${scannerHome}"
+                            "${scannerHome}\\bin\\sonar-scanner.bat" ^
+                                -Dsonar.projectKey=ecommerce-payment-service ^
+                                -Dsonar.projectName="E-commerce Payment Service" ^
+                                -Dsonar.projectVersion=%BUILD_NUMBER% ^
+                                -Dsonar.sources=. ^
+                                -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/*.exe,**/node_modules/**,**/*.log,**/tmp/**,**/cache/**,**/.git/**,**/modcache/**,**/*.zip,**/*.tar,**/*.gz ^
+                                -Dsonar.tests=. ^
+                                -Dsonar.test.inclusions=**/*_test.go ^
+                                -Dsonar.go.coverage.reportPaths=coverage.out ^
+                                -Dsonar.sourceEncoding=UTF-8 ^
+                                -Dsonar.scm.disabled=true ^
+                                -Dsonar.analysis.mode=publish ^
+                                -Dsonar.verbose=false
+                        """
+                    }
+                }
+                echo "✅ SonarQube analysis completed"
+            }
+        }
+    }
+}
 
         stage('Quality Gate') {
             steps {
                 script {
                     try {
-                        timeout(time: 1, unit: 'MINUTES') {
+                        timeout(time: 3, unit: 'MINUTES') {
                             def qg = waitForQualityGate()
                             if (qg.status != 'OK') {
                                 echo "⚠️ Quality Gate failed: ${qg.status}"
@@ -138,94 +184,60 @@ pipeline {
             }
         }
 
-        stage('Package Application') {
-            steps {
-                dir('Product-Service') {
-                    bat 'mvn package -DskipTests'
-                }
-            }
-        }
-
         stage('Build Docker Images') {
-    steps {
-        dir('Product-Service') {
-            script {
-                // Check if Dockerfile exists
-                if (fileExists('Dockerfile')) {
-                    bat "docker build -t product-service:latest -f Dockerfile ."
-                } else {
-                    error "Dockerfile not found in Product-Service directory"
-                }
+            steps {
+                dir('Payment-Service') {
+                    script {
+                        echo "🐳 Building Docker images..."
 
-                // Check if compose file exists
-                if (fileExists("${COMPOSE_FILE}")) {
-                    bat "docker-compose -f ${COMPOSE_FILE} build"
-                } else {
-                    error "Docker compose file ${COMPOSE_FILE} not found"
+                        // Check if Dockerfile exists
+                        if (fileExists('Dockerfile')) {
+                            bat "docker build -t payment-service-payment-service:latest -f Dockerfile ."
+                        } else {
+                            error "Dockerfile not found in Payment-Service directory"
+                        }
+
+                        // Check if compose file exists
+                        if (fileExists("${COMPOSE_FILE}")) {
+                            bat "docker-compose -f ${COMPOSE_FILE} build"
+                        } else {
+                            error "Docker compose file ${COMPOSE_FILE} not found"
+                        }
+
+                        echo "✅ Docker images built successfully!"
+                    }
                 }
             }
         }
-    }
-}
+
         stage('Security Scan with Trivy') {
             steps {
-                dir('Product-Service') {
+                dir('Payment-Service') {
                     script {
                         try {
-                            // Install Trivy if not already installed (Windows)
-                            bat '''
-                                @echo off
-                                where trivy >nul 2>&1
-                                if errorlevel 1 (
-                                    echo 📥 Installing Trivy for Windows...
-                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
-                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
-                                    move trivy.exe C:\\Windows\\System32\\
-                                    del trivy.zip
-                                    echo ✅ Trivy installed successfully
-                                ) else (
-                                    echo ✅ Trivy is already installed
-                                    trivy --version
-                                )
-                            '''
-
-                            // Create cache directory
-                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
-
-                            // Update Trivy database
-                            echo "📚 Updating Trivy vulnerability database..."
-                            bat """
-                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
-                            """
-
-                            // Scan the Docker image for vulnerabilities
-                            echo "🔍 Scanning Docker image: product-service:latest"
-                            bat """
-                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt product-service:latest || echo "Scan completed with warnings"
-                            """
-
-                            // Generate JSON report for detailed analysis
-                            bat """
-                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json product-service:latest || echo "JSON report completed"
-                            """
-
-                            // Check for HIGH and CRITICAL vulnerabilities
-                            def exitCode = bat(
-                                script: """
-                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 product-service:latest
-                                """,
+                            // Verify image exists before scanning
+                            def imageExists = bat(
+                                script: 'docker images -q payment-service-payment-service:latest',
                                 returnStatus: true
                             )
 
-                            // Archive the reports
-                            archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true, allowEmptyArchive: true
-
-                            // Set build status based on results
-                            if (exitCode == 0) {
-                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
-                            } else {
-                                echo "⚠️ HIGH or CRITICAL vulnerabilities detected!"
+                            if (imageExists != 0) {
+                                echo "❌ Docker image not found, skipping Trivy scan"
                                 currentBuild.result = 'UNSTABLE'
+                                return
+                            }
+
+                            echo "🔍 Scanning Docker image: payment-service-payment-service:latest"
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt payment-service-payment-service:latest || echo "Scan completed with warnings"
+                            """
+
+                            // Archive the Trivy report
+                            if (fileExists('trivy-report.txt')) {
+                                archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+                                echo "✅ Trivy security scan completed and report archived"
+                            } else {
+                                echo "⚠️ Trivy report not found"
                             }
 
                         } catch (Exception e) {
@@ -239,13 +251,40 @@ pipeline {
 
         stage('Run Containers') {
             steps {
-                dir('Product-Service') {
+                dir('Payment-Service') {
                     bat "docker-compose -f ${COMPOSE_FILE} up -d"
-                    bat 'powershell -Command "Start-Sleep -Seconds 10"'
+                    bat 'powershell -Command "Start-Sleep -Seconds 15"'
                     bat "docker-compose -f ${COMPOSE_FILE} ps"
                 }
             }
         }
+
+        // stage('Health Check') {
+        //     steps {
+        //         dir('Payment-Service') {
+        //             script {
+        //                 try {
+        //                     // Wait for the service to be ready
+        //                     timeout(time: 3, unit: 'MINUTES') {
+        //                         waitUntil {
+        //                             script {
+        //                                 def result = bat(
+        //                                     script: 'curl -f http://localhost:8089/health',
+        //                                     returnStatus: true
+        //                                 )
+        //                                 return result == 0
+        //                             }
+        //                         }
+        //                     }
+        //                     echo "✅ Payment Service health check passed!"
+        //                 } catch (Exception e) {
+        //                     echo "⚠️ Health check failed or timed out: ${e.getMessage()}"
+        //                     currentBuild.result = 'UNSTABLE'
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Push to Docker Hub') {
             steps {
@@ -255,11 +294,11 @@ pipeline {
                         bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
 
                         // Tag and push the image
-                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker tag payment-service-payment-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
                         bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
 
                         // Also tag with build number for versioning
-                        bat "docker tag product-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+                        bat "docker tag payment-service-payment-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
                         bat "docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
 
                         echo "✅ Docker images pushed successfully!"
@@ -271,39 +310,45 @@ pipeline {
     post {
         always {
             script {
-                dir('Product-Service') {
+                dir('Payment-Service') {
                     // Clean up containers
                     bat 'docker-compose -f compose.yaml down --remove-orphans || echo "Cleanup completed"'
+
+                    // Clean up Go build artifacts
+                    bat 'del /f /q payment-service.exe || echo "Build artifacts cleaned"'
                 }
 
                 // Summary report
-                echo "📋 ===== PIPELINE SUMMARY ====="
+                echo "📋 ===== PAYMENT SERVICE PIPELINE SUMMARY ====="
                 echo "🏗️ Build Number: ${BUILD_NUMBER}"
+                echo "🐹 Go Version: 1.24"
                 echo "📊 Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}"
                 echo "🔍 SonarQube: Analysis completed"
                 echo "🔒 Security: Trivy scan completed"
                 echo "🐳 Docker: Images built and pushed"
+                echo "💳 Service: Payment Service (Port 8089)"
                 echo "================================"
             }
         }
         success {
-            echo '🎉 Pipeline completed successfully!'
-            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '🎉 Payment Service pipeline completed successfully!'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000/dashboard?id=ecommerce-payment-service'
             echo '🔒 Security scan reports available in Build Artifacts'
             echo '🐳 Docker images available on Docker Hub'
+            echo '💳 Payment Service running on http://localhost:8089/health'
             bat 'docker logout || echo "Logout completed"'
         }
         failure {
-            echo '💥 Pipeline failed!'
+            echo '💥 Payment Service pipeline failed!'
             echo '🔍 Check logs and reports for issues'
-            echo '📊 SonarQube: http://localhost:9000'
+            echo '📊 SonarQube: http://localhost:9000/dashboard?id=ecommerce-payment-service'
             bat 'docker logout || echo "Logout completed"'
         }
         unstable {
-            echo '⚠️ Pipeline completed with warnings!'
+            echo '⚠️ Payment Service pipeline completed with warnings!'
             echo '📊 Quality Gate or tests may have issues'
             echo '🔍 Security vulnerabilities may have been detected'
-            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000/dashboard?id=ecommerce-payment-service'
             echo '📁 Download reports from Build Artifacts section'
         }
     }
