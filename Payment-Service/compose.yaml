@@ -1,0 +1,76 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: payment-service-postgres
+    environment:
+      POSTGRES_DB: payment-service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zakaria
+    ports:
+      - "5434:5432"  # Different port to avoid conflicts with other services
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - payment-network
+
+  # Payment Service Application
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-service-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8089:8089"
+    environment:
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: payment-service
+      DB_USER: postgres
+      DB_PASSWORD: zakaria
+      DB_SSL_MODE: disable
+
+      # Kafka Configuration
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_GROUP_ID: payment-service-group
+
+      # Application Configuration
+      APP_PORT: 8089
+      APP_ENV: docker
+
+      # Logging Configuration
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: json
+
+      # Health Check Configuration
+      HEALTH_CHECK_ENABLED: true
+
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8089/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - payment-network
+
+volumes:
+  payment_postgres_data:
+    driver: local
+
+networks:
+  payment-network:
+    driver: bridge

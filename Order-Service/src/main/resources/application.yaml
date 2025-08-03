@@ -79,4 +79,4 @@ logging:
 payment:
   service:
     name: PAYMENT-SERVICE
-    url: http://localhost:8085
+    url: http://localhost:8089
