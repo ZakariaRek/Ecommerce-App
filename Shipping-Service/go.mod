@@ -3,12 +3,13 @@ module github.com/ZakariaRek/Ecommerce-App/Shipping-Service
 go 1.24
 
 require (
-	github.com/ArthurHlt/go-eureka-client v1.1.0
 	github.com/IBM/sarama v1.45.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hudl/fargo v1.4.0
 	github.com/joho/godotenv v1.5.1
+	// NEW DEPENDENCIES FOR ELK INTEGRATION
+	github.com/sirupsen/logrus v1.9.3
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.26.0
 )
@@ -37,12 +38,10 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
-	github.com/sirupsen/logrus v1.4.2 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
