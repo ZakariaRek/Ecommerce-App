@@ -1,9 +1,80 @@
 services:
+  # PostgreSQL Database
   postgres:
-    image: 'postgres:latest'
+    image: postgres:15-alpine
+    container_name: loyalty-service-postgres
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: loyalty-service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zakaria
     ports:
-      - '5432'
+      - "5433:5432"  # Different port to avoid conflicts with product service
+    volumes:
+      - loyalty_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - loyalty-network
+
+
+  # Loyalty Service Application
+  loyalty-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loyalty-service-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8084:8084"
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/loyalty-service
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: zakaria
+
+      # Kafka Configuration
+#      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      SPRING_KAFKA_CONSUMER_GROUP_ID: loyalty-service
+
+      # JVM Options
+      JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
+
+      # Spring Profiles
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Logging Configuration
+      LOGGING_LEVEL_COM_ECOMMERCE_LOYALTY_SERVICE: DEBUG
+      LOGGING_LEVEL_ORG_APACHE_KAFKA: WARN
+
+      # Actuator Configuration
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+#    healthcheck:
+#      test: ["CMD-SHELL", "curl -f http://localhost:8084/loyalty/actuator/health || exit 1"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 5
+#      start_period: 60s
+    networks:
+      - loyalty-network
+
+  # Kafka UI (Optional - for development)
+
+volumes:
+  loyalty_postgres_data:
+    driver: local
+
+networks:
+  loyalty-network:
+    driver: bridge
