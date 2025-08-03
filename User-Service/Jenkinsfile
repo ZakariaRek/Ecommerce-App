@@ -103,8 +103,8 @@ pipeline {
                             withSonarQubeEnv('sonarqube') {
                                 bat '''
                                     mvn sonar:sonar ^
-                                        -Dsonar.projectKey=Ecommerce-app ^
-                                        -Dsonar.projectName="Ecommerce-app" ^
+                                        -Dsonar.projectKey=E-commerce-User-Service ^
+                                        -Dsonar.projectName="E-commerce User Service" ^
                                         -Dsonar.projectVersion=%BUILD_NUMBER% ^
                                         -Dsonar.host.url=%SONAR_HOST_URL% ^
                                         -Dsonar.token=%SONAR_AUTH_TOKEN% ^

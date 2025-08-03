@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: shipping-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shipping_service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yahyasd56
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - shipping-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shipping_service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Shipping Service
+  shipping-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shipping-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      # Server Configuration
+      SERVER_PORT: "8085"
+      ENVIRONMENT: "production"
+
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: yahyasd56
+      DB_NAME: shipping_service
+
+      # Disable external services for simple setup
+      KAFKA_ENABLE_CONSUMER: "false"
+      ENABLE_ELK_LOGGING: "false"
+      ENABLE_KAFKA_LOGGING: "false"
+
+      # Default settings
+      ENABLE_GPS_TRACKING: "true"
+      ENABLE_REAL_TIME_LOCATION: "true"
+      DEFAULT_ORIGIN_COMPANY: "Shipping Company"
+      DEFAULT_ORIGIN_ADDRESS: "123 Warehouse St"
+      DEFAULT_ORIGIN_CITY: "Distribution City"
+      DEFAULT_ORIGIN_STATE: "DC"
+      DEFAULT_ORIGIN_POSTAL: "12345"
+      DEFAULT_ORIGIN_COUNTRY: "USA"
+
+      # Service Information
+      SERVICE_VERSION: "1.0.0"
+      SERVICE_NAME: "shipping-service"
+
+      # Performance
+      ENABLE_METRICS: "true"
+      METRICS_PORT: "9090"
+
+      # Logging
+      LOG_LEVEL: "info"
+      LOG_FORMAT: "json"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shipping-network
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Database Admin Tool (Optional)
+  adminer:
+    image: adminer:4.8.1
+    container_name: shipping-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: "pappu687"
+    depends_on:
+      - postgres
+    networks:
+      - shipping-network
+
+# Networks
+networks:
+  shipping-network:
+    driver: bridge
+    name: shipping-network
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+    name: shipping_postgres_data

@@ -1,0 +1,84 @@
+# Git
+.git
+.gitignore
+README.md
+
+# Documentation
+*.md
+docs/
+
+# Build artifacts
+shipping-service
+shipping-service.exe
+*.exe
+*.out
+
+# Test files
+*_test.go
+coverage.out
+coverage.html
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+Jenkinsfile
+.jenkins/
+
+# Local environment files
+.env.local
+.env.development
+.env.test
+
+# Dependencies (will be downloaded in container)
+vendor/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Coverage reports
+coverage/
+*.cover
+
+# Binaries
+bin/
+dist/
+
+# Security
+*.pem
+*.key
+*.crt
+
+# Trivy cache and reports
+trivy-*
+.trivy/
