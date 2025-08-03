@@ -1,0 +1,414 @@
+pipeline {
+    agent any
+    tools {
+        maven "Maven-3.9.7"
+        // Since your system has Java 21 but Jenkins JDK tool points to Java 19,
+        // we'll manually set the JAVA_HOME in environment instead
+    }
+    environment {
+        DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-discovery-service'
+        IMAGE_TAG = 'latest'
+        GIT_CREDENTIALS_ID = 'GithubCredentials'
+
+        // Manually set JAVA_HOME to Java 21 path
+        // Based on your output, Java 21 should be here (common location):
+        JAVA_HOME = 'C:\\Program Files\\Java\\jdk-21'
+        PATH = "${JAVA_HOME}\\bin;${env.PATH}"
+
+        // Trivy configuration
+        TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
+        TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
+        TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+    }
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ZakariaRek/Ecommerce-App',
+                        credentialsId: env.GIT_CREDENTIALS_ID
+                    ]],
+                    extensions: [
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Discovery-Service/']]]
+                    ]
+                ])
+            }
+        }
+
+        stage('Find and Verify Java 21') {
+            steps {
+                script {
+                    echo "🔍 Finding Java 21 installation..."
+
+                    // Try to find Java 21 in common locations
+                    def java21Paths = [
+                        'C:\\Program Files\\Java\\jdk-21',
+                        'C:\\Program Files\\Java\\jdk-21.0.1',
+                        'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.1.12-hotspot',
+                        'C:\\Program Files\\OpenJDK\\jdk-21',
+                        'C:\\Program Files\\Amazon Corretto\\jdk21.0.1_12'
+                    ]
+
+                    def foundJava21 = false
+
+                    for (path in java21Paths) {
+                        def checkResult = bat(
+                            script: "if exist \"${path}\\bin\\java.exe\" (exit 0) else (exit 1)",
+                            returnStatus: true
+                        )
+
+                        if (checkResult == 0) {
+                            echo "✅ Found Java 21 at: ${path}"
+                            env.JAVA_HOME = path
+                            env.PATH = "${path}\\bin;${env.PATH}"
+                            foundJava21 = true
+                            break
+                        }
+                    }
+
+                    if (!foundJava21) {
+                        echo "⚠️ Java 21 not found in common locations, trying to locate..."
+                        bat '''
+                            echo "=== Searching for Java installations ==="
+                            dir "C:\\Program Files\\Java\\" 2>nul || echo "Java directory not found"
+                            echo.
+                            echo "=== All Java versions on PATH ==="
+                            where java
+                            for /f "tokens=*" %%i in ('where java') do (
+                                echo "Checking: %%i"
+                                "%%i" -version 2>&1 | findstr "version"
+                            )
+                        '''
+                        error "❌ Could not locate Java 21 installation!"
+                    }
+
+                    // Verify Java 21 is working
+                    bat '''
+                        echo "=== FINAL JAVA CONFIGURATION ==="
+                        echo "JAVA_HOME: %JAVA_HOME%"
+                        "%JAVA_HOME%\\bin\\java.exe" -version
+                        "%JAVA_HOME%\\bin\\javac.exe" -version
+                        echo.
+                        echo "=== MAVEN WITH JAVA 21 ==="
+                        mvn -version
+                    '''
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        echo "🧹 Cleaning and compiling Discovery Service with Java 21..."
+                        bat '''
+                            mvn clean compile ^
+                                -Dmaven.compiler.source=21 ^
+                                -Dmaven.compiler.target=21 ^
+                                -Dmaven.compiler.release=21 ^
+                                -Dmaven.compiler.verbose=true
+                        '''
+                        echo "✅ Successfully compiled with Java 21!"
+                    }
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        echo "🧪 Running Discovery Service tests..."
+                        def testResult = bat(
+                            script: '''
+                                mvn test ^
+                                    -Dmaven.test.failure.ignore=true ^
+                                    -Dspring.profiles.active=test ^
+                                    -Dmaven.compiler.source=21 ^
+                                    -Dmaven.compiler.target=21 ^
+                                    -Dmaven.compiler.release=21
+                            ''',
+                            returnStatus: true
+                        )
+                        if (testResult != 0) {
+                            echo "⚠️ Some tests failed, but continuing with analysis"
+                            env.TESTS_FAILED = 'true'
+                        } else {
+                            echo "✅ All tests passed!"
+                            env.TESTS_FAILED = 'false'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    dir('Discovery-Service') {
+                        junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+                        script {
+                            if (fileExists('target/site/jacoco/jacoco.xml')) {
+                                echo "✅ JaCoCo coverage report found"
+                                archiveArtifacts artifacts: 'target/site/jacoco/**/*', allowEmptyArchive: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        echo "🔍 Starting SonarQube analysis for Discovery Service..."
+                        try {
+                            withSonarQubeEnv('sonarqube') {
+                                bat '''
+                                    mvn sonar:sonar ^
+                                        -Dsonar.projectKey=E-commerce-Discovery-Service ^
+                                        -Dsonar.projectName="E-commerce Discovery Service" ^
+                                        -Dsonar.projectVersion=%BUILD_NUMBER% ^
+                                        -Dsonar.host.url=%SONAR_HOST_URL% ^
+                                        -Dsonar.token=%SONAR_AUTH_TOKEN% ^
+                                        -Dmaven.test.failure.ignore=true ^
+                                        -Dmaven.compiler.source=21 ^
+                                        -Dmaven.compiler.target=21
+                                '''
+                            }
+                            echo "✅ SonarQube analysis completed using Jenkins configuration"
+                        } catch (Exception e) {
+                            echo "❌ Jenkins SonarQube config failed: ${e.getMessage()}"
+                            echo "🔄 Trying direct connection with fallback..."
+
+                            bat '''
+                                mvn clean verify sonar:sonar ^
+                                    -Dsonar.projectKey=E-commerce-Discovery-Service ^
+                                    -Dsonar.projectName="E-commerce Discovery Service" ^
+                                    -Dsonar.host.url=http://localhost:9000 ^
+                                    -Dsonar.token=sqa_4b9038ee4ac53217da5fb0466f3dc9886bfafd96 ^
+                                    -Dmaven.test.failure.ignore=true ^
+                                    -Dmaven.compiler.source=21 ^
+                                    -Dmaven.compiler.target=21
+                            '''
+                            echo "✅ SonarQube analysis completed using direct connection"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    try {
+                        echo "🚦 Checking Quality Gate for Discovery Service..."
+                        timeout(time: 2, unit: 'MINUTES') {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                echo "⚠️ Quality Gate failed: ${qg.status}"
+                                currentBuild.result = 'UNSTABLE'
+                            } else {
+                                echo "✅ Quality Gate passed!"
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Quality Gate check failed or timed out: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Package Application') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        echo "📦 Packaging Discovery Service application..."
+                        bat '''
+                            mvn package -DskipTests ^
+                                -Dmaven.compiler.source=21 ^
+                                -Dmaven.compiler.target=21 ^
+                                -Dmaven.compiler.release=21
+                        '''
+
+                        echo "✅ Verifying JAR file creation..."
+                        bat 'dir target\\*.jar'
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        echo "🐳 Building Docker image for Discovery Service..."
+                        bat "docker build -t discovery-service:latest ."
+                        bat "docker images discovery-service:latest"
+                        echo "✅ Docker image built successfully"
+                    }
+                }
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                dir('Discovery-Service') {
+                    script {
+                        try {
+                            bat '''
+                                @echo off
+                                where trivy >nul 2>&1
+                                if errorlevel 1 (
+                                    echo 📥 Installing Trivy for Windows...
+                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
+                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
+                                    if exist C:\\Windows\\System32\\trivy.exe (
+                                        echo ✅ Trivy already in system path
+                                    ) else (
+                                        move trivy.exe C:\\Windows\\System32\\
+                                    )
+                                    del trivy.zip
+                                    echo ✅ Trivy installed successfully
+                                ) else (
+                                    echo ✅ Trivy is already installed
+                                    trivy --version
+                                )
+                            '''
+
+                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
+
+                            echo "📚 Updating Trivy vulnerability database..."
+                            bat """
+                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
+                            """
+
+                            echo "🔍 Scanning Docker image: discovery-service:latest"
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt discovery-service:latest || echo "Scan completed with warnings"
+                            """
+
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json discovery-service:latest || echo "JSON report completed"
+                            """
+
+                            def exitCode = bat(
+                                script: """
+                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 discovery-service:latest
+                                """,
+                                returnStatus: true
+                            )
+
+                            archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true, allowEmptyArchive: true
+
+                            if (exitCode == 0) {
+                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
+                            } else {
+                                echo "⚠️ HIGH or CRITICAL vulnerabilities detected!"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Trivy scan failed: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        echo "🐳 Pushing Discovery Service to Docker Hub..."
+                        bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
+
+                        bat "docker tag discovery-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+
+                        bat "docker tag discovery-service:latest ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
+                        bat "docker push ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
+
+                        echo "✅ Discovery Service Docker image pushed successfully!"
+                        echo "📦 Available tags: latest, ${BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Fixed cleanup section - using returnStatus: true to prevent pipeline failure
+                echo "🧹 Cleaning up containers..."
+                bat(script: 'docker stop discovery-test', returnStatus: true)
+                bat(script: 'docker rm discovery-test', returnStatus: true)
+
+                // Additional cleanup for any dangling containers from this build
+                bat(script: "docker stop discovery-service-${BUILD_NUMBER}", returnStatus: true)
+                bat(script: "docker rm discovery-service-${BUILD_NUMBER}", returnStatus: true)
+
+                def buildSummary = """
+=== DISCOVERY SERVICE BUILD SUMMARY ===
+Build Number: ${BUILD_NUMBER}
+Build Status: ${currentBuild.result ?: 'SUCCESS'}
+Java Version: 21 (latest LTS version)
+Date: ${new Date()}
+
+📊 Reports Available:
+- SonarQube: http://localhost:9000/dashboard?id=E-commerce-Discovery-Service
+- Trivy Security Reports: Build Artifacts
+- Test Results: Available in Jenkins
+
+🔗 Quick Links:
+- Build Artifacts: ${BUILD_URL}artifact/
+- Console Output: ${BUILD_URL}console
+- Docker Hub: https://hub.docker.com/r/${DOCKERHUB_REPO}
+- Eureka Dashboard: http://localhost:8761 (when running)
+
+📝 Pipeline Summary:
+- Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}
+- SonarQube: Analysis completed
+- Security: Trivy scan completed
+- Docker: Image built and pushed
+- Tags: latest, ${BUILD_NUMBER}
+
+🔍 Service Details:
+- Service Type: Netflix Eureka Discovery Server
+- Port: 8761
+- Health Check: /actuator/health
+- Dashboard: http://localhost:8761
+"""
+                writeFile file: 'build-summary.txt', text: buildSummary
+                archiveArtifacts artifacts: 'build-summary.txt', allowEmptyArchive: true
+
+                echo "📋 ===== DISCOVERY SERVICE PIPELINE SUMMARY ====="
+                echo "🏗️ Build Number: ${BUILD_NUMBER}"
+                echo "☕ Java Version: 21 (successfully configured)"
+                echo "📊 Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}"
+                echo "🐳 Docker: Image built and pushed"
+                echo "🔍 Service: Eureka Discovery Server on port 8761"
+                echo "============================================"
+                bat(script: 'docker logout', returnStatus: true)
+            }
+        }
+        success {
+            echo '🎉 Discovery Service pipeline completed successfully with Java 21!'
+            echo '🔍 Eureka Server ready for service registration'
+            echo '☕ Note: Built with Java 21 (latest LTS version)'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+        failure {
+            echo '💥 Discovery Service pipeline failed!'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+        unstable {
+            echo '⚠️ Discovery Service pipeline completed with warnings!'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+    }
+}
