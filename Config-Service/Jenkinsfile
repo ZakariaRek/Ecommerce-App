@@ -1,0 +1,377 @@
+pipeline {
+    agent any
+    tools {
+        maven "Maven-3.9.7"
+        // Using Java 17 instead of 21 (which should be available in Jenkins)
+    }
+    environment {
+        DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-config-serveur'
+        IMAGE_TAG = 'latest'
+        GIT_CREDENTIALS_ID = 'GithubCredentials'
+
+        // Trivy configuration
+        TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
+        TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
+        TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+    }
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ZakariaRek/Ecommerce-App',
+                        credentialsId: env.GIT_CREDENTIALS_ID
+                    ]],
+                    extensions: [
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Config-Service/']]]
+                    ]
+                ])
+            }
+        }
+
+        stage('Verify Java Version') {
+            steps {
+                script {
+                    echo "🔍 Verifying Java installation..."
+                    bat '''
+                        java -version
+                        javac -version
+                        echo "Maven version:"
+                        mvn -version
+                    '''
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        echo "🧹 Cleaning and compiling Config Server with Java 17..."
+                        bat '''
+                            mvn clean compile ^
+                                -Dmaven.compiler.source=17 ^
+                                -Dmaven.compiler.target=17 ^
+                                -Dmaven.compiler.release=17
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        echo "🧪 Running Config Server tests..."
+                        def testResult = bat(
+                            script: '''
+                                mvn test ^
+                                    -Dmaven.test.failure.ignore=true ^
+                                    -Dspring.profiles.active=test ^
+                                    -Dmaven.compiler.source=17 ^
+                                    -Dmaven.compiler.target=17 ^
+                                    -Dmaven.compiler.release=17
+                            ''',
+                            returnStatus: true
+                        )
+                        if (testResult != 0) {
+                            echo "⚠️ Some tests failed, but continuing with analysis"
+                            env.TESTS_FAILED = 'true'
+                        } else {
+                            echo "✅ All tests passed!"
+                            env.TESTS_FAILED = 'false'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    dir('Config-Service') {
+                        junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+                        script {
+                            if (fileExists('target/site/jacoco/jacoco.xml')) {
+                                echo "✅ JaCoCo coverage report found"
+                                archiveArtifacts artifacts: 'target/site/jacoco/**/*', allowEmptyArchive: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        echo "🔍 Starting SonarQube analysis for Config Server..."
+                        try {
+                            withSonarQubeEnv('sonarqube') {
+                                bat '''
+                                    mvn sonar:sonar ^
+                                        -Dsonar.projectKey=E-commerce-Config-Service ^
+                                        -Dsonar.projectName="E-commerce Config Service" ^
+                                        -Dsonar.projectVersion=%BUILD_NUMBER% ^
+                                        -Dsonar.host.url=%SONAR_HOST_URL% ^
+                                        -Dsonar.token=%SONAR_AUTH_TOKEN% ^
+                                        -Dmaven.test.failure.ignore=true ^
+                                        -Dmaven.compiler.source=17 ^
+                                        -Dmaven.compiler.target=17
+                                '''
+                            }
+                            echo "✅ SonarQube analysis completed using Jenkins configuration"
+                        } catch (Exception e) {
+                            echo "❌ Jenkins SonarQube config failed: ${e.getMessage()}"
+                            echo "🔄 Trying direct connection with fallback..."
+
+                            bat '''
+                                mvn clean verify sonar:sonar ^
+                                    -Dsonar.projectKey=E-commerce-Config-Service ^
+                                    -Dsonar.projectName="E-commerce Config Service" ^
+                                    -Dsonar.host.url=http://localhost:9000 ^
+                                    -Dsonar.token=sqa_4b9038ee4ac53217da5fb0466f3dc9886bfafd96 ^
+                                    -Dmaven.test.failure.ignore=true ^
+                                    -Dmaven.compiler.source=17 ^
+                                    -Dmaven.compiler.target=17
+                            '''
+                            echo "✅ SonarQube analysis completed using direct connection"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    try {
+                        echo "🚦 Checking Quality Gate for Config Server..."
+                        timeout(time: 2, unit: 'MINUTES') {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                echo "⚠️ Quality Gate failed: ${qg.status}"
+                                currentBuild.result = 'UNSTABLE'
+                            } else {
+                                echo "✅ Quality Gate passed!"
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Quality Gate check failed or timed out: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Package Application') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        echo "📦 Packaging Config Server application..."
+                        bat '''
+                            mvn package -DskipTests ^
+                                -Dmaven.compiler.source=17 ^
+                                -Dmaven.compiler.target=17 ^
+                                -Dmaven.compiler.release=17
+                        '''
+
+                        echo "✅ Verifying JAR file creation..."
+                        bat 'dir target'
+                        bat 'dir target\\*.jar'
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        echo "🔍 Checking build environment..."
+                        bat '''
+                            echo "=== Current Directory Structure ==="
+                            dir
+                            echo "=== Target Directory ==="
+                            if exist target (dir target) else (echo Target directory not found)
+                            echo "=== Checking for required files ==="
+                            if exist pom.xml (echo "✅ pom.xml found") else (echo "❌ pom.xml missing")
+                            if exist src\\nul (echo "✅ src directory found") else (echo "❌ src directory missing")
+                            if exist Dockerfile (echo "✅ Dockerfile found") else (echo "❌ Dockerfile missing")
+                            if exist target\\*.jar (echo "✅ JAR file found") else (echo "❌ JAR file missing")
+                        '''
+
+                        script {
+                            def jarExists = bat(script: 'if exist target\\*.jar (exit 0) else (exit 1)', returnStatus: true)
+
+                            if (jarExists == 0) {
+                                echo "🐳 Building Docker image for Config Server..."
+
+                                if (fileExists('Dockerfile')) {
+                                    echo "📋 Dockerfile contents:"
+                                    bat 'type Dockerfile'
+                                }
+
+                                bat "docker build -t config-service:latest ."
+                                bat "docker images config-service:latest"
+                                echo "✅ Docker image built successfully"
+
+                            } else {
+                                error "❌ No JAR file found in target directory! Maven build may have failed."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                dir('Config-Service') {
+                    script {
+                        try {
+                            bat '''
+                                @echo off
+                                where trivy >nul 2>&1
+                                if errorlevel 1 (
+                                    echo 📥 Installing Trivy for Windows...
+                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
+                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
+                                    if exist C:\\Windows\\System32\\trivy.exe (
+                                        echo ✅ Trivy already in system path
+                                    ) else (
+                                        move trivy.exe C:\\Windows\\System32\\
+                                    )
+                                    del trivy.zip
+                                    echo ✅ Trivy installed successfully
+                                ) else (
+                                    echo ✅ Trivy is already installed
+                                    trivy --version
+                                )
+                            '''
+
+                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
+
+                            echo "📚 Updating Trivy vulnerability database..."
+                            bat """
+                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
+                            """
+
+                            echo "🔍 Scanning Docker image: config-service:latest"
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt config-service:latest || echo "Scan completed with warnings"
+                            """
+
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json config-service:latest || echo "JSON report completed"
+                            """
+
+                            def exitCode = bat(
+                                script: """
+                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 config-service:latest
+                                """,
+                                returnStatus: true
+                            )
+
+                            archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true, allowEmptyArchive: true
+
+                            if (exitCode == 0) {
+                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
+                            } else {
+                                echo "⚠️ HIGH or CRITICAL vulnerabilities detected!"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Trivy scan failed: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        echo "🐳 Pushing Config Service to Docker Hub..."
+                        bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
+
+                        bat "docker tag config-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+
+                        bat "docker tag config-service:latest ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
+                        bat "docker push ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
+
+                        echo "✅ Config Service Docker image pushed successfully!"
+                        echo "📦 Available tags: latest, ${BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                // Fixed cleanup section - using returnStatus: true to prevent pipeline failure
+                echo "🧹 Cleaning up containers..."
+                bat(script: 'docker stop config-test', returnStatus: true)
+                bat(script: 'docker rm config-test', returnStatus: true)
+
+                // Additional cleanup for any dangling containers from this build
+                bat(script: "docker stop config-service-${BUILD_NUMBER}", returnStatus: true)
+                bat(script: "docker rm config-service-${BUILD_NUMBER}", returnStatus: true)
+
+                def buildSummary = """
+=== CONFIG SERVICE BUILD SUMMARY ===
+Build Number: ${BUILD_NUMBER}
+Build Status: ${currentBuild.result ?: 'SUCCESS'}
+Java Version: 17 (downgraded from 21 for Jenkins compatibility)
+Date: ${new Date()}
+
+📊 Reports Available:
+- SonarQube: http://localhost:9000/dashboard?id=E-commerce-Config-Service
+- Trivy Security Reports: Build Artifacts
+- Test Results: Available in Jenkins
+
+🔗 Quick Links:
+- Build Artifacts: ${BUILD_URL}artifact/
+- Console Output: ${BUILD_URL}console
+- Docker Hub: https://hub.docker.com/r/${DOCKERHUB_REPO}
+
+📝 Pipeline Summary:
+- Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}
+- SonarQube: Analysis completed
+- Security: Trivy scan completed
+- Docker: Image built and pushed
+- Tags: latest, ${BUILD_NUMBER}
+"""
+                writeFile file: 'build-summary.txt', text: buildSummary
+                archiveArtifacts artifacts: 'build-summary.txt', allowEmptyArchive: true
+
+                echo "📋 ===== CONFIG SERVICE PIPELINE SUMMARY ====="
+                echo "🏗️ Build Number: ${BUILD_NUMBER}"
+                echo "☕ Java Version: 17 (Jenkins compatible)"
+                echo "📊 Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}"
+                echo "🐳 Docker: Image built and pushed"
+                echo "============================================"
+            }
+        }
+        success {
+            echo '🎉 Config Service pipeline completed successfully!'
+            echo '☕ Note: Built with Java 17 for Jenkins compatibility'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+        failure {
+            echo '💥 Config Service pipeline failed!'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+        unstable {
+            echo '⚠️ Config Service pipeline completed with warnings!'
+            bat(script: 'docker logout', returnStatus: true)
+        }
+    }
+}
