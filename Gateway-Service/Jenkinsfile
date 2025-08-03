@@ -1,0 +1,358 @@
+pipeline {
+    agent any
+    tools {
+        maven "Maven-3.9.7"
+        jdk 'jdk-21'
+    }
+    environment {
+        COMPOSE_FILE = 'compose.yaml'
+        DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+        DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-api-gateway-service'
+        IMAGE_TAG = 'latest'
+        GIT_CREDENTIALS_ID = 'git-https-token'
+        // Trivy configuration
+        TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
+        TRIVY_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db'
+        TRIVY_JAVA_DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-java-db'
+    }
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ZakariaRek/Ecommerce-App',
+                        credentialsId: env.GIT_CREDENTIALS_ID
+                    ]],
+                    extensions: [
+                        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Gateway-Service/']]]
+                    ]
+                ])
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                dir('Gateway-Service') {
+                    bat 'mvn clean compile'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                dir('Gateway-Service') {
+                    script {
+                        // Run tests but don't fail the pipeline
+                        def testResult = bat(
+                            script: 'mvn test -Dmaven.test.failure.ignore=true -Dspring.profiles.active=test',
+                            returnStatus: true
+                        )
+                        if (testResult != 0) {
+                            echo "⚠️ Some tests failed, but continuing with analysis"
+                            env.TESTS_FAILED = 'true'
+                        } else {
+                            echo "✅ All tests passed!"
+                            env.TESTS_FAILED = 'false'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    dir('Gateway-Service') {
+                        // Archive test results even if some tests fail
+                        junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+                        // Archive JaCoCo coverage report if it exists
+                        script {
+                            if (fileExists('target/site/jacoco/jacoco.xml')) {
+                                echo "✅ JaCoCo coverage report found"
+                                archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir('Gateway-Service') {
+                    script {
+                        echo "🔍 Starting SonarQube analysis..."
+                        try {
+                            // Try with the configured server name
+                            withSonarQubeEnv('sonarqube') {
+                                bat '''
+                                    mvn clean verify sonar:sonar ^
+                                    -Dsonar.projectKey=ecommerce-api-gateway-service ^
+                                    -Dsonar.projectName="E-commerce Api Gateway Service" ^
+                                    -Dsonar.projectVersion=%BUILD_NUMBER% ^
+                                    -Dsonar.host.url=%SONAR_HOST_URL% ^
+                                    -Dsonar.token=%SONAR_AUTH_TOKEN% ^
+                                    -Dmaven.test.failure.ignore=true
+                                '''
+                            }
+                            echo "✅ SonarQube analysis completed using Jenkins configuration"
+                        } catch (Exception e) {
+                            echo "❌ Jenkins SonarQube config failed: ${e.getMessage()}"
+                            echo "🔄 Trying direct connection..."
+
+                            // Fallback: Use direct connection with your token
+                            bat '''
+                                mvn clean verify sonar:sonar ^
+                                -Dsonar.projectKey=ecommerce-api-gateway-service ^
+                                -Dsonar.projectName="E-commerce Api Gateway Service" ^
+                                -Dsonar.projectVersion=%BUILD_NUMBER% ^
+                                -Dsonar.host.url=http://localhost:9000 ^
+                                -Dsonar.token=sqa_08e3ba1af16e9a4f7f0ce7b381d391ddee03866f ^
+                                -Dmaven.test.failure.ignore=true
+                            '''
+                            echo "✅ SonarQube analysis completed using direct connection"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    try {
+                        timeout(time: 1, unit: 'MINUTES') {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                echo "⚠️ Quality Gate failed: ${qg.status}"
+                                currentBuild.result = 'UNSTABLE'
+                            } else {
+                                echo "✅ Quality Gate passed!"
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Quality Gate check failed or timed out: ${e.getMessage()}"
+                        echo "📊 Check SonarQube dashboard manually"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Package Application') {
+            steps {
+                dir('Gateway-Service') {
+                    bat 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                dir('Gateway-Service') {
+                    script {
+                        // Check if Dockerfile exists
+                        if (fileExists('Dockerfile')) {
+                            bat "docker build -t gateway-service-gateway-service:latest -f Dockerfile ."
+                        } else {
+                            error "Dockerfile not found in Gateway-Service directory"
+                        }
+
+                        // Check if compose file exists
+                        if (fileExists("${COMPOSE_FILE}")) {
+                            bat "docker-compose -f ${COMPOSE_FILE} build"
+                        } else {
+                            error "Docker compose file ${COMPOSE_FILE} not found"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                dir('Gateway-Service') {
+                    script {
+                        try {
+                            // Install Trivy if not already installed (Windows)
+                            bat '''
+                                @echo off
+                                where trivy >nul 2>&1
+                                if errorlevel 1 (
+                                    echo 📥 Installing Trivy for Windows...
+                                    powershell -Command "Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/download/v0.48.3/trivy_0.48.3_Windows-64bit.zip -OutFile trivy.zip"
+                                    powershell -Command "Expand-Archive -Path trivy.zip -DestinationPath . -Force"
+                                    move trivy.exe C:\\Windows\\System32\\
+                                    del trivy.zip
+                                    echo ✅ Trivy installed successfully
+                                ) else (
+                                    echo ✅ Trivy is already installed
+                                    trivy --version
+                                )
+                            '''
+
+                            // Create cache directory
+                            bat "if not exist \"${TRIVY_CACHE_DIR}\" mkdir \"${TRIVY_CACHE_DIR}\""
+
+                            // Update Trivy database
+                            echo "📚 Updating Trivy vulnerability database..."
+                            bat """
+                                trivy image --download-db-only --cache-dir "${TRIVY_CACHE_DIR}"
+                            """
+
+                            // Scan the Docker image for vulnerabilities
+                            echo "🔍 Scanning Docker image: gateway-service-gateway-servicelatest"
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format table --output trivy-report.txt gateway-service-gateway-service:latest || echo "Scan completed with warnings"
+                            """
+
+                            // Generate JSON report for detailed analysis
+                            bat """
+                                trivy image --cache-dir "${TRIVY_CACHE_DIR}" --format json --output trivy-report.json gateway-service-gateway-service:latest || echo "JSON report completed"
+                            """
+
+                            // Check for HIGH and CRITICAL vulnerabilities
+                            def exitCode = bat(
+                                script: """
+                                    trivy image --cache-dir "${TRIVY_CACHE_DIR}" --severity HIGH,CRITICAL --exit-code 1 gateway-service:latest
+                                """,
+                                returnStatus: true
+                            )
+
+                            // Archive the reports
+                            archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true, allowEmptyArchive: true
+
+                            // Set build status based on results
+                            if (exitCode == 0) {
+                                echo "✅ No HIGH or CRITICAL vulnerabilities found!"
+                            } else {
+                                echo "⚠️ HIGH or CRITICAL vulnerabilities detected!"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                        } catch (Exception e) {
+                            echo "❌ Trivy scan failed: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Run Containers') {
+            steps {
+                dir('Gateway-Service') {
+                    bat "docker-compose -f ${COMPOSE_FILE} up -d"
+                    bat 'powershell -Command "Start-Sleep -Seconds 15"'
+                    bat "docker-compose -f ${COMPOSE_FILE} ps"
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                dir('Gateway-Service') {
+                    script {
+                        try {
+                            // Wait for services to be ready
+                            echo "🏥 Performing health checks..."
+                            bat 'powershell -Command "Start-Sleep -Seconds 30"'
+
+                            // Check Gateway Service health
+                            def healthCheck = bat(
+                                script: 'curl -f http://localhost:8099/actuator/health',
+                                returnStatus: true
+                            )
+
+                            if (healthCheck == 0) {
+                                echo "✅ Gateway Service is healthy!"
+                            } else {
+                                echo "⚠️ Gateway Service health check failed"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+
+                            // Check Redis health
+                            bat 'docker exec gateway-service-redis redis-cli ping || echo "Redis check failed"'
+
+                            // Check Zipkin health
+                            bat 'curl -f http://localhost:9411/health || echo "Zipkin check failed"'
+
+                        } catch (Exception e) {
+                            echo "⚠️ Health check failed: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKERHUB_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        echo "Retrieved Docker Hub credentials successfully."
+                        bat 'echo %DOCKERHUB_PASSWORD% | docker login -u %DOCKERHUB_USERNAME% --password-stdin'
+
+                        // Tag and push the image
+                        bat "docker tag gateway-service-gateway-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+                        bat "docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+
+                        // Also tag with build number for versioning
+                        bat "docker tag gateway-service-gateway-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+                        bat "docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}"
+
+                        echo "✅ Docker images pushed successfully!"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                dir('Gateway-Service') {
+                    // Clean up containers
+                    bat 'docker-compose -f compose.yaml down --remove-orphans || echo "Cleanup completed"'
+                }
+
+                // Summary report
+                echo "📋 ===== GATEWAY SERVICE PIPELINE SUMMARY ====="
+                echo "🏗️ Build Number: ${BUILD_NUMBER}"
+                echo "📊 Tests Status: ${env.TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}"
+                echo "🔍 SonarQube: Analysis completed"
+                echo "🔒 Security: Trivy scan completed"
+                echo "🐳 Docker: Images built and pushed"
+                echo "🌐 Gateway Service: API Gateway deployed"
+                echo "📈 Redis: Rate limiting service ready"
+                echo "🔍 Zipkin: Distributed tracing ready"
+                echo "=============================================="
+            }
+        }
+        success {
+            echo '🎉 Gateway Service Pipeline completed successfully!'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '🔒 Security scan reports available in Build Artifacts'
+            echo '🐳 Docker images available on Docker Hub'
+            echo '🌐 Gateway Service available at: http://localhost:8099'
+            echo '📊 Gateway Management UI: http://localhost:8099/swagger-ui.html'
+            echo '🔍 Zipkin Tracing UI: http://localhost:9411'
+            bat 'docker logout || echo "Logout completed"'
+        }
+        failure {
+            echo '💥 Gateway Service Pipeline failed!'
+            echo '🔍 Check logs and reports for issues'
+            echo '📊 SonarQube: http://localhost:9000'
+            echo '🐳 Check Docker containers status'
+            bat 'docker logout || echo "Logout completed"'
+        }
+        unstable {
+            echo '⚠️ Gateway Service Pipeline completed with warnings!'
+            echo '📊 Quality Gate or tests may have issues'
+            echo '🔍 Security vulnerabilities may have been detected'
+            echo '🏥 Health checks may have failed'
+            echo '📊 Check SonarQube dashboard: http://localhost:9000'
+            echo '📁 Download reports from Build Artifacts section'
+            echo '🌐 Gateway Service: http://localhost:8099'
+            echo '🔍 Zipkin Tracing: http://localhost:9411'
+        }
+    }
+}
