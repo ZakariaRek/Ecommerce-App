@@ -1,29 +1,32 @@
 spring:
   profiles:
-    active: kafka  # ADD THIS LINE to enable Kafka logging
+    active: ${SPRING_PROFILES_ACTIVE:kafka}
   config:
-    import: optional:configserver:http://localhost:8888
+    import: optional:configserver:${SPRING_CLOUD_CONFIG_URI:http://localhost:8888}
   application:
     name: user-service
   zipkin:
     enabled: false
   data:
     mongodb:
-      database: User-service  # Ensure this is your intended database name
-      host: localhost         # Ensure MongoDB is running on this host
-      port: 27017             # Ensure MongoDB is listening on this port
+      database: ${SPRING_DATA_MONGODB_DATABASE:User-service}
+      host: ${SPRING_DATA_MONGODB_HOST:localhost}
+      port: ${SPRING_DATA_MONGODB_PORT:27017}
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/User-service}
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
+        bootstrap.servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: user-service-group
+      group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID:user-service-group}
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       properties:
         spring.json.trusted.packages: "*"
   security:
@@ -31,15 +34,12 @@ spring:
       client:
         registration:
           google:
-            client-id: "373916811775-cj1je9ohkmpkkgflgfs2lod5544nf281.apps.googleusercontent.com"
-            client-secret: "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"
+            client-id: "${GOOGLE_CLIENT_ID:373916811775-cj1je9ohkmpkkgflgfs2lod5544nf281.apps.googleusercontent.com}"
+            client-secret: "${GOOGLE_CLIENT_SECRET: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}"
             scope:
               - email
               - profile
-#            redirect-uri: "http://localhost:8081/oauth2/callback/google"
             redirect-uri: "http://localhost:8081/api/users/oauth2/callback/{registrationId}"
-#            http://localhost:8081/api/users/oauth2/callback/{registrationId}"
-
             authorization-grant-type: authorization_code
         provider:
           google:
@@ -48,41 +48,38 @@ spring:
             user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
             user-name-attribute: sub
 
-# OAuth2 configuration
 app:
   oauth2:
-    # Updated redirect URIs to match your actual ports
-#    authorizedRedirectUris: "http://localhost:3000/oauth2/redirect,http://localhost:8080/oauth2/redirect"
-    authorizedRedirectUris: "http://localhost:3000/auth/oauth2/redirect"
+    authorizedRedirectUris: "${APP_OAUTH2_AUTHORIZED_REDIRECT_URIS:http://localhost:3000/auth/oauth2/redirect}"
 
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
   servlet:
-    context-path: /api/users
+    context-path: ${SERVER_SERVLET_CONTEXT_PATH:/api/users}
 
 User-service:
   app:
-    jwtCookieName: user-service
-    jwtSecret: "c03a546beee68b92784e681b537540349c386d02b6dbf9917cf438e47e5c1ee93fdebc55652af00cb3ebc6bff17dc3bedaa33ea6cfdd1959b114ede448c4ac87853021cc3c32f1ef6d5951d0c6b1398bc01c563c7638a0000e6b4064c5733c5552aa232aa8547be8b4b1f8dddacac8256f319acd6832ff5ae9365358e20624fc99dab8489d33e582cf621444e9d944442559707a1f92d556862bb53ce12deb3ec17d3a8bc3c7159b672e4f02189af368a8e71d8547a5b71518de7a1d9a4997d20b4f646fae73e73c26666799b21cdec5544b74319756bb0a27d4e124ec5f13bf8f338ce3ba5ad8b3af1a8aae211bef3eb6ca4f8a24e6b80662c94530e168b0dc"
-    jwtExpirationMs: 86400000
+    jwtCookieName: ${USER_SERVICE_APP_JWT_COOKIE_NAME:user-service}
+    jwtSecret: "${JWT_SECRET:c03a546beee68b92784e681b537540349c386d02b6dbf9917cf438e47e5c1ee93fdebc55652af00cb3ebc6bff17dc3bedaa33ea6cfdd1959b114ede448c4ac87853021cc3c32f1ef6d5951d0c6b1398bc01c563c7638a0000e6b4064c5733c5552aa232aa8547be8b4b1f8dddacac8256f319acd6832ff5ae9365358e20624fc99dab8489d33e582cf621444e9d944442559707a1f92d556862bb53ce12deb3ec17d3a8bc3c7159b672e4f02189af368a8e71d8547a5b71518de7a1d9a4997d20b4f646fae73e73c26666799b21cdec5544b74319756bb0a27d4e124ec5f13bf8f338ce3ba5ad8b3af1a8aae211bef3eb6ca4f8a24e6b80662c94530e168b0dc}"
+    jwtExpirationMs: ${USER_SERVICE_APP_JWT_EXPIRATION_MS:86400000}
+
 eureka:
   instance:
     preferIpAddress: true
     instanceId: ${spring.application.name}:${server.port}
-    hostname: localhost
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
     metadataMap:
       instanceId: ${spring.application.name}:${server.port}
   client:
     registerWithEureka: true
     fetchRegistry: true
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
-# ELK configuration - include in all services
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka/}
+
 logstash:
   host: ${LOGSTASH_HOST:localhost}
   port: ${LOGSTASH_PORT:5000}
 
-# In application.yml or application.properties
 management:
   endpoints:
     web:
@@ -91,6 +88,7 @@ management:
   endpoint:
     env:
       show-values: ALWAYS
+
 logging:
   level:
     org.springframework.cloud.gateway: DEBUG
@@ -100,8 +98,8 @@ logging:
     org.springframework.web.cors: DEBUG
     io.github.resilience4j: DEBUG
     org.springframework.boot.autoconfigure: DEBUG
-    com.Ecommerce: DEBUG  # Your package
-    org.springframework.kafka: DEBUG
-    org.apache.kafka: WARN
+    com.Ecommerce: DEBUG
+    org.springframework.kafka: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA:DEBUG}
+    org.apache.kafka: ${LOGGING_LEVEL_ORG_APACHE_KAFKA:WARN}
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
