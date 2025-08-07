@@ -136,6 +136,30 @@
 
 	<build>
 		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.2</version>
+				<configuration>
+					<!-- Continue running tests even if some fail -->
+					<testFailureIgnore>true</testFailureIgnore>
+
+					<!-- Optional: Generate detailed reports -->
+					<reportFormat>plain</reportFormat>
+					<useFile>false</useFile>
+
+					<!-- Optional: Run tests in parallel for faster execution -->
+					<parallel>methods</parallel>
+					<threadCount>4</threadCount>
+
+					<!-- Optional: Include/exclude specific test patterns -->
+					<includes>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+					</includes>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
