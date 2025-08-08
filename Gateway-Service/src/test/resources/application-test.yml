@@ -1,0 +1,35 @@
+server:
+  port: 0
+
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6370 # Different port for tests
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+
+# Test-specific configurations
+gateway1:
+  jwt:
+    secret: "test-secret-key-for-testing-purposes-only"
+
+# Reduce timeouts for faster tests
+resilience4j:
+  circuitbreaker:
+    instances:
+      test-cb:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 1s
+
+logging:
+  level:
+    com.Ecommerce.Gateway_Service: DEBUG
+    org.springframework.cloud.gateway: DEBUG
