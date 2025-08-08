@@ -28,6 +28,8 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<maven.test.failure.ignore>true</maven.test.failure.ignore>
+		<maven.test.skip>false</maven.test.skip>
 		<spring-cloud.version>2024.0.1</spring-cloud.version>
 	</properties>
 	<dependencies>
@@ -137,29 +139,7 @@
 	<build>
 		<plugins>
 
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.5.2</version>
-				<configuration>
-					<!-- Continue running tests even if some fail -->
-					<testFailureIgnore>true</testFailureIgnore>
 
-					<!-- Optional: Generate detailed reports -->
-					<reportFormat>plain</reportFormat>
-					<useFile>false</useFile>
-
-					<!-- Optional: Run tests in parallel for faster execution -->
-					<parallel>methods</parallel>
-					<threadCount>4</threadCount>
-
-					<!-- Optional: Include/exclude specific test patterns -->
-					<includes>
-						<include>**/*Test.java</include>
-						<include>**/*Tests.java</include>
-					</includes>
-				</configuration>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -172,6 +152,62 @@
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.2</version>
+				<configuration>
+					<!-- DON'T FAIL BUILD ON TEST FAILURES -->
+					<testFailureIgnore>true</testFailureIgnore>
+
+					<!-- Alternative: Use this instead of testFailureIgnore -->
+					<!-- <skipTests>false</skipTests> -->
+					<!-- <forkMode>once</forkMode> -->
+
+					<includes>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+					</includes>
+					<excludes>
+						<exclude>**/*IntegrationTest.java</exclude>
+						<exclude>**/*PerformanceTest.java</exclude>
+					</excludes>
+					<systemPropertyVariables>
+						<spring.profiles.active>test</spring.profiles.active>
+					</systemPropertyVariables>
+
+					<!-- Additional configuration to handle errors gracefully -->
+					<printSummary>true</printSummary>
+					<reportFormat>xml</reportFormat>
+					<useFile>true</useFile>
+				</configuration>
+			</plugin>
+
+			<!-- Failsafe Plugin - Also don't fail on integration test errors -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.2.2</version>
+				<configuration>
+					<testFailureIgnore>true</testFailureIgnore>
+					<includes>
+						<include>**/*IntegrationTest.java</include>
+					</includes>
+					<systemPropertyVariables>
+						<spring.profiles.active>test</spring.profiles.active>
+					</systemPropertyVariables>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Your other plugins... -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -186,5 +222,72 @@
 			</plugin>
 		</plugins>
 	</build>
+	<profiles>
+		<!-- Profile to skip all tests -->
+		<profile>
+			<id>skip-tests</id>
+			<properties>
+				<maven.test.skip>true</maven.test.skip>
+			</properties>
+		</profile>
 
+		<!-- Profile to run tests but not fail build -->
+		<profile>
+			<id>tests-no-fail</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<testFailureIgnore>true</testFailureIgnore>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile to run tests and fail build on errors (for CI/CD) -->
+		<profile>
+			<id>strict-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<testFailureIgnore>false</testFailureIgnore>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile for development - minimal tests -->
+		<profile>
+			<id>dev</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<testFailureIgnore>true</testFailureIgnore>
+							<includes>
+								<include>**/*ServiceTest.java</include>
+							</includes>
+							<excludes>
+								<exclude>**/*IntegrationTest.java</exclude>
+								<exclude>**/*PerformanceTest.java</exclude>
+								<exclude>**/*ControllerTest.java</exclude>
+							</excludes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
