@@ -88,18 +88,18 @@ management:
   endpoint:
     env:
       show-values: ALWAYS
-
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
-    org.springframework.web: DEBUG
-    com.Ecommerce.Gateway_Service: DEBUG
-    org.springframework.data.redis: DEBUG
-    org.springframework.web.cors: DEBUG
-    io.github.resilience4j: DEBUG
-    org.springframework.boot.autoconfigure: DEBUG
-    com.Ecommerce: DEBUG
-    org.springframework.kafka: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA:DEBUG}
-    org.apache.kafka: ${LOGGING_LEVEL_ORG_APACHE_KAFKA:WARN}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+#
+#logging:
+#  level:
+#    org.springframework.cloud.gateway: DEBUG
+#    org.springframework.web: DEBUG
+#    com.Ecommerce.Gateway_Service: DEBUG
+#    org.springframework.data.redis: DEBUG
+#    org.springframework.web.cors: DEBUG
+#    io.github.resilience4j: DEBUG
+#    org.springframework.boot.autoconfigure: DEBUG
+#    com.Ecommerce: DEBUG
+#    org.springframework.kafka: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA:DEBUG}
+#    org.apache.kafka: ${LOGGING_LEVEL_ORG_APACHE_KAFKA:WARN}
+#  pattern:
+#    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
