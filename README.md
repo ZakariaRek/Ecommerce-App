@@ -1091,6 +1091,285 @@ graph TB
     M --> R[Event-Driven Scalability]
 ```
 
+## 🚀 CI/CD Pipeline Architecture
+
+NexusCommerce implements a sophisticated **CI/CD pipeline** for each microservice, ensuring code quality, security, and automated deployments. Every service includes a dedicated `Jenkinsfile` that orchestrates a comprehensive build, test, and deployment process.
+
+![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Hub-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)
+![Trivy](https://img.shields.io/badge/Trivy_Security-1904DA?style=for-the-badge&logo=trivy&logoColor=white)
+
+### 🎯 **Pipeline Overview**
+
+Each microservice follows a standardized **10-stage CI/CD pipeline** that ensures quality, security, and consistency across all services:
+
+```mermaid
+graph LR
+    A[📥 Checkout] --> B[🔨 Build]
+    B --> C[🧪 Test]
+    C --> D[🔍 SonarQube Analysis]
+    D --> E[🚦 Quality Gate]
+    E --> F[📦 Package]
+    F --> G[🐳 Docker Build]
+    G --> H[🔒 Security Scan]
+    H --> I[🏃 Deploy]
+    I --> J[📤 Push to Registry]
+    
+    style A fill:#e3f2fd
+    style D fill:#f3e5f5
+    style H fill:#ffebee
+    style J fill:#e8f5e8
+```
+
+### 🛠️ **Pipeline Stages Breakdown**
+
+#### **Stage 1: 📥 Checkout**
+```groovy
+stage('Checkout') {
+    steps {
+        checkout([$class: 'GitSCM',
+            branches: [[name: '*/main']],
+            userRemoteConfigs: [[url: 'https://github.com/ZakariaRek/Ecommerce-App']],
+            extensions: [[$class: 'SparseCheckoutPaths']]
+        ])
+    }
+}
+```
+- **Smart Git Integration**: Sparse checkout for service-specific code
+- **Branch Strategy**: Main branch deployment with feature branch support
+- **Credential Management**: Secure GitHub integration
+
+#### **Stage 2: 🔨 Build Application**
+```groovy
+stage('Build Application') {
+    steps {
+        bat '''
+            mvn clean compile
+                -Dmaven.compiler.source=17
+                -Dmaven.compiler.target=17
+        '''
+    }
+}
+```
+- **Multi-Language Support**: Maven for Java services, Go build for Go services
+- **Standardized JDK**: Java 17 across all Spring Boot services
+- **Clean Builds**: Ensures consistent build environment
+
+#### **Stage 3: 🧪 Run Tests**
+```groovy
+stage('Run Tests') {
+    steps {
+        bat '''
+            mvn test
+                -Dmaven.test.failure.ignore=true
+                -Dspring.profiles.active=test
+        '''
+    }
+    post {
+        always {
+            junit testResults: 'target/surefire-reports/*.xml'
+            archiveArtifacts artifacts: 'target/site/jacoco/**/*'
+        }
+    }
+}
+```
+- **Comprehensive Testing**: Unit tests, integration tests, coverage reports
+- **JaCoCo Integration**: Code coverage analysis and reporting
+- **Flexible Execution**: Continue pipeline even with test failures for analysis
+
+#### **Stage 4: 🔍 SonarQube Analysis**
+```groovy
+stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('sonarqube') {
+            bat '''
+                mvn sonar:sonar
+                    -Dsonar.projectKey=E-commerce-User-Service
+                    -Dsonar.host.url=%SONAR_HOST_URL%
+                    -Dsonar.token=%SONAR_AUTH_TOKEN%
+            '''
+        }
+    }
+}
+```
+- **Code Quality Metrics**: Bugs, vulnerabilities, code smells, technical debt
+- **Quality Standards**: Enforced coding standards and best practices
+- **Trend Analysis**: Historical quality metrics tracking
+
+#### **Stage 5: 🚦 Quality Gate**
+```groovy
+stage('Quality Gate') {
+    steps {
+        timeout(time: 2, unit: 'MINUTES') {
+            def qg = waitForQualityGate()
+            if (qg.status != 'OK') {
+                currentBuild.result = 'UNSTABLE'
+            }
+        }
+    }
+}
+```
+- **Automated Quality Control**: Fail-fast on quality issues
+- **Configurable Thresholds**: Coverage, duplication, security ratings
+- **Pipeline Control**: Quality gate failures mark build as unstable
+
+#### **Stage 6: 📦 Package Application**
+```groovy
+stage('Package Application') {
+    steps {
+        bat '''
+            mvn package -DskipTests
+                -Dmaven.compiler.source=17
+        '''
+    }
+}
+```
+- **Artifact Generation**: JAR files for Java services, binaries for Go services
+- **Optimization**: Skip tests during packaging (already executed)
+- **Standardization**: Consistent naming conventions
+
+#### **Stage 7: 🐳 Build Docker Images**
+```groovy
+stage('Build Docker Images') {
+    steps {
+        bat "docker build -t user-service:latest ."
+        bat "docker-compose build"
+    }
+}
+```
+- **Multi-Stage Builds**: Optimized Docker images
+- **Layer Caching**: Efficient build times
+- **Compose Integration**: Service orchestration support
+
+#### **Stage 8: 🔒 Security Scan with Trivy**
+```groovy
+stage('Security Scan with Trivy') {
+    steps {
+        bat """
+            trivy image --severity HIGH,CRITICAL 
+                --exit-code 1 user-service:latest
+        """
+        archiveArtifacts artifacts: 'trivy-report.*'
+    }
+}
+```
+- **Vulnerability Scanning**: Container image security analysis
+- **Severity Filtering**: Focus on HIGH and CRITICAL vulnerabilities
+- **Comprehensive Reporting**: JSON and table format reports
+- **Pipeline Integration**: Fail builds on critical security issues
+
+#### **Stage 9: 🏃 Deploy & Test**
+```groovy
+stage('Run Containers') {
+    steps {
+        bat "docker-compose up -d"
+        // Health checks and integration tests
+    }
+}
+```
+- **Container Orchestration**: Docker Compose for local testing
+- **Health Verification**: Application startup and readiness checks
+- **Integration Testing**: Service-to-service communication validation
+
+#### **Stage 10: 📤 Push to Docker Hub**
+```groovy
+stage('Push to Docker Hub') {
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds')]) {
+            bat "docker push yahyazakaria123/ecommerce-app-user-service:latest"
+        }
+    }
+}
+```
+- **Registry Integration**: Automated Docker Hub publishing
+- **Secure Credentials**: Jenkins credential management
+- **Tagging Strategy**: Latest, version-specific, and branch-based tags
+
+### 🎭 **Service-Specific Pipeline Configurations**
+
+Each service has tailored pipeline configurations based on technology stack:
+
+#### **🟢 Spring Boot Services** (User, Product, Order, Loyalty, Notification)
+- **Maven Build System**: `mvn clean compile test package`
+- **Spring Profiles**: Test-specific configurations
+- **JaCoCo Coverage**: Minimum 70% coverage requirement
+- **Spring Boot Testing**: `@SpringBootTest`, `@TestContainers`
+
+#### **🔵 Go Services** (Cart, Payment, Shipping)
+- **Go Build Tools**: `go build`, `go test`, `go mod tidy`
+- **Coverage Analysis**: `go test -coverprofile=coverage.out`
+- **Static Analysis**: `golangci-lint` integration
+- **Performance Testing**: Benchmark tests with `go test -bench`
+
+#### **🟡 API Gateway** (Spring Cloud Gateway)
+- **Gateway-Specific Tests**: Route configuration validation
+- **Circuit Breaker Testing**: Resilience pattern verification
+- **Performance Testing**: Load testing with Gatling
+- **Configuration Validation**: YAML syntax and service discovery
+
+### 🔐 **Security & Quality Assurance**
+
+#### **🛡️ Security Scanning Pipeline**
+```mermaid
+graph TB
+    subgraph "Security Analysis"
+        A[Trivy Container Scan] --> B[Vulnerability Database]
+        C[SonarQube Security Hotspots] --> D[OWASP Top 10]
+        E[Dependency Check] --> F[Known CVEs]
+    end
+    
+    subgraph "Quality Metrics"
+        G[Code Coverage] --> H[Minimum 70%]
+        I[Code Duplication] --> J[Maximum 3%]
+        K[Complexity] --> L[Cyclomatic < 10]
+    end
+    
+    subgraph "Pipeline Gates"
+        M[Security Gate] --> N{Critical Vulns?}
+        O[Quality Gate] --> P{Standards Met?}
+        N -->|Yes| Q[Fail Build]
+        N -->|No| R[Continue]
+        P -->|No| S[Mark Unstable]
+        P -->|Yes| R
+    end
+
+    style A fill:#ffebee
+    style C fill:#ffebee
+    style E fill:#ffebee
+    style G fill:#e8f5e8
+    style I fill:#e8f5e8
+    style K fill:#e8f5e8
+```
+
+#### **📊 Quality Metrics Dashboard**
+
+Our SonarQube integration provides comprehensive quality insights:
+
+- **Code Coverage**: Minimum 70% across all services
+- **Security Rating**: A rating required for production deployment
+- **Maintainability**: Technical debt ratio < 5%
+- **Reliability**: Bug-free code deployment
+- **Duplication**: Less than 3% code duplication
+
+### 🚢 **Deployment Strategies**
+
+#### **🌱 Environment Promotion**
+```mermaid
+graph LR
+    A[Feature Branch] --> B[Dev Environment]
+    B --> C[Integration Tests]
+    C --> D[Staging Environment]
+    D --> E[User Acceptance Tests]
+    E --> F[Production Environment]
+    
+    G[Hotfix Branch] --> H[Production Direct]
+    
+    style A fill:#e3f2fd
+    style D fill:#fff3e0
+    style F fill:#e8f5e8
+    style G fill:#ffebee
+```
 ## 🚀 Getting Started
 
 ### Prerequisites
