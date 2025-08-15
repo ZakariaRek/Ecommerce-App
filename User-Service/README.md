@@ -164,16 +164,16 @@ graph TB
         end
         
         subgraph "Business Layer"
-            UserService[User Service]
-            RoleService[Role Service]
-            AddressService[Address Service]
-            EventService[Kafka Event Service]
+            UserSvc[User Service]
+            RoleSvc[Role Service]
+            AddressSvc[Address Service]
+            EventSvc[Kafka Event Service]
         end
         
         subgraph "Security Layer"
             AuthFilter[JWT Auth Filter]
             OAuth2Handler[OAuth2 Handler]
-            SecurityConfig[Security Configuration]
+            SecConfig[Security Configuration]
         end
         
         subgraph "Data Access Layer"
@@ -191,19 +191,19 @@ graph TB
         end
     end
     
-    REST --> UserService
-    REST --> RoleService
-    REST --> AddressService
+    REST --> UserSvc
+    REST --> RoleSvc
+    REST --> AddressSvc
     
-    UserService --> UserRepo
-    RoleService --> RoleRepo
-    AddressService --> AddressRepo
+    UserSvc --> UserRepo
+    RoleSvc --> RoleRepo
+    AddressSvc --> AddressRepo
     
-    EntityListeners --> EventService
-    EventService --> KafkaProducer
+    EntityListeners --> EventSvc
+    EventSvc --> KafkaProducer
     
-    AuthFilter --> SecurityConfig
-    OAuth2Handler --> SecurityConfig
+    AuthFilter --> SecConfig
+    OAuth2Handler --> SecConfig
     
     UserRepo --> MongoConfig
     KafkaProducer --> KafkaConsumer
