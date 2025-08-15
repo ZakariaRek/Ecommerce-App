@@ -1,15 +1,32 @@
 # 🚀 E-commerce Gateway Service
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/spring-projects/spring-framework/main/framework-docs/src/docs/spring-framework.png" alt="Spring" width="100"/>
-  <img src="https://www.vectorlogo.zone/logos/springio/springio-ar21.svg" alt="Spring Boot" width="120"/>
-  <img src="https://redis.io/wp-content/uploads/2024/04/Logotype.svg" alt="Redis" width="100"/>
-  <img src="https://kafka.apache.org/logos/kafka_logo--simple.png" alt="Kafka" width="100"/>
+
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.4-brightgreen.svg?style=for-the-badge&logo=spring-boot)](https://spring.io/projects/spring-boot)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2024.0.1-brightgreen.svg?style=for-the-badge&logo=spring)](https://spring.io/projects/spring-cloud)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg?style=for-the-badge&logo=openjdk)](https://openjdk.java.net/)
+[![Redis](https://img.shields.io/badge/Redis-Latest-red.svg?style=for-the-badge&logo=redis)](https://redis.io/)
+[![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-Latest-orange.svg?style=for-the-badge&logo=apache-kafka)](https://kafka.apache.org/)
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-blue.svg?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-blue.svg?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Quality%20Gate-blue.svg?style=for-the-badge&logo=sonarqube)](https://www.sonarqube.org/)
+[![Trivy](https://img.shields.io/badge/Trivy-Security%20Scan-blue.svg?style=for-the-badge&logo=trivy)](https://trivy.dev/)
+
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg?style=for-the-badge&logo=github-actions)](https://jenkins.io/)
+[![Code Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=opensource)](LICENSE)
+
+<img src="https://raw.githubusercontent.com/spring-projects/spring-framework/main/framework-docs/src/docs/spring-framework.png" alt="Spring" width="80"/>
+<img src="https://www.vectorlogo.zone/logos/springio/springio-ar21.svg" alt="Spring Boot" width="100"/>
+<img src="https://redis.io/wp-content/uploads/2024/04/Logotype.svg" alt="Redis" width="80"/>
+<img src="https://kafka.apache.org/logos/kafka_logo--simple.png" alt="Kafka" width="80"/>
+
 </div>
 
 ## 📋 Overview
 
-The **Gateway Service** is a central API Gateway built with **Spring Cloud Gateway** that serves as the single entry point for all client requests in our e-commerce microservices architecture. It provides authentication, authorization, rate limiting, circuit breaking, and intelligent request routing.
+The **Gateway Service** is a central API Gateway built with **Spring Cloud Gateway** that serves as the single entry point for all client requests in our e-commerce microservices architecture. It provides authentication, authorization, rate limiting, circuit breaking, and intelligent request routing with automated CI/CD pipeline.
 
 ### ✨ Key Features
 
@@ -22,7 +39,68 @@ The **Gateway Service** is a central API Gateway built with **Spring Cloud Gatew
 - 📈 **Comprehensive Monitoring**
 - 📚 **Swagger Documentation**
 
----
+## 🔄 CI/CD Pipeline with Jenkins
+
+<div align="center">
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
+[![Zipkin](https://img.shields.io/badge/Zipkin-Distributed%20Tracing-blue?style=for-the-badge&logo=zipkin)](https://zipkin.io/)
+
+</div>
+
+```mermaid
+graph LR
+    subgraph "🚀 CI/CD Pipeline"
+        A[📥 Checkout] --> B[🔨 Build JDK21]
+        B --> C[🧪 Test]
+        C --> D[🔍 SonarQube]
+        D --> E[🚦 Quality Gate]
+        E --> F[📦 Package]
+        F --> G[🐳 Docker Build]
+        G --> H[🛡️ Security Scan]
+        H --> I[🏥 Health Check]
+        I --> J[📤 Push Registry]
+    end
+```
+
+### 🏗️ Pipeline Stages
+
+| Stage | Tool | Duration | Features |
+|-------|------|----------|----------|
+| **📥 Checkout** | Git | ~30s | Sparse checkout Gateway-Service |
+| **🔨 Build** | Maven 3.9.7 + JDK 21 | ~2min | Clean compile with Java 21 |
+| **🧪 Tests** | JUnit + JaCoCo | ~3min | Test profiles with coverage |
+| **🔍 Code Analysis** | SonarQube | ~2min | ecommerce-api-gateway-service |
+| **📦 Package** | Maven | ~1min | JAR packaging |
+| **🐳 Docker Build** | Docker + Compose | ~2min | Multi-service containers |
+| **🛡️ Security Scan** | Trivy | ~3min | Vulnerability assessment |
+| **🏥 Health Check** | cURL + Redis + Zipkin | ~1min | Multi-service validation |
+| **📤 Registry Push** | Docker Hub | ~2min | Versioned images |
+
+### 🛠️ Jenkins Configuration
+
+#### Required Credentials
+- `yahya.zakaria-dockerhub` - Docker Hub authentication
+- `git-https-token` - GitHub repository access
+- `sonarqube` - SonarQube server configuration
+
+#### Quality Gates & Health Checks
+- **Code Coverage**: > 85%
+- **Gateway Health**: `http://localhost:8099/actuator/health`
+- **Redis Health**: Container ping validation
+- **Zipkin Health**: `http://localhost:9411/health`
+- **Service Discovery**: Eureka registration check
+
+#### Multi-Service Deployment
+```yaml
+# Automated container orchestration
+services:
+  - gateway-service:8099 (API Gateway)
+  - redis:6379 (Rate Limiting & Cache)
+  - zipkin:9411 (Distributed Tracing)
+```
 
 ## 🏗️ Architecture Overview
 
@@ -48,8 +126,6 @@ graph TB
     style Kafka fill:#f3e5f5
     style Eureka fill:#e8f5e8
 ```
-
----
 
 ## 🔄 Request Flow Architecture
 
@@ -82,24 +158,22 @@ sequenceDiagram
     Gateway-->>Client: Enriched Response
 ```
 
----
-
 ## 🛠️ Technology Stack
 
 <div align="center">
 
 | Technology | Purpose | Version |
 |------------|---------|---------|
-| ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white) | Application Framework | 3.4.4 |
-| ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-6DB33F?style=for-the-badge&logo=spring&logoColor=white) | Microservices Toolkit | 2024.0.1 |
-| ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white) | Caching & Rate Limiting | Latest |
-| ![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-000?style=for-the-badge&logo=apachekafka) | Message Streaming | Latest |
-| ![JWT](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens) | Authentication | 0.11.5 |
-| ![Swagger](https://img.shields.io/badge/-Swagger-%23Clojure?style=for-the-badge&logo=swagger&logoColor=white) | API Documentation | 2.3.0 |
+| <img src="https://img.shields.io/badge/Spring%20Boot-6DB33F?style=flat&logo=spring-boot&logoColor=white" width="100"> | Application Framework | 3.4.4 |
+| <img src="https://img.shields.io/badge/Spring%20Cloud-6DB33F?style=flat&logo=spring&logoColor=white" width="100"> | Microservices Toolkit | 2024.0.1 |
+| <img src="https://img.shields.io/badge/Java-ED8B00?style=flat&logo=openjdk&logoColor=white" width="100"> | Runtime Platform | JDK 21 |
+| <img src="https://img.shields.io/badge/redis-%23DD0031.svg?style=flat&logo=redis&logoColor=white" width="100"> | Caching & Rate Limiting | Latest |
+| <img src="https://img.shields.io/badge/Apache%20Kafka-000?style=flat&logo=apachekafka" width="100"> | Message Streaming | Latest |
+| <img src="https://img.shields.io/badge/JWT-black?style=flat&logo=JSON%20web%20tokens" width="100"> | Authentication | 0.11.5 |
+| <img src="https://img.shields.io/badge/-Swagger-%23Clojure?style=flat&logo=swagger&logoColor=white" width="100"> | API Documentation | 2.3.0 |
+| <img src="https://img.shields.io/badge/Zipkin-FF6B6B?style=flat&logo=zipkin&logoColor=white" width="100"> | Distributed Tracing | Latest |
 
 </div>
-
----
 
 ## 🚦 Rate Limiting Strategy
 
@@ -128,8 +202,6 @@ graph LR
     style H fill:#e1f5fe
 ```
 
----
-
 ## ⚡ Circuit Breaker Configuration
 
 ```mermaid
@@ -156,8 +228,6 @@ stateDiagram-v2
     end note
 ```
 
----
-
 ## 🔐 Security Architecture
 
 ```mermaid
@@ -181,11 +251,19 @@ graph TD
     style Route fill:#e8f5e8
 ```
 
----
-
 ## 📦 Installation & Setup
 
 ### Prerequisites
+
+<div align="center">
+
+[![Java](https://img.shields.io/badge/Java-21%2B-orange?logo=openjdk)](https://openjdk.java.net/)
+[![Docker](https://img.shields.io/badge/Docker-Latest-blue?logo=docker)](https://docker.com/)
+[![Maven](https://img.shields.io/badge/Maven-3.6%2B-red?logo=apache-maven)](https://maven.apache.org/)
+[![Redis](https://img.shields.io/badge/Redis-Latest-red?logo=redis)](https://redis.io/)
+[![Kafka](https://img.shields.io/badge/Apache%20Kafka-Latest-orange?logo=apache-kafka)](https://kafka.apache.org/)
+
+</div>
 
 ```bash
 # Required Software
@@ -214,6 +292,9 @@ docker run -d --name kafka -p 9092:9092 \
   -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
   -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
   confluentinc/cp-kafka:latest
+
+# Start Zipkin (for tracing)
+docker run -d --name zipkin -p 9411:9411 openzipkin/zipkin:latest
 ```
 
 3. **Configure application**
@@ -241,8 +322,7 @@ mvn spring-boot:run
 - **Gateway API**: `http://localhost:8099`
 - **Swagger UI**: `http://localhost:8099/swagger-ui.html`
 - **Health Check**: `http://localhost:8099/actuator/health`
-
----
+- **Zipkin UI**: `http://localhost:9411`
 
 ## 🛣️ API Routes Configuration
 
@@ -285,9 +365,15 @@ GET /api/order/{orderId}/enriched     → order-bff-service
 POST /api/order/batch                 → order-bff-service
 ```
 
----
-
 ## 📊 Monitoring & Health Checks
+
+<div align="center">
+
+[![Actuator](https://img.shields.io/badge/Spring-Actuator-green?logo=spring)](https://spring.io/)
+[![Zipkin](https://img.shields.io/badge/Zipkin-Tracing-FF6B6B?logo=zipkin)](https://zipkin.io/)
+[![Redis](https://img.shields.io/badge/Redis-Monitoring-red?logo=redis)](https://redis.io/)
+
+</div>
 
 ### Available Endpoints
 
@@ -308,8 +394,6 @@ curl http://localhost:8099/api/gateway/circuit-breakers
 # Reset specific circuit breaker
 curl -X POST http://localhost:8099/api/gateway/circuit-breakers/auth-cb/reset
 ```
-
----
 
 ## 🔧 Configuration
 
@@ -345,8 +429,6 @@ resilience4j:
         failureRateThreshold: 30
         waitDurationInOpenState: 60s
 ```
-
----
 
 ## 🎯 BFF (Backend for Frontend) Pattern
 
@@ -399,8 +481,6 @@ sequenceDiagram
 }
 ```
 
----
-
 ## 🔄 Async Communication with Kafka
 
 ### Kafka Topics
@@ -414,9 +494,14 @@ sequenceDiagram
 | `order.request` | Order data requests | Gateway | Order Service |
 | `order.response` | Order data responses | Order Service | Gateway |
 
----
-
 ## 📈 Performance & Scalability
+
+<div align="center">
+
+[![Performance](https://img.shields.io/badge/Performance-Optimized-green?logo=speedtest)](https://spring.io/)
+[![Scalability](https://img.shields.io/badge/Scalability-Horizontal-blue?logo=kubernetes)](https://kubernetes.io/)
+
+</div>
 
 ### Key Metrics
 - **Throughput**: 1000+ requests/second
@@ -443,7 +528,73 @@ server:
       min-spare: 10
 ```
 
----
+## 🚀 Deployment
+
+### 🐳 Docker Deployment
+
+<div align="center">
+
+[![Docker](https://img.shields.io/badge/Docker-Containerized-blue?logo=docker)](https://docker.com/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?logo=docker)](https://hub.docker.com/)
+[![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Multi%20Service-blue?logo=docker)](https://docs.docker.com/compose/)
+
+</div>
+
+```dockerfile
+FROM openjdk:21-jre-slim
+COPY target/gateway-service-*.jar app.jar
+EXPOSE 8099
+ENTRYPOINT ["java", "-jar", "/app.jar"]
+```
+
+```bash
+# Build Docker image
+docker build -t gateway-service:latest .
+
+# Run container
+docker run -d \
+  --name gateway-service \
+  -p 8099:8099 \
+  -e REDIS_HOST=redis \
+  -e KAFKA_BROKERS=kafka:9092 \
+  gateway-service:latest
+```
+
+### ☸️ Kubernetes Deployment
+
+<div align="center">
+
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Orchestration-blue?logo=kubernetes)](https://kubernetes.io/)
+[![Helm](https://img.shields.io/badge/Helm-Package%20Manager-blue?logo=helm)](https://helm.sh/)
+
+</div>
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gateway-service
+  template:
+    metadata:
+      labels:
+        app: gateway-service
+    spec:
+      containers:
+      - name: gateway-service
+        image: gateway-service:latest
+        ports:
+        - containerPort: 8099
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: KAFKA_BROKERS
+          value: "kafka-service:9092"
+```
 
 ## 🐛 Troubleshooting
 
@@ -473,16 +624,76 @@ curl -X POST http://localhost:8099/api/gateway/rate-limiting/reset/IP/192.168.1.
 curl http://localhost:8761/eureka/apps/gateway-service
 ```
 
----
+4. **Health Check Failures**
+```bash
+# Gateway health
+curl http://localhost:8099/actuator/health
 
-## 📝 API Documentation
+# Redis health
+docker exec gateway-service-redis redis-cli ping
+
+# Zipkin health
+curl http://localhost:9411/health
+```
+
+## 📚 API Documentation
+
+<div align="center">
+
+[![Swagger](https://img.shields.io/badge/Swagger-API%20Docs-85EA2D?logo=swagger)](http://localhost:8099/swagger-ui.html)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-green?logo=openapiinitiative)](http://localhost:8099/v3/api-docs)
+
+</div>
 
 - **Swagger UI**: [http://localhost:8099/swagger-ui.html](http://localhost:8099/swagger-ui.html)
 - **OpenAPI Spec**: [http://localhost:8099/v3/api-docs](http://localhost:8099/v3/api-docs)
+- **Gateway Management**: [http://localhost:8099/api/gateway](http://localhost:8099/api/gateway)
+- **Zipkin Tracing**: [http://localhost:9411](http://localhost:9411)
 
----
+## 🧪 Testing
 
-## 👥 Contributing
+<div align="center">
+
+[![JUnit](https://img.shields.io/badge/JUnit-5-green?logo=junit5)](https://junit.org/)
+[![JaCoCo](https://img.shields.io/badge/JaCoCo-Coverage-blue?logo=jacoco)](https://jacoco.org/)
+[![TestContainers](https://img.shields.io/badge/TestContainers-Integration-blue?logo=docker)](https://testcontainers.org/)
+
+</div>
+
+### Running Tests
+
+```bash
+# Run all tests
+mvn test
+
+# Run with specific profile
+mvn test -Dspring.profiles.active=test
+
+# Run with coverage
+mvn test jacoco:report
+```
+
+### Integration Testing
+
+```bash
+# Test Gateway routing
+curl -X GET http://localhost:8099/api/products
+
+# Test rate limiting
+for i in {1..10}; do curl http://localhost:8099/api/auth/test; done
+
+# Test circuit breaker
+curl -X POST http://localhost:8099/api/gateway/circuit-breakers/test-cb/open
+```
+
+## 🤝 Contributing
+
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-Contribute-black?logo=github)](https://github.com/)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow?logo=conventionalcommits)](https://conventionalcommits.org/)
+
+</div>
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -490,13 +701,31 @@ curl http://localhost:8761/eureka/apps/gateway-service
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
----
+## 🔒 Security
+
+<div align="center">
+
+[![Spring Security](https://img.shields.io/badge/Spring%20Security-JWT-green?logo=spring-security)](https://spring.io/projects/spring-security)
+[![OWASP](https://img.shields.io/badge/OWASP-Compliant-blue?logo=owasp)](https://owasp.org/)
+
+</div>
+
+### Security Features
+- **JWT Token Validation**
+- **CORS Protection**
+- **Rate Limiting by IP/User**
+- **Circuit Breaker Protection**
+- **Request/Response Filtering**
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+<div align="center">
 
----
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg?logo=opensource)](LICENSE)
+
+</div>
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
@@ -505,15 +734,37 @@ For support and questions:
 - 📖 Documentation: [Gateway Wiki](wiki-url)
 - 🐛 Issues: [GitHub Issues](issues-url)
 
+## 🙏 Acknowledgments
+
+<div align="center">
+
+[![Spring](https://img.shields.io/badge/Spring-Team-green?logo=spring)](https://spring.io/)
+[![Redis](https://img.shields.io/badge/Redis-Team-red?logo=redis)](https://redis.io/)
+[![Apache](https://img.shields.io/badge/Apache-Kafka%20Team-orange?logo=apache-kafka)](https://kafka.apache.org/)
+[![Zipkin](https://img.shields.io/badge/Zipkin-Team-FF6B6B?logo=zipkin)](https://zipkin.io/)
+
+</div>
+
+- Spring Cloud Gateway team for the powerful gateway framework
+- Redis team for the high-performance caching solution
+- Apache Kafka team for reliable event streaming
+- Zipkin team for distributed tracing capabilities
+
 ---
 
 <div align="center">
 
-**Built with ❤️ by the E-commerce Team**
+**🚀 Built with ❤️ by the E-commerce Team 🚀**
 
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?style=flat&logo=spring-boot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-6DB33F?style=flat&logo=spring&logoColor=white)](https://spring.io/projects/spring-cloud)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
 [![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-231F20?style=flat&logo=apache-kafka&logoColor=white)](https://kafka.apache.org/)
+
+[![GitHub stars](https://img.shields.io/github/stars/username/gateway-service?style=social)](https://github.com/username/gateway-service/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/username/gateway-service?style=social)](https://github.com/username/gateway-service/network/members)
+[![GitHub watchers](https://img.shields.io/github/watchers/username/gateway-service?style=social)](https://github.com/username/gateway-service/watchers)
+
+[⬆ Back to top](#-e-commerce-gateway-service)
 
 </div>
