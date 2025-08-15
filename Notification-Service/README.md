@@ -8,6 +8,9 @@
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-C71A36?logo=apachemaven&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Jenkins](https://img.shields.io/badge/Jenkins-D24939?logo=jenkins&logoColor=white)
+![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?logo=sonarqube&logoColor=white)
+![Trivy](https://img.shields.io/badge/Trivy-1904DA?logo=trivy&logoColor=white)
 
 *A comprehensive notification microservice for e-commerce platforms with real-time notifications, email templates, and event-driven architecture*
 
@@ -27,6 +30,7 @@ The Notification Service is a robust microservice designed to handle all notific
 - 🎯 **Smart Routing**: Intelligent notification routing based on user preferences
 - 📊 **Analytics & Monitoring**: Comprehensive logging and metrics
 - 🔐 **Secure**: Built-in security features and data validation
+- 🚀 **CI/CD Ready**: Complete Jenkins pipeline with automated testing and deployment
 
 ## 🏗️ Architecture
 
@@ -117,6 +121,247 @@ graph TB
 | **Documentation** | SpringDoc OpenAPI | 2.3.0 |
 | **Monitoring** | ELK Stack | - |
 | **Build Tool** | Maven | - |
+| **CI/CD** | Jenkins | Latest |
+| **Code Quality** | SonarQube | Latest |
+| **Security Scanning** | Trivy | 0.48.3+ |
+| **Containerization** | Docker | Latest |
+
+## 🔄 CI/CD Pipeline
+
+<div align="center">
+
+![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
+![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge&logo=trivy&logoColor=white)
+
+</div>
+
+### 🚀 Pipeline Overview
+
+Our Jenkins CI/CD pipeline ensures code quality, security, and reliable deployment through automated testing, static analysis, security scanning, and containerized deployment.
+
+```mermaid
+graph TD
+    A[🔄 Git Push] --> B[📥 Checkout Code]
+    B --> C[🏗️ Build Application]
+    C --> D[🧪 Run Tests]
+    D --> E[📊 SonarQube Analysis]
+    E --> F[✅ Quality Gate]
+    F --> G[📦 Package Application]
+    G --> H[🐳 Build Docker Images]
+    H --> I[🔒 Security Scan]
+    I --> J[▶️ Run Containers]
+    J --> K[🚀 Push to Registry]
+    K --> L[✅ Pipeline Complete]
+    
+    D --> M[📊 Test Reports]
+    E --> N[📈 Code Coverage]
+    I --> O[🛡️ Security Reports]
+    
+    style A fill:#ff6b6b
+    style L fill:#51cf66
+    style I fill:#ffd43b
+    style E fill:#339af0
+```
+
+### 🏗️ Pipeline Stages
+
+| Stage | Description | Tools | Duration |
+|-------|-------------|-------|----------|
+| **📥 Checkout** | Clone repository and sparse checkout | Git | ~30s |
+| **🏗️ Build** | Compile Java source code | Maven | ~1-2min |
+| **🧪 Test** | Run unit tests with coverage | JUnit, JaCoCo | ~2-3min |
+| **📊 Analysis** | Static code analysis | SonarQube | ~1-2min |
+| **✅ Quality Gate** | Validate code quality metrics | SonarQube | ~30s |
+| **📦 Package** | Create JAR artifacts | Maven | ~1min |
+| **🐳 Build Images** | Create Docker containers | Docker, Docker Compose | ~2-3min |
+| **🔒 Security Scan** | Vulnerability assessment | Trivy | ~2-4min |
+| **▶️ Deploy** | Start application containers | Docker Compose | ~1min |
+| **🚀 Publish** | Push to Docker Hub | Docker Registry | ~1-2min |
+
+### 📋 Pipeline Configuration
+
+#### Environment Variables
+
+```bash
+# Docker Hub Configuration
+DOCKERHUB_CREDENTIALS=your-dockerhub-credentials-id
+DOCKERHUB_REPO=yourusername/notification-service
+IMAGE_TAG=latest
+
+# Git Configuration
+GIT_CREDENTIALS_ID=git-https-token
+
+# SonarQube Configuration
+SONAR_HOST_URL=http://localhost:9000
+SONAR_AUTH_TOKEN=your-sonar-token
+
+# Trivy Security Scanning
+TRIVY_CACHE_DIR=C:\temp\trivy-cache
+TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db
+TRIVY_JAVA_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-java-db
+```
+
+#### Jenkins Setup Requirements
+
+<div align="center">
+
+![Jenkins](https://img.shields.io/badge/Jenkins-Requirements-D24939?logo=jenkins&logoColor=white)
+
+</div>
+
+**Required Jenkins Plugins:**
+- 🔧 **Pipeline**: Pipeline plugin suite
+- 🐳 **Docker**: Docker Pipeline plugin
+- 📊 **SonarQube**: SonarQube Scanner plugin
+- 🧪 **JUnit**: JUnit plugin for test results
+- 📈 **JaCoCo**: JaCoCo plugin for coverage
+- 🔑 **Credentials**: Credentials Binding plugin
+
+**Required Tools Configuration:**
+- ☕ **JDK 21**: Configured in Global Tool Configuration
+- 📦 **Maven 3.9.7**: Configured as "Maven-3.9.7"
+- 🐳 **Docker**: Available on Jenkins agent
+- 🔍 **Trivy**: Auto-installed during pipeline
+
+### 🔒 Security & Quality Assurance
+
+#### SonarQube Integration
+
+<div align="center">
+
+![SonarQube](https://img.shields.io/badge/Code%20Quality-SonarQube-4E9BCD?logo=sonarqube&logoColor=white)
+
+</div>
+
+**Quality Metrics Tracked:**
+- 🐛 **Bugs**: Code bugs and potential issues
+- 🔒 **Vulnerabilities**: Security vulnerabilities
+- 💨 **Code Smells**: Maintainability issues
+- 📊 **Coverage**: Test coverage percentage
+- 🔄 **Duplications**: Code duplication analysis
+
+**Quality Gate Criteria:**
+- ✅ Coverage > 80%
+- ✅ No new bugs
+- ✅ No new vulnerabilities
+- ✅ Maintainability rating A
+- ✅ Reliability rating A
+
+#### Security Scanning with Trivy
+
+<div align="center">
+
+![Trivy](https://img.shields.io/badge/Security%20Scanning-Trivy-1904DA?logo=trivy&logoColor=white)
+
+</div>
+
+**Security Scans Include:**
+- 🔍 **OS Vulnerabilities**: Operating system packages
+- 📦 **Language Dependencies**: Java/Maven dependencies
+- 🐳 **Container Images**: Docker image vulnerabilities
+- 📝 **Configuration Issues**: Misconfigurations
+- 🔒 **Secret Detection**: Hardcoded secrets
+
+**Vulnerability Severity Levels:**
+- 🔴 **CRITICAL**: Immediate action required
+- 🟠 **HIGH**: Should be fixed soon
+- 🟡 **MEDIUM**: Should be fixed eventually
+- 🔵 **LOW**: Nice to fix
+- ⚪ **UNKNOWN**: Requires investigation
+
+### 📊 Pipeline Monitoring
+
+#### Build Status & Reports
+
+```mermaid
+graph LR
+    A[🏗️ Build] --> B[📊 Test Results]
+    A --> C[📈 Coverage Report]
+    A --> D[🔍 SonarQube Dashboard]
+    A --> E[🛡️ Security Report]
+    A --> F[🐳 Docker Images]
+    
+    B --> G[📋 JUnit Report]
+    C --> H[📊 JaCoCo Report]
+    D --> I[📈 Quality Metrics]
+    E --> J[🔒 Trivy Results]
+    F --> K[📦 Registry Tags]
+```
+
+#### Pipeline Notifications
+
+**Success Notifications:**
+- ✅ Pipeline completed successfully
+- 📊 Links to SonarQube dashboard
+- 🔒 Security scan reports available
+- 🐳 Docker images published
+
+**Failure Notifications:**
+- ❌ Pipeline failed with details
+- 🔍 Links to build logs
+- 📊 Quality gate status
+- 🛠️ Remediation suggestions
+
+### 🚀 Pipeline Execution
+
+#### Triggering the Pipeline
+
+```bash
+# Automatic trigger on push to main branch
+git push origin main
+
+# Manual trigger through Jenkins UI
+# Navigate to Jenkins → Notification-Service → Build Now
+```
+
+#### Pipeline Artifacts
+
+The pipeline generates and archives the following artifacts:
+
+| Artifact | Description | Location |
+|----------|-------------|----------|
+| **📦 JAR File** | Compiled application | `target/*.jar` |
+| **📊 Test Reports** | JUnit test results | `**/surefire-reports/*.xml` |
+| **📈 Coverage Report** | JaCoCo coverage | `target/site/jacoco/**` |
+| **🔒 Security Report** | Trivy scan results | `trivy-report.*` |
+| **📋 Build Logs** | Complete build logs | Jenkins console |
+
+#### Docker Images
+
+**Generated Images:**
+- 🏷️ `notification-service:latest` - Latest build
+- 🔢 `notification-service:build-{BUILD_NUMBER}` - Versioned build
+- 🚀 `{DOCKERHUB_REPO}:latest` - Published to registry
+- 📦 `{DOCKERHUB_REPO}:build-{BUILD_NUMBER}` - Versioned registry
+
+### 🛠️ Pipeline Maintenance
+
+#### Regular Maintenance Tasks
+
+**Weekly:**
+- 🔄 Update Trivy vulnerability database
+- 📊 Review SonarQube quality trends
+- 🧹 Clean up old Docker images
+- 📋 Review pipeline performance metrics
+
+**Monthly:**
+- 🔧 Update Jenkins plugins
+- 📦 Update Maven dependencies
+- 🔒 Rotate credentials and tokens
+- 📈 Analyze build time trends
+
+#### Troubleshooting Common Issues
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| **Build Failure** | Compilation errors | Check Java/Maven versions |
+| **Test Failures** | Test suite failures | Review test logs and fix |
+| **Quality Gate** | SonarQube gate failed | Address code quality issues |
+| **Security Scan** | High/Critical vulnerabilities | Update dependencies |
+| **Docker Build** | Image build failures | Check Dockerfile and dependencies |
+| **Registry Push** | Push to DockerHub fails | Verify credentials and connectivity |
 
 ## 📋 Prerequisites
 
@@ -125,6 +370,8 @@ graph TB
 - 🔄 **Apache Kafka** 2.8+
 - 📦 **Maven** 3.8+
 - 🐳 **Docker** (optional)
+- 🏗️ **Jenkins** (for CI/CD)
+- 📊 **SonarQube** (for code quality)
 
 ## 🚀 Quick Start
 
@@ -525,6 +772,7 @@ export EMAIL_PASSWORD=secure-app-password
 - Write comprehensive tests
 - Update documentation
 - Follow conventional commit messages
+- Ensure CI/CD pipeline passes
 
 ## 📄 License
 
@@ -546,6 +794,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ ] 🔄 Webhook support for external integrations
 - [ ] 🎨 Visual template editor
 - [ ] 🤖 AI-powered notification optimization
+- [ ] 🔧 Blue-green deployment support
+- [ ] 📈 Advanced monitoring with Prometheus
+- [ ] 🚀 Kubernetes deployment manifests
 
 ---
 
@@ -556,5 +807,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ![Spring Boot](https://img.shields.io/badge/Powered%20by-Spring%20Boot-brightgreen?logo=springboot)
 ![MongoDB](https://img.shields.io/badge/Data-MongoDB-green?logo=mongodb)
 ![Kafka](https://img.shields.io/badge/Events-Apache%20Kafka-black?logo=apachekafka)
+![Jenkins](https://img.shields.io/badge/CI%2FCD-Jenkins-red?logo=jenkins)
+![Docker](https://img.shields.io/badge/Containerized-Docker-blue?logo=docker)
 
 </div>
