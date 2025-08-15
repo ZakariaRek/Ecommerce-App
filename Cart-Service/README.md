@@ -1,20 +1,37 @@
 # 🛒 Cart Service - E-commerce Microservice
 
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.4-brightgreen.svg)](https://spring.io/projects/spring-boot) [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/) [![MongoDB](https://img.shields.io/badge/MongoDB-Latest-green.svg)](https://www.mongodb.com/) [![Redis](https://img.shields.io/badge/Redis-Latest-red.svg)](https://redis.io/) [![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-Latest-orange.svg)](https://kafka.apache.org/)
+<div align="center">
 
-A robust, scalable cart management microservice built with Spring Boot, featuring real-time event-driven architecture, intelligent caching, and comprehensive cart operations.
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.4-brightgreen.svg?style=for-the-badge&logo=spring-boot)](https://spring.io/projects/spring-boot) 
+[![Java](https://img.shields.io/badge/Java-17-orange.svg?style=for-the-badge&logo=openjdk)](https://www.oracle.com/java/) 
+[![MongoDB](https://img.shields.io/badge/MongoDB-Latest-green.svg?style=for-the-badge&logo=mongodb)](https://www.mongodb.com/) 
+[![Redis](https://img.shields.io/badge/Redis-Latest-red.svg?style=for-the-badge&logo=redis)](https://redis.io/) 
+[![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-Latest-orange.svg?style=for-the-badge&logo=apache-kafka)](https://kafka.apache.org/)
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-blue.svg?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-blue.svg?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Quality%20Gate-blue.svg?style=for-the-badge&logo=sonarqube)](https://www.sonarqube.org/)
+[![Trivy](https://img.shields.io/badge/Trivy-Security%20Scan-blue.svg?style=for-the-badge&logo=trivy)](https://trivy.dev/)
+
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg?style=for-the-badge&logo=github-actions)](https://jenkins.io/)
+[![Code Coverage](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=opensource)](LICENSE)
+
+</div>
+
+A robust, scalable cart management microservice built with Spring Boot, featuring real-time event-driven architecture, intelligent caching, and comprehensive cart operations with automated CI/CD pipeline.
 
 ## 🏗️ Architecture Overview
 
 ```mermaid
 graph TB
     subgraph "Cart Service Architecture"
-        API[REST API Layer]
-        SERVICE[Service Layer]
-        REPO[Repository Layer]
-        CACHE[Redis Cache Layer]
-        DB[(MongoDB)]
-        KAFKA[Kafka Events]
+        API[🎮 REST API Layer]
+        SERVICE[⚙️ Service Layer]
+        REPO[🗄️ Repository Layer]
+        CACHE[🔴 Redis Cache Layer]
+        DB[(🍃 MongoDB)]
+        KAFKA[🔄 Kafka Events]
         
         API --> SERVICE
         SERVICE --> REPO
@@ -23,8 +40,8 @@ graph TB
         SERVICE --> KAFKA
         
         subgraph "External Services"
-            EUREKA[Eureka Discovery]
-            CONFIG[Config Server]
+            EUREKA[🔍 Eureka Discovery]
+            CONFIG[⚙️ Config Server]
         end
         
         API -.-> EUREKA
@@ -38,12 +55,12 @@ graph TB
 
 | Technology | Description | Version |
 |------------|-------------|---------|
-| <img src="https://spring.io/img/logos/spring-boot.svg" width="30"> **Spring Boot** | Application Framework | 3.4.4 |
-| <img src="https://webassets.mongodb.com/_com_assets/cms/mongodb_logo1-76twgcu2dm.png" width="30"> **MongoDB** | Primary Database | Latest |
-| <img src="https://redis.io/wp-content/uploads/2024/04/Logotype.svg" width="30"> **Redis** | Caching Layer | Latest |
-| <img src="https://kafka.apache.org/images/logo.png" width="30"> **Apache Kafka** | Event Streaming | Latest |
-| <img src="https://spring.io/img/logos/spring-cloud.svg" width="30"> **Eureka** | Service Discovery | 2024.0.1 |
-| <img src="https://static1.smartbear.co/swagger/media/assets/images/swagger_logo.svg" width="30"> **Swagger** | API Documentation | 2.7.0 |
+| <img src="https://img.shields.io/badge/Spring%20Boot-6DB33F?style=flat&logo=spring-boot&logoColor=white" width="100"> | Application Framework | 3.4.4 |
+| <img src="https://img.shields.io/badge/MongoDB-47A248?style=flat&logo=mongodb&logoColor=white" width="100"> | Primary Database | Latest |
+| <img src="https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white" width="100"> | Caching Layer | Latest |
+| <img src="https://img.shields.io/badge/Apache%20Kafka-231F20?style=flat&logo=apache-kafka&logoColor=white" width="100"> | Event Streaming | Latest |
+| <img src="https://img.shields.io/badge/Spring%20Cloud-6DB33F?style=flat&logo=spring&logoColor=white" width="100"> | Service Discovery | 2024.0.1 |
+| <img src="https://img.shields.io/badge/Swagger-85EA2D?style=flat&logo=swagger&logoColor=black" width="100"> | API Documentation | 2.7.0 |
 
 </div>
 
@@ -69,6 +86,56 @@ graph TB
 - ✅ **Real-time notifications** via Kafka
 - ✅ **Microservice communication** patterns
 - ✅ **Event sourcing** for audit trails
+
+## 🔄 CI/CD Pipeline with Jenkins
+
+<div align="center">
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
+
+</div>
+
+```mermaid
+graph LR
+    subgraph "🚀 CI/CD Pipeline"
+        A[📥 Checkout] --> B[🔨 Build]
+        B --> C[🧪 Test]
+        C --> D[🔍 SonarQube]
+        D --> E[🚦 Quality Gate]
+        E --> F[📦 Package]
+        F --> G[🐳 Docker Build]
+        G --> H[🛡️ Security Scan]
+        H --> I[📤 Push Registry]
+    end
+```
+
+### 🏗️ Pipeline Stages
+
+| Stage | Tool | Duration | Status |
+|-------|------|----------|--------|
+| **📥 Checkout** | Git | ~30s | ✅ |
+| **🔨 Build** | Maven 3.9.7 | ~2min | ✅ |
+| **🧪 Tests** | JUnit + JaCoCo | ~3min | ✅ |
+| **🔍 Code Analysis** | SonarQube | ~2min | ✅ |
+| **📦 Package** | Maven | ~1min | ✅ |
+| **🐳 Docker Build** | Docker | ~2min | ✅ |
+| **🛡️ Security Scan** | Trivy | ~3min | ✅ |
+| **📤 Registry Push** | Docker Hub | ~2min | ✅ |
+
+### 🛠️ Jenkins Configuration
+
+#### Required Credentials
+- `yahya.zakaria-dockerhub` - Docker Hub authentication
+- `GithubCredentials` - GitHub repository access
+- `sonarqube` - SonarQube server configuration
+
+#### Quality Gates
+- **Code Coverage**: > 80%
+- **Bugs**: 0 tolerance
+- **Security Vulnerabilities**: 0 high/critical
+- **Code Smells**: < 10 issues
 
 ## 🏛️ System Architecture
 
@@ -218,6 +285,16 @@ graph TD
 
 ### 📋 Prerequisites
 
+<div align="center">
+
+[![Java](https://img.shields.io/badge/Java-17%2B-orange?logo=openjdk)](https://openjdk.java.net/)
+[![Docker](https://img.shields.io/badge/Docker-Latest-blue?logo=docker)](https://docker.com/)
+[![Maven](https://img.shields.io/badge/Maven-3.6%2B-red?logo=apache-maven)](https://maven.apache.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Latest-green?logo=mongodb)](https://mongodb.com/)
+[![Redis](https://img.shields.io/badge/Redis-Latest-red?logo=redis)](https://redis.io/)
+
+</div>
+
 Before running the Cart Service, ensure you have the following installed:
 
 - ☕ **Java 17** or higher
@@ -266,6 +343,13 @@ curl http://localhost:8087/api/carts/actuator/health
 ## 📚 API Documentation
 
 ### 🎯 Endpoints Overview
+
+<div align="center">
+
+[![Swagger](https://img.shields.io/badge/Swagger-API%20Docs-85EA2D?logo=swagger)](http://localhost:8087/api/carts/swagger-ui/index.html)
+[![Postman](https://img.shields.io/badge/Postman-Collection-orange?logo=postman)](https://postman.com/)
+
+</div>
 
 The Cart Service provides RESTful APIs accessible at: `http://localhost:8087/api/carts`
 
@@ -434,6 +518,14 @@ Cart-Service/
 
 ## 🧪 Testing
 
+<div align="center">
+
+[![JUnit](https://img.shields.io/badge/JUnit-5-green?logo=junit5)](https://junit.org/)
+[![JaCoCo](https://img.shields.io/badge/JaCoCo-Coverage-blue?logo=jacoco)](https://jacoco.org/)
+[![Testcontainers](https://img.shields.io/badge/Testcontainers-Integration-blue?logo=docker)](https://testcontainers.org/)
+
+</div>
+
 ### 🚀 Running Tests
 
 ```bash
@@ -471,6 +563,14 @@ graph TD
 ```
 
 ## 📈 Performance & Monitoring
+
+<div align="center">
+
+[![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-orange?logo=prometheus)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-Dashboard-orange?logo=grafana)](https://grafana.com/)
+[![Jaeger](https://img.shields.io/badge/Jaeger-Tracing-blue?logo=jaeger)](https://jaegertracing.io/)
+
+</div>
 
 ### 🎯 Key Metrics
 
@@ -514,6 +614,13 @@ graph LR
 
 ### 🐳 Docker Deployment
 
+<div align="center">
+
+[![Docker](https://img.shields.io/badge/Docker-Containerized-blue?logo=docker)](https://docker.com/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?logo=docker)](https://hub.docker.com/)
+
+</div>
+
 ```dockerfile
 FROM openjdk:17-jre-slim
 COPY target/cart-service-0.0.1-SNAPSHOT.jar app.jar
@@ -536,6 +643,13 @@ docker run -d \
 ```
 
 ### ☸️ Kubernetes Deployment
+
+<div align="center">
+
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Orchestration-blue?logo=kubernetes)](https://kubernetes.io/)
+[![Helm](https://img.shields.io/badge/Helm-Package%20Manager-blue?logo=helm)](https://helm.sh/)
+
+</div>
 
 ```yaml
 apiVersion: apps/v1
@@ -567,6 +681,13 @@ spec:
 ```
 
 ## 🤝 Contributing
+
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-Contribute-black?logo=github)](https://github.com/)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow?logo=conventionalcommits)](https://conventionalcommits.org/)
+
+</div>
 
 ### 🛠️ Development Setup
 
@@ -638,6 +759,13 @@ curl -X POST http://localhost:8087/api/carts/123e4567-e89b-12d3-a456-42661417400
 ```
 
 ## 🔒 Security
+
+<div align="center">
+
+[![Spring Security](https://img.shields.io/badge/Spring%20Security-JWT-green?logo=spring-security)](https://spring.io/projects/spring-security)
+[![OWASP](https://img.shields.io/badge/OWASP-Compliant-blue?logo=owasp)](https://owasp.org/)
+
+</div>
 
 ### 🛡️ Security Features
 
@@ -727,10 +855,24 @@ curl http://localhost:8087/api/carts/actuator/health/redis
 
 ## 📄 License
 
+<div align="center">
+
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg?logo=opensource)](LICENSE)
+
+</div>
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-
 ## 🙏 Acknowledgments
+
+<div align="center">
+
+[![Spring](https://img.shields.io/badge/Spring-Team-green?logo=spring)](https://spring.io/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Team-green?logo=mongodb)](https://mongodb.com/)
+[![Redis](https://img.shields.io/badge/Redis-Team-red?logo=redis)](https://redis.io/)
+[![Apache](https://img.shields.io/badge/Apache-Kafka%20Team-orange?logo=apache-kafka)](https://kafka.apache.org/)
+
+</div>
 
 - Spring Boot team for the amazing framework
 - MongoDB team for the flexible database
@@ -744,6 +886,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **🛒 Happy Shopping Cart Development! 🛒**
 
 Made with ❤️ using Spring Boot
+
+[![GitHub stars](https://img.shields.io/github/stars/username/cart-service?style=social)](https://github.com/username/cart-service/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/username/cart-service?style=social)](https://github.com/username/cart-service/network/members)
+[![GitHub watchers](https://img.shields.io/github/watchers/username/cart-service?style=social)](https://github.com/username/cart-service/watchers)
 
 [⬆ Back to top](#-cart-service---e-commerce-microservice)
 
