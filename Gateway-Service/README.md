@@ -17,10 +17,7 @@
 [![Code Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=opensource)](LICENSE)
 
-<img src="https://raw.githubusercontent.com/spring-projects/spring-framework/main/framework-docs/src/docs/spring-framework.png" alt="Spring" width="80"/>
-<img src="https://www.vectorlogo.zone/logos/springio/springio-ar21.svg" alt="Spring Boot" width="100"/>
-<img src="https://redis.io/wp-content/uploads/2024/04/Logotype.svg" alt="Redis" width="80"/>
-<img src="https://kafka.apache.org/logos/kafka_logo--simple.png" alt="Kafka" width="80"/>
+
 
 </div>
 
