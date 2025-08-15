@@ -1302,11 +1302,6 @@ Each service has tailored pipeline configurations based on technology stack:
 - **Static Analysis**: `golangci-lint` integration
 - **Performance Testing**: Benchmark tests with `go test -bench`
 
-#### **🟡 API Gateway** (Spring Cloud Gateway)
-- **Gateway-Specific Tests**: Route configuration validation
-- **Circuit Breaker Testing**: Resilience pattern verification
-- **Performance Testing**: Load testing with Gatling
-- **Configuration Validation**: YAML syntax and service discovery
 
 ### 🔐 **Security & Quality Assurance**
 
@@ -1346,7 +1341,7 @@ graph TB
 
 Our SonarQube integration provides comprehensive quality insights:
 
-- **Code Coverage**: Minimum 70% across all services
+- **Code Coverage**:  across all services
 - **Security Rating**: A rating required for production deployment
 - **Maintainability**: Technical debt ratio < 5%
 - **Reliability**: Bug-free code deployment
