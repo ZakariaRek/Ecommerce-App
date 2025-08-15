@@ -1337,34 +1337,8 @@ graph TB
     style K fill:#e8f5e8
 ```
 
-#### **📊 Quality Metrics Dashboard**
 
-Our SonarQube integration provides comprehensive quality insights:
 
-- **Code Coverage**:  across all services
-- **Security Rating**: A rating required for production deployment
-- **Maintainability**: Technical debt ratio < 5%
-- **Reliability**: Bug-free code deployment
-- **Duplication**: Less than 3% code duplication
-
-### 🚢 **Deployment Strategies**
-
-#### **🌱 Environment Promotion**
-```mermaid
-graph LR
-    A[Feature Branch] --> B[Dev Environment]
-    B --> C[Integration Tests]
-    C --> D[Staging Environment]
-    D --> E[User Acceptance Tests]
-    E --> F[Production Environment]
-    
-    G[Hotfix Branch] --> H[Production Direct]
-    
-    style A fill:#e3f2fd
-    style D fill:#fff3e0
-    style F fill:#e8f5e8
-    style G fill:#ffebee
-```
 ## 🚀 Getting Started
 
 ### Prerequisites
