@@ -14,12 +14,9 @@
 [![Swagger](https://img.shields.io/badge/Swagger-API%20Docs-85EA2D.svg?style=for-the-badge&logo=swagger)](https://swagger.io/)
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg?style=for-the-badge&logo=github-actions)](https://jenkins.io/)
-[![Code Coverage](https://img.shields.io/badge/Coverage-88%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
+[![Code Coverage](https://img.shields.io/badge/Coverage%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=opensource)](LICENSE)
 
-<img src="https://raw.githubusercontent.com/spring-projects/spring-framework/main/framework-docs/src/docs/spring-framework.png" alt="Spring" width="80"/>
-<img src="https://www.vectorlogo.zone/logos/postgresql/postgresql-ar21.svg" alt="PostgreSQL" width="100"/>
-<img src="https://kafka.apache.org/logos/kafka_logo--simple.png" alt="Kafka" width="80"/>
 
 </div>
 
