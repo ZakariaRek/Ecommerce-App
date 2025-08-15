@@ -1126,13 +1126,13 @@ graph TB
         subgraph "Metrics"
             Health[Health Check]
             Info[App Info]
-            Metrics[JVM Metrics]
+            JVMMetrics[JVM Metrics]
             Env[Environment]
         end
         
         subgraph "Logging"
             Logback[Logback]
-            Kafka[Kafka Appender]
+            KafkaAppender[Kafka Appender]
             ELK[ELK Stack]
         end
         
@@ -1146,12 +1146,12 @@ graph TB
     App --> Actuator
     Actuator --> Health
     Actuator --> Info
-    Actuator --> Metrics
+    Actuator --> JVMMetrics
     Actuator --> Env
     
     App --> Logback
-    Logback --> Kafka
-    Kafka --> ELK
+    Logback --> KafkaAppender
+    KafkaAppender --> ELK
     
     Actuator --> Prometheus
     Prometheus --> Grafana
