@@ -14,7 +14,7 @@
 [![Trivy](https://img.shields.io/badge/Trivy-Security%20Scan-blue.svg?style=for-the-badge&logo=trivy)](https://trivy.dev/)
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg?style=for-the-badge&logo=github-actions)](https://jenkins.io/)
-[![Code Coverage](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
+[![Code Coverage](https://img.shields.io/badge/Coverage%25-brightgreen.svg?style=for-the-badge&logo=codecov)](https://codecov.io/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=opensource)](LICENSE)
 
 </div>
