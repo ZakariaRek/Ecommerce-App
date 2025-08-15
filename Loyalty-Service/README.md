@@ -22,76 +22,6 @@
 
 **A comprehensive microservice for managing customer loyalty programs with points, tiers, coupons, and rewards**
 
-## 🔄 CI/CD Pipeline with Jenkins
-
-<div align="center">
-
-[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
-[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
-[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
-
-</div>
-
-```mermaid
-graph LR
-    subgraph "🚀 CI/CD Pipeline"
-        A[📥 Checkout] --> B[🔨 Build JDK21]
-        B --> C[🧪 Test]
-        C --> D[🔍 SonarQube]
-        D --> E[🚦 Quality Gate]
-        E --> F[📦 Package]
-        F --> G[🐳 Docker Build]
-        G --> H[🛡️ Security Scan]
-        H --> I[🏃 Run Containers]
-        I --> J[📤 Push Registry]
-    end
-```
-
-### 🏗️ Pipeline Stages
-
-| Stage | Tool | Duration | Features |
-|-------|------|----------|----------|
-| **📥 Checkout** | Git | ~30s | Sparse checkout Loyalty-Service |
-| **🔨 Build** | Maven 3.9.7 + JDK 21 | ~2min | Clean compile with Java 21 |
-| **🧪 Tests** | JUnit + JaCoCo | ~3min | Test profiles with coverage |
-| **🔍 Code Analysis** | SonarQube | ~2min | ecommerce-loyalty-service |
-| **🚦 Quality Gate** | SonarQube | ~3min | Extended timeout for analysis |
-| **📦 Package** | Maven | ~1min | JAR packaging |
-| **🐳 Docker Build** | Docker + Compose | ~2min | Multi-service containers |
-| **🛡️ Security Scan** | Trivy | ~3min | Image vulnerability scanning |
-| **🏃 Run Containers** | Docker Compose | ~15s | Container orchestration |
-| **📤 Registry Push** | Docker Hub | ~2min | Versioned images |
-
-### 🛠️ Jenkins Configuration
-
-#### Required Credentials
-- `yahya.zakaria-dockerhub` - Docker Hub authentication
-- `git-https-token` - GitHub repository access
-- `sonarqube` - SonarQube server configuration
-
-#### Quality Gates & Coverage
-- **Code Coverage**: > 85%
-- **Quality Gate Timeout**: 3 minutes (extended for loyalty analysis)
-- **Security Vulnerabilities**: 0 high/critical tolerance
-- **Service Port**: 8084 (/loyalty endpoint)
-
-#### Loyalty-Specific Features
-```yaml
-# Pipeline highlights
-build:
-  - Loyalty program business logic testing
-  - Point calculation algorithm validation
-  - Tier system integrity checks
-  - Coupon validation testing
-  - Reward redemption workflows
-
-security:
-  - Customer data protection scanning
-  - Financial transaction security
-  - Point fraud prevention checks
-  - PCI compliance validation
-```
-
 ## 🌟 Overview
 
 The Loyalty Service is a feature-rich Spring Boot microservice designed to handle all aspects of customer loyalty programs in an e-commerce ecosystem. It provides seamless integration with other services through Kafka messaging and offers a complete solution for customer retention and engagement with automated CI/CD pipeline.
@@ -597,6 +527,78 @@ docker run -d \
   -e KAFKA_BROKERS=kafka:9092 \
   loyalty-service:latest
 ```
+
+
+## 🔄 CI/CD Pipeline with Jenkins
+
+<div align="center">
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
+
+</div>
+
+```mermaid
+graph LR
+    subgraph "🚀 CI/CD Pipeline"
+        A[📥 Checkout] --> B[🔨 Build JDK21]
+        B --> C[🧪 Test]
+        C --> D[🔍 SonarQube]
+        D --> E[🚦 Quality Gate]
+        E --> F[📦 Package]
+        F --> G[🐳 Docker Build]
+        G --> H[🛡️ Security Scan]
+        H --> I[🏃 Run Containers]
+        I --> J[📤 Push Registry]
+    end
+```
+
+### 🏗️ Pipeline Stages
+
+| Stage | Tool | Duration | Features |
+|-------|------|----------|----------|
+| **📥 Checkout** | Git | ~30s | Sparse checkout Loyalty-Service |
+| **🔨 Build** | Maven 3.9.7 + JDK 21 | ~2min | Clean compile with Java 21 |
+| **🧪 Tests** | JUnit + JaCoCo | ~3min | Test profiles with coverage |
+| **🔍 Code Analysis** | SonarQube | ~2min | ecommerce-loyalty-service |
+| **🚦 Quality Gate** | SonarQube | ~3min | Extended timeout for analysis |
+| **📦 Package** | Maven | ~1min | JAR packaging |
+| **🐳 Docker Build** | Docker + Compose | ~2min | Multi-service containers |
+| **🛡️ Security Scan** | Trivy | ~3min | Image vulnerability scanning |
+| **🏃 Run Containers** | Docker Compose | ~15s | Container orchestration |
+| **📤 Registry Push** | Docker Hub | ~2min | Versioned images |
+
+### 🛠️ Jenkins Configuration
+
+#### Required Credentials
+- `yahya.zakaria-dockerhub` - Docker Hub authentication
+- `git-https-token` - GitHub repository access
+- `sonarqube` - SonarQube server configuration
+
+#### Quality Gates & Coverage
+- **Code Coverage**: > 85%
+- **Quality Gate Timeout**: 3 minutes (extended for loyalty analysis)
+- **Security Vulnerabilities**: 0 high/critical tolerance
+- **Service Port**: 8084 (/loyalty endpoint)
+
+#### Loyalty-Specific Features
+```yaml
+# Pipeline highlights
+build:
+  - Loyalty program business logic testing
+  - Point calculation algorithm validation
+  - Tier system integrity checks
+  - Coupon validation testing
+  - Reward redemption workflows
+
+security:
+  - Customer data protection scanning
+  - Financial transaction security
+  - Point fraud prevention checks
+  - PCI compliance validation
+```
+
 
 ### ☸️ Kubernetes Deployment
 
