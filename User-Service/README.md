@@ -95,7 +95,7 @@ graph TB
         subgraph "Security"
             JWT[JWT Utils]
             OAuth2[OAuth2 Config]
-            Security[Security Config]
+            SecConfig[Security Config]
         end
     end
 
