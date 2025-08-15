@@ -36,68 +36,6 @@ The **Gateway Service** is a central API Gateway built with **Spring Cloud Gatew
 - 📈 **Comprehensive Monitoring**
 - 📚 **Swagger Documentation**
 
-## 🔄 CI/CD Pipeline with Jenkins
-
-<div align="center">
-
-[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
-[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
-[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
-[![Zipkin](https://img.shields.io/badge/Zipkin-Distributed%20Tracing-blue?style=for-the-badge&logo=zipkin)](https://zipkin.io/)
-
-</div>
-
-```mermaid
-graph LR
-    subgraph "🚀 CI/CD Pipeline"
-        A[📥 Checkout] --> B[🔨 Build JDK21]
-        B --> C[🧪 Test]
-        C --> D[🔍 SonarQube]
-        D --> E[🚦 Quality Gate]
-        E --> F[📦 Package]
-        F --> G[🐳 Docker Build]
-        G --> H[🛡️ Security Scan]
-        H --> I[🏥 Health Check]
-        I --> J[📤 Push Registry]
-    end
-```
-
-### 🏗️ Pipeline Stages
-
-| Stage | Tool | Duration | Features |
-|-------|------|----------|----------|
-| **📥 Checkout** | Git | ~30s | Sparse checkout Gateway-Service |
-| **🔨 Build** | Maven 3.9.7 + JDK 21 | ~2min | Clean compile with Java 21 |
-| **🧪 Tests** | JUnit + JaCoCo | ~3min | Test profiles with coverage |
-| **🔍 Code Analysis** | SonarQube | ~2min | ecommerce-api-gateway-service |
-| **📦 Package** | Maven | ~1min | JAR packaging |
-| **🐳 Docker Build** | Docker + Compose | ~2min | Multi-service containers |
-| **🛡️ Security Scan** | Trivy | ~3min | Vulnerability assessment |
-| **🏥 Health Check** | cURL + Redis + Zipkin | ~1min | Multi-service validation |
-| **📤 Registry Push** | Docker Hub | ~2min | Versioned images |
-
-### 🛠️ Jenkins Configuration
-
-#### Required Credentials
-- `yahya.zakaria-dockerhub` - Docker Hub authentication
-- `git-https-token` - GitHub repository access
-- `sonarqube` - SonarQube server configuration
-
-#### Quality Gates & Health Checks
-- **Code Coverage**: > 85%
-- **Gateway Health**: `http://localhost:8099/actuator/health`
-- **Redis Health**: Container ping validation
-- **Zipkin Health**: `http://localhost:9411/health`
-- **Service Discovery**: Eureka registration check
-
-#### Multi-Service Deployment
-```yaml
-# Automated container orchestration
-services:
-  - gateway-service:8099 (API Gateway)
-  - redis:6379 (Rate Limiting & Cache)
-  - zipkin:9411 (Distributed Tracing)
-```
 
 ## 🏗️ Architecture Overview
 
@@ -555,6 +493,68 @@ docker run -d \
   -e REDIS_HOST=redis \
   -e KAFKA_BROKERS=kafka:9092 \
   gateway-service:latest
+```
+## 🔄 CI/CD Pipeline with Jenkins
+
+<div align="center">
+
+[![Jenkins](https://img.shields.io/badge/Jenkins-Automated%20Pipeline-blue?style=for-the-badge&logo=jenkins)](https://jenkins.io/)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Registry-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/)
+[![SonarQube](https://img.shields.io/badge/SonarQube-Code%20Quality-blue?style=for-the-badge&logo=sonarqube)](https://sonarqube.org/)
+[![Zipkin](https://img.shields.io/badge/Zipkin-Distributed%20Tracing-blue?style=for-the-badge&logo=zipkin)](https://zipkin.io/)
+
+</div>
+
+```mermaid
+graph LR
+    subgraph "🚀 CI/CD Pipeline"
+        A[📥 Checkout] --> B[🔨 Build JDK21]
+        B --> C[🧪 Test]
+        C --> D[🔍 SonarQube]
+        D --> E[🚦 Quality Gate]
+        E --> F[📦 Package]
+        F --> G[🐳 Docker Build]
+        G --> H[🛡️ Security Scan]
+        H --> I[🏥 Health Check]
+        I --> J[📤 Push Registry]
+    end
+```
+
+### 🏗️ Pipeline Stages
+
+| Stage | Tool | Duration | Features |
+|-------|------|----------|----------|
+| **📥 Checkout** | Git | ~30s | Sparse checkout Gateway-Service |
+| **🔨 Build** | Maven 3.9.7 + JDK 21 | ~2min | Clean compile with Java 21 |
+| **🧪 Tests** | JUnit + JaCoCo | ~3min | Test profiles with coverage |
+| **🔍 Code Analysis** | SonarQube | ~2min | ecommerce-api-gateway-service |
+| **📦 Package** | Maven | ~1min | JAR packaging |
+| **🐳 Docker Build** | Docker + Compose | ~2min | Multi-service containers |
+| **🛡️ Security Scan** | Trivy | ~3min | Vulnerability assessment |
+| **🏥 Health Check** | cURL + Redis + Zipkin | ~1min | Multi-service validation |
+| **📤 Registry Push** | Docker Hub | ~2min | Versioned images |
+
+### 🛠️ Jenkins Configuration
+
+#### Required Credentials
+- `yahya.zakaria-dockerhub` - Docker Hub authentication
+- `git-https-token` - GitHub repository access
+- `sonarqube` - SonarQube server configuration
+
+#### Quality Gates & Health Checks
+- **Code Coverage**:  %%
+- **Gateway Health**: `http://localhost:8099/actuator/health`
+- **Redis Health**: Container ping validation
+- **Zipkin Health**: `http://localhost:9411/health`
+- **Service Discovery**: Eureka registration check
+
+#### Multi-Service Deployment
+```yaml
+# Automated container orchestration
+services:
+  - gateway-service:8099 (API Gateway)
+  - redis:6379 (Rate Limiting & Cache)
+  - zipkin:9411 (Distributed Tracing)
 ```
 
 ### ☸️ Kubernetes Deployment
