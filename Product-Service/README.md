@@ -12,7 +12,7 @@
 
 **A robust, scalable microservice for comprehensive product management in e-commerce systems**
 
-[Features](#-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [API Documentation](#-api-documentation) • [Testing](#-testing)
+[Features](#-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [CI/CD Pipeline](#-cicd-pipeline) • [API Documentation](#-api-documentation) • [Testing](#-testing)
 
 </div>
 
@@ -356,6 +356,330 @@ curl http://localhost:8082/api/products/actuator/health
 # API documentation
 open http://localhost:8082/api/products/swagger-ui.html
 ```
+
+## 🔄 CI/CD Pipeline
+
+<div align="center">
+
+![Jenkins](https://img.shields.io/badge/Jenkins-D33833?style=for-the-badge&logo=jenkins&logoColor=white)
+![SonarQube](https://img.shields.io/badge/SonarQube-4E9BCD?style=for-the-badge&logo=sonarqube&logoColor=white)
+![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=for-the-badge&logo=trivy&logoColor=white)
+![Docker Hub](https://img.shields.io/badge/Docker%20Hub-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
+
+**Automated CI/CD pipeline ensuring code quality, security, and reliable deployments**
+
+</div>
+
+The Product Service utilizes a comprehensive Jenkins-based CI/CD pipeline that automates the entire software delivery process from code commit to production deployment. Our pipeline emphasizes code quality, security scanning, and automated testing to ensure reliable and secure deployments.
+
+### 🏗️ Pipeline Architecture
+
+```mermaid
+graph LR
+    subgraph "Source Control"
+        GIT[GitHub Repository]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        CHECKOUT[📥 Checkout]
+        BUILD[🏗️ Build]
+        TEST[🧪 Test]
+        SONAR[📊 SonarQube]
+        QUALITY[✅ Quality Gate]
+        PACKAGE[📦 Package]
+        DOCKER_BUILD[🐳 Docker Build]
+        SECURITY[🔒 Security Scan]
+        DEPLOY[🚀 Deploy]
+        PUSH[📤 Push to Registry]
+    end
+    
+    subgraph "External Services"
+        SONARQUBE[SonarQube Server]
+        DOCKERHUB[Docker Hub]
+        TRIVY[Trivy Scanner]
+    end
+    
+    GIT --> CHECKOUT
+    CHECKOUT --> BUILD
+    BUILD --> TEST
+    TEST --> SONAR
+    SONAR --> SONARQUBE
+    SONAR --> QUALITY
+    QUALITY --> PACKAGE
+    PACKAGE --> DOCKER_BUILD
+    DOCKER_BUILD --> SECURITY
+    SECURITY --> TRIVY
+    SECURITY --> DEPLOY
+    DEPLOY --> PUSH
+    PUSH --> DOCKERHUB
+    
+    classDef sourceStyle fill:#e8f5e8
+    classDef pipelineStyle fill:#e1f5fe
+    classDef externalStyle fill:#fff3e0
+    
+    class GIT sourceStyle
+    class CHECKOUT,BUILD,TEST,SONAR,QUALITY,PACKAGE,DOCKER_BUILD,SECURITY,DEPLOY,PUSH pipelineStyle
+    class SONARQUBE,DOCKERHUB,TRIVY externalStyle
+```
+
+### 🔧 Pipeline Stages
+
+Our Jenkins pipeline consists of multiple stages that ensure code quality, security, and reliable deployments:
+
+#### 1. **📥 Checkout Stage**
+- **Purpose**: Retrieves source code from GitHub repository
+- **Features**:
+  - Sparse checkout for Product-Service directory only
+  - Git credentials management
+  - Branch-specific checkout (main branch)
+
+```groovy
+checkout([$class: 'GitSCM',
+    branches: [[name: '*/main']],
+    userRemoteConfigs: [[
+        url: 'https://github.com/ZakariaRek/Ecommerce-App',
+        credentialsId: env.GIT_CREDENTIALS_ID
+    ]],
+    extensions: [
+        [$class: 'SparseCheckoutPaths', sparseCheckoutPaths: [[path: 'Product-Service/']]]
+    ]
+])
+```
+
+#### 2. **🏗️ Build Application**
+- **Purpose**: Compiles the Java application using Maven
+- **Tools**: Maven 3.9.7, JDK 21
+- **Command**: `mvn clean compile`
+
+#### 3. **🧪 Run Tests**
+- **Purpose**: Executes unit and integration tests
+- **Features**:
+  - JUnit test execution with Spring Test profile
+  - JaCoCo code coverage report generation
+  - Test failure tolerance (continues pipeline for analysis)
+  - Automatic test result archiving
+
+```bash
+mvn test -Dmaven.test.failure.ignore=true -Dspring.profiles.active=test
+```
+
+**Test Reporting**:
+- JUnit test results archived as XML reports
+- JaCoCo coverage reports generated and archived
+- Test failure status tracked for final pipeline summary
+
+#### 4. **📊 SonarQube Analysis**
+- **Purpose**: Static code analysis for code quality and technical debt
+- **Features**:
+  - Integration with local SonarQube server (http://localhost:9000)
+  - Fallback mechanism for direct token authentication
+  - Project versioning with build numbers
+  - Comprehensive code quality metrics
+
+```bash
+mvn sonar:sonar \
+  -Dsonar.projectKey=ecommerce-product-service \
+  -Dsonar.projectName="E-commerce Product Service" \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=your_sonar_token
+```
+
+**Analysis Metrics**:
+- Code coverage percentage
+- Technical debt assessment
+- Code duplication detection
+- Security hotspots identification
+- Maintainability rating
+
+#### 5. **✅ Quality Gate**
+- **Purpose**: Enforces code quality standards before deployment
+- **Features**:
+  - Automated quality gate evaluation
+  - 1-minute timeout for quick feedback
+  - Pipeline status adjustment based on results
+  - Manual dashboard review option on failure
+
+#### 6. **📦 Package Application**
+- **Purpose**: Creates deployable JAR artifact
+- **Command**: `mvn package -DskipTests`
+- **Output**: Executable Spring Boot JAR file
+
+#### 7. **🐳 Build Docker Images**
+- **Purpose**: Containerizes the application for deployment
+- **Features**:
+  - Multi-stage Docker build process
+  - Docker Compose integration for orchestration
+  - Image tagging with latest and build-specific tags
+  - Dockerfile validation
+
+```bash
+docker build -t product-service:latest -f Dockerfile .
+docker-compose -f compose.yaml build
+```
+
+#### 8. **🔒 Security Scan with Trivy**
+- **Purpose**: Comprehensive security vulnerability scanning
+- **Features**:
+  - Container image vulnerability scanning
+  - OS package vulnerability detection
+  - Dependency vulnerability analysis
+  - HIGH and CRITICAL severity filtering
+
+```bash
+# Scan for vulnerabilities
+trivy image --cache-dir "${TRIVY_CACHE_DIR}" \
+  --format table --output trivy-report.txt product-service:latest
+
+# Generate JSON report for detailed analysis
+trivy image --cache-dir "${TRIVY_CACHE_DIR}" \
+  --format json --output trivy-report.json product-service:latest
+```
+
+**Security Features**:
+- Automatic Trivy installation for Windows
+- Vulnerability database updates
+- Severity-based pipeline control
+- Detailed HTML and JSON reports
+- Report archiving for compliance
+
+#### 9. **🚀 Run Containers**
+- **Purpose**: Deploys and validates containerized application
+- **Features**:
+  - Docker Compose orchestration
+  - Health check validation
+  - Container status verification
+  - Service readiness confirmation
+
+#### 10. **📤 Push to Docker Hub**
+- **Purpose**: Publishes container images to registry
+- **Features**:
+  - Automated Docker Hub authentication
+  - Multi-tag strategy (latest + build number)
+  - Secure credential management
+  - Push verification
+
+```bash
+# Tag and push images
+docker tag product-service:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}
+docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}
+docker tag product-service:latest ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}
+docker push ${DOCKERHUB_REPO}:build-${BUILD_NUMBER}
+```
+
+### 📊 Pipeline Monitoring & Reporting
+
+#### **Build Status Indicators**
+- ✅ **Success**: All stages completed successfully
+- ⚠️ **Unstable**: Quality gate issues or test failures detected
+- ❌ **Failed**: Critical pipeline stage failure
+
+#### **Automated Reports**
+- **Test Coverage Reports**: JaCoCo coverage analysis
+- **Security Scan Reports**: Trivy vulnerability assessment
+- **Code Quality Reports**: SonarQube analysis dashboard
+- **Build Artifacts**: JAR files and Docker images
+
+#### **Pipeline Summary**
+```
+📋 ===== PIPELINE SUMMARY =====
+🏗️ Build Number: ${BUILD_NUMBER}
+📊 Tests Status: ${TESTS_FAILED == 'true' ? '⚠️ Some Failed' : '✅ Passed'}
+🔍 SonarQube: Analysis completed
+🔒 Security: Trivy scan completed
+🐳 Docker: Images built and pushed
+================================
+```
+
+### 🔧 Jenkins Configuration
+
+#### **Prerequisites**
+- Jenkins server with necessary plugins
+- Docker and Docker Compose installed
+- Maven 3.9.7 configured
+- JDK 21 configured
+- SonarQube server running
+- Docker Hub credentials configured
+
+#### **Required Jenkins Plugins**
+- Pipeline Plugin
+- Git Plugin
+- SonarQube Scanner Plugin
+- Docker Pipeline Plugin
+- JUnit Plugin
+- JaCoCo Plugin
+
+#### **Environment Variables**
+```groovy
+environment {
+    COMPOSE_FILE = 'compose.yaml'
+    DOCKERHUB_CREDENTIALS = 'yahya.zakaria-dockerhub'
+    DOCKERHUB_REPO = 'yahyazakaria123/ecommerce-app-product-service'
+    IMAGE_TAG = 'latest'
+    GIT_CREDENTIALS_ID = 'git-https-token'
+    TRIVY_CACHE_DIR = 'C:\\temp\\trivy-cache'
+}
+```
+
+#### **Credential Management**
+- **Git Access**: GitHub personal access token
+- **Docker Hub**: Username/password credentials
+- **SonarQube**: Authentication token
+
+### 🛡️ Security & Quality Assurance
+
+#### **Code Quality Gates**
+- **Coverage Threshold**: Minimum code coverage requirements
+- **Duplication Limit**: Maximum allowed code duplication
+- **Maintainability Rating**: Code maintainability standards
+- **Security Rating**: Security vulnerability thresholds
+
+#### **Security Scanning**
+- **Container Scanning**: Base image vulnerability detection
+- **Dependency Scanning**: Third-party library security analysis
+- **SAST Integration**: Static application security testing
+- **Compliance Reporting**: Security compliance documentation
+
+#### **Best Practices Implemented**
+- ✅ Automated testing at every commit
+- ✅ Code quality enforcement through quality gates
+- ✅ Security scanning before deployment
+- ✅ Container image optimization
+- ✅ Artifact versioning and traceability
+- ✅ Automated rollback capabilities
+- ✅ Environment-specific configurations
+
+### 🔗 Integration Points
+
+#### **External Tool Integration**
+- **GitHub**: Source code management and webhooks
+- **SonarQube**: Code quality and security analysis
+- **Docker Hub**: Container registry and image storage
+- **Trivy**: Security vulnerability scanning
+- **JaCoCo**: Code coverage analysis
+
+#### **Notification & Alerting**
+- Build status notifications
+- Quality gate failure alerts
+- Security vulnerability notifications
+- Deployment success confirmations
+
+### 📈 Metrics & KPIs
+
+#### **Pipeline Metrics**
+- **Build Success Rate**: Percentage of successful builds
+- **Build Duration**: Average pipeline execution time
+- **Test Coverage**: Code coverage percentage trends
+- **Security Score**: Vulnerability trend analysis
+- **Quality Gate Pass Rate**: Code quality compliance
+
+#### **Deployment Metrics**
+- **Deployment Frequency**: How often deployments occur
+- **Lead Time**: Time from commit to production
+- **Mean Time to Recovery**: Recovery time from failures
+- **Change Failure Rate**: Percentage of failed deployments
+
+This comprehensive CI/CD pipeline ensures that every code change goes through rigorous testing, quality analysis, and security scanning before reaching production, maintaining the highest standards of software delivery.
 
 ## 📚 API Documentation
 
